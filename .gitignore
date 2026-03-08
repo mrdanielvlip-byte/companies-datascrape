@@ -1,0 +1,13 @@
+# API key — never commit this
+.ch_api_key
+
+# Output data
+output/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
