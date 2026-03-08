@@ -130,6 +130,7 @@ Examples:
     parser.add_argument("--contacts-only",   action="store_true", help="Step 5 only")
     parser.add_argument("--excel-only",      action="store_true", help="Steps 6–7 only")
     parser.add_argument("--skip-contacts",   action="store_true", help="Skip contact enrichment (faster)")
+    parser.add_argument("--no-disify",       action="store_true", help="Skip Disify email verification (faster but unverified)")
 
     # ── Discovery options ─────────────────────────────────────────────────────
     parser.add_argument(
@@ -214,9 +215,11 @@ Examples:
     fin.run()
 
     if not args.skip_contacts:
-        print("\nStep 5/7 — Contact intelligence (website + email inference)")
+        run_disify = not args.no_disify
+        label = "website + email inference + Disify verification" if run_disify else "website + email inference (no Disify)"
+        print(f"\nStep 5/7 — Contact intelligence ({label})")
         contacts = reload("ch_contacts")
-        contacts.run()
+        contacts.run(run_disify=run_disify)
     else:
         print("\nStep 5/7 — Contact intelligence SKIPPED (--skip-contacts)")
 

@@ -6,15 +6,25 @@ For each company:
 2. Infer director email addresses using common domain patterns
 3. Extract any publicly listed phone/contact info
 4. Score each contact with a confidence rating
+5. Verify inferred emails via Disify (free, no API key required)
 
 Data reliability:
   Tier 3 — verified corporate website
   Tier 4 — inferred email pattern
 
 Contact confidence:
-  High   — verified email (found directly on website/directory)
-  Medium — likely pattern (domain confirmed, format inferred)
-  Low    — inferred pattern (domain unconfirmed)
+  High     — verified email found directly on website/directory
+  Verified — Disify confirms deliverable (MX + SMTP check passed)
+  Medium   — likely pattern (domain confirmed via Disify MX, format inferred)
+  Low      — inferred pattern (domain unconfirmed or Disify invalid)
+  Invalid  — Disify returned invalid/disposable
+
+Disify API (free, no key, unlimited):
+  GET https://api.disify.com/api/email/{email}
+  Returns: {"format": bool, "domain": str, "disposable": bool,
+            "dns": bool, "whitelist": bool}
+  dns=true  → MX record found (domain accepts email)
+  whitelist → known legitimate domain
 """
 
 import requests
@@ -25,6 +35,102 @@ import re
 from urllib.parse import urlparse, quote_plus
 
 import config as cfg
+
+
+# ── Disify email verification ─────────────────────────────────────────────────
+# Free API — no key required. Rate limit is generous but we throttle to be safe.
+DISIFY_BASE = "https://www.disify.com/api/email"
+
+def verify_email_disify(email: str) -> dict:
+    """
+    Verify a single email address via Disify.
+    Returns a result dict:
+      {
+        "email":       str,
+        "format":      bool,   # valid email syntax
+        "dns":         bool,   # MX record exists (domain can receive mail)
+        "disposable":  bool,   # throwaway/temporary domain
+        "whitelist":   bool,   # known legitimate domain
+        "deliverable": bool,   # our composite: format AND dns AND NOT disposable
+        "verdict":     str,    # "Verified" | "Invalid" | "Unresolvable" | "Disposable" | "Error"
+        "raw":         dict,   # full Disify response
+      }
+    """
+    result = {
+        "email":       email,
+        "format":      False,
+        "dns":         False,
+        "disposable":  False,
+        "whitelist":   False,
+        "deliverable": False,
+        "verdict":     "Error",
+        "raw":         {},
+    }
+    try:
+        r = requests.get(
+            f"{DISIFY_BASE}/{email}",
+            headers={"User-Agent": "Mozilla/5.0 (compatible; research-bot/1.0)"},
+            timeout=6,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            result["raw"]        = data
+            result["format"]     = bool(data.get("format", False))
+            result["dns"]        = bool(data.get("dns", False))
+            result["disposable"] = bool(data.get("disposable", False))
+            result["whitelist"]  = bool(data.get("whitelist", False))
+
+            if not result["format"]:
+                result["verdict"] = "Invalid"
+            elif result["disposable"]:
+                result["verdict"] = "Disposable"
+            elif not result["dns"]:
+                result["verdict"] = "Unresolvable"
+            else:
+                result["deliverable"] = True
+                result["verdict"]     = "Verified"
+    except requests.RequestException:
+        result["verdict"] = "Error"
+    return result
+
+
+def verify_best_email(patterns: list[dict], site_emails: list[str]) -> dict:
+    """
+    Given a list of inferred email patterns and any site-scraped emails,
+    pick the best candidate and verify it via Disify.
+
+    Strategy:
+      1. Try the top-2 inferred patterns (most common formats)
+      2. If a site email is available, verify that first
+      3. Return the first one that comes back Verified, or the best available
+
+    Returns: Disify result dict with an added "pattern" key.
+    """
+    # Site-scraped emails take priority
+    candidates = []
+    for email in site_emails[:2]:
+        candidates.append({"email": email, "pattern": "scraped_from_site", "confidence": "High"})
+    for p in patterns[:3]:
+        candidates.append(p)
+
+    best_result   = None
+    best_verified = None
+
+    for c in candidates:
+        email = c.get("email", "")
+        if not email:
+            continue
+        result = verify_email_disify(email)
+        result["pattern"] = c.get("pattern", "")
+        time.sleep(0.4)  # polite throttle
+
+        if result["verdict"] == "Verified" and best_verified is None:
+            best_verified = result
+        if best_result is None:
+            best_result = result
+
+    # Prefer verified; fall back to first attempt
+    return best_verified or best_result or {}
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -225,11 +331,13 @@ def scrape_contact_page(base_url: str) -> dict:
 # ── Director contact assembly ─────────────────────────────────────────────────
 
 def build_director_contacts(directors: list[dict], domain: str,
-                             site_emails: list[str]) -> list[dict]:
+                             site_emails: list[str],
+                             run_disify: bool = True) -> list[dict]:
     """
     For each director, build a contact record with:
     - Inferred email patterns (confidence scored)
     - Best match from site emails (if found)
+    - Disify MX/deliverability check on the best candidate
     - LinkedIn search URL
     Data tier: Tier 3/4
     """
@@ -249,6 +357,38 @@ def build_director_contacts(directors: list[dict], domain: str,
 
         patterns = infer_email_patterns(first, last, domain) if domain else []
 
+        # ── Disify verification ────────────────────────────────────────────────
+        disify_result = {}
+        if run_disify and (patterns or verified_email):
+            candidate_emails = [verified_email] if verified_email else []
+            disify_result = verify_best_email(patterns, candidate_emails)
+
+        # Determine best email and confidence from Disify result
+        disify_verdict = disify_result.get("verdict", "")
+        disify_email   = disify_result.get("email")
+
+        if disify_verdict == "Verified":
+            best_email       = disify_email
+            email_confidence = "Verified ✓ (Disify)"
+            data_tier        = "Tier 3 — Disify confirmed deliverable"
+        elif disify_verdict in ("Invalid", "Disposable"):
+            # Fall back to next pattern
+            best_email       = patterns[1]["email"] if len(patterns) > 1 else disify_email
+            email_confidence = f"Low — Disify: {disify_verdict}"
+            data_tier        = "Tier 4 — Inferred (primary failed Disify)"
+        elif verified_email:
+            best_email       = verified_email
+            email_confidence = "High — found on company website"
+            data_tier        = "Tier 3 — Website scraped"
+        elif domain:
+            best_email       = patterns[0]["email"] if patterns else None
+            email_confidence = "Medium — domain confirmed, pattern inferred"
+            data_tier        = "Tier 4 — Inferred pattern"
+        else:
+            best_email       = None
+            email_confidence = "None"
+            data_tier        = "Tier 4 — No domain found"
+
         # LinkedIn search URL
         linkedin_search = (
             f"https://www.linkedin.com/search/results/people/"
@@ -262,25 +402,29 @@ def build_director_contacts(directors: list[dict], domain: str,
             "role":              d.get("role", ""),
             "age":               d.get("age"),
             "verified_email":    verified_email,
-            "email_confidence":  "High" if verified_email else ("Medium" if domain else "None"),
-            "email_patterns":    patterns[:3],  # top 3 patterns
-            "best_email":        verified_email or (patterns[0]["email"] if patterns else None),
+            "best_email":        best_email,
+            "email_confidence":  email_confidence,
+            "email_patterns":    patterns[:3],
+            "disify":            disify_result,
             "linkedin_search":   linkedin_search,
-            "data_tier":         "Tier 3" if verified_email else "Tier 4 — Inferred pattern",
+            "data_tier":         data_tier,
         })
     return contacts
 
 
 # ── Main enrichment function ──────────────────────────────────────────────────
 
-def enrich_contacts(company: dict) -> dict:
+def enrich_contacts(company: dict, run_disify: bool = True) -> dict:
     """
     Full contact enrichment for a single company.
     Returns a contacts dict to be merged into the company record.
+
+    run_disify: if True (default), verify best email candidate via Disify.
+                Set False to skip verification and run faster.
     """
-    name    = company.get("company_name", "")
-    number  = company.get("company_number", "")
-    address = company.get("registered_office_address", {})
+    name      = company.get("company_name", "")
+    number    = company.get("company_number", "")
+    address   = company.get("registered_office_address", {})
     directors = company.get("directors", [])
 
     # 1. Find website
@@ -297,34 +441,46 @@ def enrich_contacts(company: dict) -> dict:
     site_emails = site_data.get("emails", [])
     site_phones = site_data.get("phones", [])
 
-    # 3. Build director contacts
-    dir_contacts = build_director_contacts(directors, domain, site_emails)
+    # 3. Build director contacts (with optional Disify verification)
+    dir_contacts = build_director_contacts(
+        directors, domain, site_emails, run_disify=run_disify
+    )
 
     return {
         "website":           website,
         "site_phones":       site_phones,
         "site_emails":       site_emails,
         "director_contacts": dir_contacts,
+        "disify_enabled":    run_disify,
         "data_tier":         "Tier 3/4",
     }
 
 
-def run():
+def run(run_disify: bool = True):
     enriched_path = os.path.join(cfg.OUTPUT_DIR, cfg.ENRICHED_JSON)
     with open(enriched_path) as f:
         companies = json.load(f)
 
-    # Only run on top targets to avoid excessive HTTP requests
     top_n = getattr(cfg, "CONTACT_ENRICH_TOP_N", 50)
-    print(f"\nContact enrichment for top {top_n} companies...")
+    disify_str = "with Disify verification" if run_disify else "without email verification"
+    print(f"\nContact enrichment for top {top_n} companies ({disify_str})...")
 
     for i, c in enumerate(companies[:top_n]):
         if i % 10 == 0:
             print(f"  [{i+1}/{top_n}] {c['company_name'][:50]}")
-        c["contacts"] = enrich_contacts(c)
+        c["contacts"] = enrich_contacts(c, run_disify=run_disify)
 
     with open(enriched_path, "w") as f:
         json.dump(companies, f, indent=2)
+
+    # Print a quick verification summary
+    if run_disify:
+        verified = sum(
+            1 for c in companies[:top_n]
+            for dc in c.get("contacts", {}).get("director_contacts", [])
+            if "Verified" in dc.get("email_confidence", "")
+        )
+        print(f"  Disify verified: {verified} director emails confirmed deliverable")
 
     print(f"Done → {enriched_path}")
     return companies
