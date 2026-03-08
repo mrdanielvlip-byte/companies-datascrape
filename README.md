@@ -1,14 +1,71 @@
 # Companies House PE Deal-Sourcing Pipeline
 
-Automated pipeline for identifying UK SME acquisition targets in any sector using the Companies House public API. Scores every active company by succession risk, founder retirement signal, PE independence, and operational maturity.
+Institutional-grade UK SME acquisition intelligence platform. Sweeps the Companies House API by SIC code and keyword, enriches every company with director data, charges, dealability signals, financial estimates, and contact intelligence — then scores each against a 4-dimension PE acquisition model.
 
-## What it does
+Designed to replicate the analytical rigour of Dun & Bradstreet / Creditsafe, optimised specifically for PE buy-and-build target identification.
 
-1. **Search** — sweeps Companies House by SIC code + keyword name search across all active companies
-2. **Filter** — removes false positives (dental labs, recruiters, etc.) using configurable keyword rules
-3. **Enrich** — pulls directors, PSC (shareholders), and company age for every match via the API
-4. **Score** — applies a 6-dimension weighted acquisition score (0–100) to each company
-5. **Export** — produces a formatted Excel workbook with ranked pipeline, top-30 profiles, and summary stats
+---
+
+## Pipeline overview
+
+```
+Step 1  ch_search.py       SIC sweep + name search → all active companies
+Step 2  (filter)           Remove false positives using keyword rules
+Step 3  ch_enrich.py       Directors, PSC, charges, dealability signals, acquisition score
+Step 4  ch_financials.py   Accounts metadata + 3-model revenue/EBITDA estimation
+Step 5  ch_contacts.py     Website identification + email pattern inference
+Step 6  bolt_on.py         Sector adjacency + market fragmentation analysis
+Step 7  build_excel.py     6-sheet Excel workbook output
+```
+
+---
+
+## Acquisition scoring model
+
+```
+Acquisition Score =
+  Scale & Financial      × 30%
+  Market Attractiveness  × 20%
+  Ownership & Succession × 30%
+  Dealability Signals    × 20%
+```
+
+| Score   | Classification          |
+|---------|-------------------------|
+| 80–100  | Prime acquisition target |
+| 65–79   | High priority           |
+| 50–64   | Medium priority         |
+| < 50    | Intelligence record only |
+
+All companies remain in the dataset regardless of score.
+
+---
+
+## Data reliability tiers
+
+| Tier   | Source                                                            |
+|--------|-------------------------------------------------------------------|
+| Tier 1 | Companies House official registry (officers, PSC, charges, filings) |
+| Tier 2 | Structured industry datasets (UKAS, Contracts Finder)            |
+| Tier 3 | Verified corporate websites                                       |
+| Tier 4 | Derived estimates (financial models)                              |
+
+Every output value carries its source tier. Where conflicts exist, Tier 1 takes precedence.
+
+---
+
+## Output — Excel workbook (6 sheets)
+
+| Sheet               | Contents                                                          |
+|---------------------|-------------------------------------------------------------------|
+| PE Pipeline         | All companies ranked by acquisition score with auto-filter        |
+| Top 30 Profiles     | Detailed intelligence cards: directors, signals, score breakdown  |
+| Director Contacts   | Email patterns, website URL, confidence ratings per director      |
+| Financial Estimates | Revenue/EBITDA low/base/high with model formula shown             |
+| Bolt-On Analysis    | Market fragmentation index + sector adjacency recommendations     |
+| Summary Stats       | Pipeline KPIs: grade distribution, succession, dealability        |
+
+---
 
 ## Setup
 
@@ -16,73 +73,89 @@ Automated pipeline for identifying UK SME acquisition targets in any sector usin
 pip install -r requirements.txt
 ```
 
-Create a `.ch_api_key` file in the project root:
-
+Create `.ch_api_key` in the project root:
 ```
 COMPANIES_HOUSE_API_KEY=your-key-here
 ```
 
-Get a free API key at: https://developer.company-information.service.gov.uk/
+Free API key: https://developer.company-information.service.gov.uk/
+
+---
 
 ## Usage
 
 ```bash
-# Full pipeline (search → enrich → Excel)
+# Full pipeline
 python run.py
 
-# Use a different sector config
+# Different sector
 python run.py --config configs.plumbing_hvac
 python run.py --config configs.fire_security
 
-# Run individual steps
-python run.py --search-only      # Pull raw companies
-python run.py --enrich-only      # Enrich (uses existing raw JSON)
-python run.py --excel-only       # Rebuild Excel only
+# Skip contact enrichment (faster)
+python run.py --skip-contacts
+
+# Individual steps
+python run.py --search-only        # Steps 1–2
+python run.py --enrich-only        # Step 3
+python run.py --financials-only    # Step 4
+python run.py --contacts-only      # Step 5
+python run.py --excel-only         # Steps 6–7
 ```
 
-Output is saved to `output/PE_Pipeline.xlsx`.
+---
 
-## Targeting a new sector
+## Creating a new sector config
 
-Copy `config.py` to `configs/my_sector.py` and edit:
+Copy `config.py` to `configs/my_sector.py` and edit these key fields:
 
-| Field | Description |
-|---|---|
-| `SECTOR_LABEL` | Display name for reports |
-| `SIC_CODES` | List of relevant SIC codes |
-| `NAME_QUERIES` | Keyword phrases for name search |
-| `INCLUDE_STEMS` | Substrings that must appear in company name |
-| `EXCLUDE_TERMS` | Substrings that disqualify a company |
-| `REVENUE_PER_HEAD_*` | Revenue/employee benchmarks (£) |
-| `EBITDA_MARGIN_*` | Sector EBITDA margin range |
-| `SCORE_WEIGHTS` | Acquisition score dimension weights (must sum to 100) |
+| Field                       | Description                                    |
+|-----------------------------|------------------------------------------------|
+| `SECTOR_LABEL`              | Display name                                   |
+| `SIC_CODES`                 | List of relevant SIC codes                     |
+| `NAME_QUERIES`              | Keyword phrases for CH name search             |
+| `INCLUDE_STEMS`             | Substrings that must appear in company name    |
+| `EXCLUDE_TERMS`             | Substrings that disqualify a company           |
+| `SECTOR_BENCHMARKS`         | Revenue/head, asset turnover, EBITDA margins   |
+| `MARKET_ATTRACTIVENESS_SCORE` | Fixed sector score 0–100                     |
+| `BOLT_ON_ADJACENCIES`       | Sector-specific service adjacency map          |
 
-Then run:
-```bash
-python run.py --config configs.my_sector
-```
+Then run: `python run.py --config configs.my_sector`
 
-## Acquisition scoring model
+---
 
-| Dimension | Weight | Signal |
-|---|---|---|
-| Scale fit | 25% | Company age as maturity proxy |
-| Founder retirement | 20% | Max director age |
-| Succession weakness | 20% | Director count + age distribution |
-| Independence | 15% | Not PE-backed (PSC check) |
-| Sector fragmentation | 10% | Fixed for each sector |
-| Operational signals | 10% | Company age, stability |
+## Financial models
 
-**Grade thresholds:** A+ ≥85 · A ≥80 · B+ ≥75 · B ≥70 · C ≥60 · D <60
+- **Employee model**: `Revenue = Employees × Revenue per Employee`
+- **Asset model**: `Revenue = Total Assets × Sector Asset Turnover Ratio`
+- **Location model**: `Revenue = Sites × Revenue per Site Benchmark`
+- **EBITDA**: `EBITDA = Revenue × Sector EBITDA Margin`
 
-## Example sectors already configured
+All estimates are Tier 4 (derived). Low / base / high ranges provided. For most UK SMEs, only balance sheet data is publicly available (Total Exemption accounts — turnover not disclosed).
 
-- `config.py` — Calibration & Metrology Laboratories
-- `configs/plumbing_hvac.py` — Plumbing, Heating & HVAC
-- `configs/fire_security.py` — Fire Protection & Security Systems
+---
 
-## Notes
+## Director contact intelligence
 
-- The `.ch_api_key` file is excluded from git via `.gitignore` — never commit your key
-- Output JSON and Excel are also excluded — re-run the pipeline to regenerate
-- Rate limiting: the script uses 50–100ms delays between API calls; a full 300-company run takes ~3–4 minutes
+For each company (top N by acquisition score):
+1. Identifies official website via DuckDuckGo + domain pattern inference
+2. Scrapes homepage and contact pages for phone numbers and email addresses
+3. Infers director email patterns using company domain
+4. Scores confidence: **High** (verified) / **Medium** (domain confirmed) / **Low** (inferred)
+
+---
+
+## Included sector configs
+
+| File                       | Sector                                |
+|----------------------------|---------------------------------------|
+| `config.py`                | Calibration & Metrology Laboratories  |
+| `configs/plumbing_hvac.py` | Plumbing, Heating & HVAC              |
+| `configs/fire_security.py` | Fire Protection & Security Systems    |
+
+---
+
+## Security
+
+- `.ch_api_key` is **gitignored** — never committed
+- `output/` is gitignored — re-run the pipeline to regenerate
