@@ -352,7 +352,7 @@ def seller_likelihood_score(company: dict, company_number: str) -> dict:
 
     # ── E. Ownership Concentration ────────────────────────────────────────────
     # Proxy: single active director and family surname match, or sole director
-    active_dirs = [d for d in directors if not d.get("resigned")]
+    active_dirs = [d for d in directors if not d.get("resigned") and not d.get("resigned_on")]
     surnames    = [d.get("name", "").split(",")[0].strip().upper() for d in active_dirs]
     surname_counts = {}
     for s in surnames:
@@ -371,7 +371,8 @@ def seller_likelihood_score(company: dict, company_number: str) -> dict:
 
     # ── F. Succession Gap ─────────────────────────────────────────────────────
     # No director under 45 = no clear internal succession candidate
-    ages_known  = [d.get("age") for d in active_dirs if d.get("age")]
+    ages_known  = [d.get("age") or d.get("age_est") for d in active_dirs
+                   if d.get("age") or d.get("age_est")]
     has_young   = any(a < 45 for a in ages_known)
     if ages_known and not has_young:
         flags["F_succession_gap"] = True
@@ -386,7 +387,22 @@ def seller_likelihood_score(company: dict, company_number: str) -> dict:
 
     # ── G. Long Ownership (>15 years) ─────────────────────────────────────────
     # Any director serving >15 years = embedded owner-manager, exit fatigue possible
-    tenures      = [d.get("years_active", 0) for d in active_dirs]
+    def _dir_tenure(d):
+        """Return years_active, or calculate from appointed date if available."""
+        if d.get("years_active") is not None:
+            return float(d["years_active"])
+        appt = d.get("appointed") or d.get("appointed_on") or ""
+        if appt:
+            try:
+                import re as _re
+                m = _re.match(r'(\d{4})', appt)
+                if m:
+                    return TODAY.year - int(m.group(1))
+            except:
+                pass
+        return 0.0
+
+    tenures      = [_dir_tenure(d) for d in active_dirs]
     long_service = [t for t in tenures if t >= 15]
     if long_service:
         flags["G_long_ownership"] = True
@@ -417,11 +433,11 @@ def seller_likelihood_score(company: dict, company_number: str) -> dict:
 
     # ── I. No Recent Hiring ───────────────────────────────────────────────────
     # Proxy: last director appointment >5 years ago (from pre-enriched data)
-    # We use max_tenure of existing directors vs company_age as a proxy for stagnation
+    # We use tenure of existing directors as a proxy for stagnation
     newest_appointment_years_ago = None
     if tenures:
         # The director with SHORTEST tenure was appointed most recently
-        min_tenure = min(tenures)
+        min_tenure = min(t for t in tenures if t > 0) if any(t > 0 for t in tenures) else 0
         # If min tenure > 5 = no new director in 5+ years
         newest_appointment_years_ago = min_tenure
 

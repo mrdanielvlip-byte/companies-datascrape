@@ -191,8 +191,8 @@ def score_operational_improvement(company: dict) -> dict:
 
     Higher score = MORE improvement potential (better for PE, not worse).
     """
-    directors = company.get("directors", [])
-    n_dirs    = len(directors)
+    directors   = company.get("directors") or []
+    n_dirs      = company.get("director_count") or len(directors)
     sell_intent = company.get("sell_intent") or {}
     struct_score = (sell_intent.get("components") or {}).get("business_structure") or {}
     ops_stress   = (sell_intent.get("components") or {}).get("operational_stress") or {}
@@ -202,14 +202,32 @@ def score_operational_improvement(company: dict) -> dict:
     score   = 0
 
     # a. Governance gap (1–7)
-    if struct_score.get("has_governance") == False:
-        score += 7
-        signals.append("No FD/CFO/MD/NED — significant professionalisation upside post-acquisition")
+    # Use sell_intent.components.business_structure.has_governance when available (post sell_signals.run())
+    # Otherwise fall back to director count / occupation keywords
+    has_governance_flag = struct_score.get("has_governance")
+    if has_governance_flag is None:
+        # Derive from director occupations / roles
+        gov_kws = {"chief financial","cfo","finance director"," fd","chief operating",
+                   "coo","managing director"," md","independent director",
+                   "non-executive","ned","group finance","commercial director"}
+        has_governance_flag = any(
+            any(kw in (d.get("occupation") or d.get("role") or "").lower() for kw in gov_kws)
+            for d in directors
+        )
+
+    if not has_governance_flag:
+        if n_dirs <= 2:
+            score += 7
+            signals.append("Solo/duo management, no governance roles — significant professionalisation upside")
+        elif n_dirs <= 4:
+            score += 5
+            signals.append("Small unprofessionalised board — governance gap, operational leverage available")
+        else:
+            score += 3
+            signals.append("No FD/CFO/MD/NED identified — professionalisation upside post-acquisition")
     elif n_dirs <= 2:
-        score += 5
-        signals.append("Solo/duo management — substantial operational leverage available")
-    elif n_dirs <= 4:
         score += 3
+        signals.append("Lean management team — some operational improvement opportunity")
     else:
         score += 1
 
@@ -246,7 +264,7 @@ def score_operational_improvement(company: dict) -> dict:
             score += 2
 
     detail = {
-        "governance_gap": struct_score.get("has_governance") == False,
+        "governance_gap": not has_governance_flag,
         "director_count": n_dirs,
         "late_filings": late_filings,
         "has_website": has_web,
