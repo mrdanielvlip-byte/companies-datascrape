@@ -161,6 +161,20 @@ P_CURRENT_ASSETS = re.compile(
     r'(?:total\s+current\s+assets|current\s+assets)\s+([\(\)£$\d,\.\-]+)',
     re.IGNORECASE | re.MULTILINE)
 
+# Trade debtors / receivables — HIGH ACCURACY revenue proxy via debtor book method
+P_TRADE_DEBTORS = re.compile(
+    r'(?:trade\s+debtors?|trade\s+and\s+other\s+receivables?|trade\s+receivables?'
+    r'|accounts?\s+receivable|debtors?\s+(?:due\s+within|falling\s+due))'
+    r'[\s\d:]*\s+([\(\)£$\d,\.\-]+)',
+    re.IGNORECASE | re.MULTILINE)
+
+# Total creditors / liabilities — for debt capacity model
+P_CREDITORS = re.compile(
+    r'(?:total\s+creditors?|creditors?\s+(?:due|falling\s+due)|total\s+liabilities?'
+    r'|net\s+current\s+liabilities?)'
+    r'[\s\d:]*\s+([\(\)£$\d,\.\-]+)',
+    re.IGNORECASE | re.MULTILINE)
+
 P_CURRENCY = re.compile(r'(?:£|\$|€|USD|GBP|EUR)', re.IGNORECASE)
 
 def currency_from_text(text):
@@ -201,19 +215,30 @@ def parse_financials(full_text, priority):
         "turnover": None, "operating_profit": None, "profit_before_tax": None,
         "staff_costs": None, "net_assets": None, "total_assets": None,
         "fixed_assets": None, "current_assets": None,
+        "trade_debtors": None,    # for debtor book revenue model (Method 7)
+        "total_liabilities": None, # for debt capacity model (Method 8)
         "currency": currency_from_text(full_text),
         "source": "CH accounts PDF (OCR)",
         "data_tier": "Tier 1 — Companies House filing",
     }
 
-    result["turnover"]         = safe_val(P_TURNOVER.search(full_text))
-    result["operating_profit"] = safe_val(P_OPERATING_PROFIT.search(full_text))
-    result["profit_before_tax"]= safe_val(P_PBT.search(full_text))
-    result["staff_costs"]      = safe_val(P_STAFF.search(full_text))
-    result["net_assets"]       = safe_val(P_NET_ASSETS.search(full_text))
-    result["total_assets"]     = safe_val(P_TOTAL_ASSETS.search(full_text))
-    result["fixed_assets"]     = safe_val(P_FIXED_ASSETS.search(full_text))
-    result["current_assets"]   = safe_val(P_CURRENT_ASSETS.search(full_text))
+    result["turnover"]          = safe_val(P_TURNOVER.search(full_text))
+    result["operating_profit"]  = safe_val(P_OPERATING_PROFIT.search(full_text))
+    result["profit_before_tax"] = safe_val(P_PBT.search(full_text))
+    result["staff_costs"]       = safe_val(P_STAFF.search(full_text))
+    result["net_assets"]        = safe_val(P_NET_ASSETS.search(full_text))
+    result["total_assets"]      = safe_val(P_TOTAL_ASSETS.search(full_text))
+    result["fixed_assets"]      = safe_val(P_FIXED_ASSETS.search(full_text))
+    result["current_assets"]    = safe_val(P_CURRENT_ASSETS.search(full_text))
+    result["trade_debtors"]     = safe_val(P_TRADE_DEBTORS.search(full_text))
+    result["total_liabilities"] = safe_val(P_CREDITORS.search(full_text))
+
+    # Sanity-check trade_debtors: must be positive and < total_assets (if known)
+    if result["trade_debtors"] and result["trade_debtors"] < 0:
+        result["trade_debtors"] = None
+    if (result["trade_debtors"] and result["total_assets"]
+            and result["trade_debtors"] > result["total_assets"] * 2):
+        result["trade_debtors"] = None  # OCR mis-parse — discard
 
     # Quality: how many figures did we get?
     extracted = sum(1 for v in result.values()

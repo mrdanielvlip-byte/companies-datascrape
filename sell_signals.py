@@ -2,19 +2,33 @@
 sell_signals.py — Sell Intent Signal Engine
 
 Identifies behavioural and structural signals that suggest a founder/owner
-is approaching exit readiness. Produces a composite Sell Intent Score (0–100).
+is approaching exit readiness. Produces a composite Sell Intent Score (0–100)
+and a separate Seller Likelihood classification (High / Medium / Low).
 
-Signal dimensions:
+Signal dimensions (Sell Intent Score):
   A. Age & Tenure         (0–40 pts) — Founder age, director tenure
   B. Business Structure   (0–25 pts) — Solo management, no governance hires
   C. Operational Stress   (0–20 pts) — Late filings, director departures
   D. Company Maturity     (0–15 pts) — Years in operation
 
-Scoring bands:
+Seller Likelihood (separate classification, per master prompt):
+  E. Ownership Concentration — single founder/family ownership signals
+  F. Succession Gap          — no obvious management successor identified
+  G. Long Ownership (>15 yrs) — lock-in/fatigue signals
+  H. Revenue Trajectory      — declining/flat revenue = shareholder pressure
+  I. Hiring Signals          — no recent hiring = stagnation / exit mode
+  J. Directorship Reduction  — director count falling = unwinding governance
+
+Scoring bands (Sell Intent):
   70–100  Strong sell signals — priority outreach
   50–69   Moderate signals — include in contact list
   30–49   Weak signals — monitor
   < 30    Low signal — background intelligence only
+
+Seller Likelihood bands:
+  High    — 3+ confirmed signals from E–J
+  Medium  — 1–2 signals from E–J
+  Low     — no clear seller signals
 
 Data tiers:
   Tier 1 — Companies House filing history, officers register
@@ -308,6 +322,149 @@ def maturity_score(company_age: int) -> dict:
     }
 
 
+# ── E–J. Seller Likelihood Signals ───────────────────────────────────────────
+
+def seller_likelihood_score(company: dict, company_number: str) -> dict:
+    """
+    Seller Likelihood Classification — per master prompt spec.
+
+    Six independent signal dimensions (E–J), each 0 or 1:
+      E. Ownership Concentration  — single director/founder owns the company
+      F. Succession Gap           — no management successor (no <45-yr-old director)
+      G. Long Ownership (>15 yrs) — directors serving >15 years = possible lock-in fatigue
+      H. Revenue Trajectory       — static/declining accounts (Tier B/micro for large co)
+      I. No Recent Hiring         — no new appointments in last 5 years
+      J. Director Reduction       — fewer active directors now than at peak
+
+    Classification:
+      High    — 4+ signals
+      Medium  — 2–3 signals
+      Low     — 0–1 signals
+
+    Unlike the Sell Intent Score (A–D, uses CH API live calls), this function
+    works entirely from pre-enriched data (no additional API calls) so it can
+    be run in bulk without rate-limit risk.
+    """
+    directors = company.get("directors", [])
+    company_age = company.get("company_age_years") or 0
+    signals = []
+    flags   = {}
+
+    # ── E. Ownership Concentration ────────────────────────────────────────────
+    # Proxy: single active director and family surname match, or sole director
+    active_dirs = [d for d in directors if not d.get("resigned")]
+    surnames    = [d.get("name", "").split(",")[0].strip().upper() for d in active_dirs]
+    surname_counts = {}
+    for s in surnames:
+        surname_counts[s] = surname_counts.get(s, 0) + 1
+    dominant_family = any(v >= 2 for v in surname_counts.values())
+    is_sole_director = len(active_dirs) == 1
+
+    if is_sole_director:
+        flags["E_ownership_concentration"] = True
+        signals.append("Single director company — founder ownership concentration")
+    elif dominant_family and len(active_dirs) <= 3:
+        flags["E_ownership_concentration"] = True
+        signals.append(f"Family-owned ({list(surname_counts.keys())[0]} family) — concentrated ownership")
+    else:
+        flags["E_ownership_concentration"] = False
+
+    # ── F. Succession Gap ─────────────────────────────────────────────────────
+    # No director under 45 = no clear internal succession candidate
+    ages_known  = [d.get("age") for d in active_dirs if d.get("age")]
+    has_young   = any(a < 45 for a in ages_known)
+    if ages_known and not has_young:
+        flags["F_succession_gap"] = True
+        min_age = min(ages_known) if ages_known else 0
+        signals.append(f"No director under 45 (youngest: {min_age}) — succession gap identified")
+    elif not ages_known and len(active_dirs) <= 2 and company_age >= 15:
+        # No age data but long-tenure small company = likely older founder
+        flags["F_succession_gap"] = True
+        signals.append("Director ages unavailable — likely older founder profile given tenure")
+    else:
+        flags["F_succession_gap"] = False
+
+    # ── G. Long Ownership (>15 years) ─────────────────────────────────────────
+    # Any director serving >15 years = embedded owner-manager, exit fatigue possible
+    tenures      = [d.get("years_active", 0) for d in active_dirs]
+    long_service = [t for t in tenures if t >= 15]
+    if long_service:
+        flags["G_long_ownership"] = True
+        signals.append(f"Director serving {max(long_service):.0f} yrs — owner-manager lock-in / exit fatigue window")
+    elif company_age >= 20 and len(active_dirs) <= 2:
+        # Likely same founder still at the helm even without tenure data
+        flags["G_long_ownership"] = True
+        signals.append(f"Company aged {company_age} yrs with ≤2 directors — inferred long ownership")
+    else:
+        flags["G_long_ownership"] = False
+
+    # ── H. Revenue / Accounts Trajectory ─────────────────────────────────────
+    # Accounts type downgrade (e.g., company with 10+ employees filing micro/dormant)
+    # or balance sheet only (Tier B) when company is established = possible stagnation
+    acct = (company.get("accounts_type") or
+            (company.get("bs") or {}).get("accounts_type") or "").lower()
+    employees   = company.get("employees_est_band") or ""
+    # Heuristic: if micro/dormant but has directors with long tenure = red flag
+    if acct in ("micro-entity", "dormant") and company_age >= 10:
+        flags["H_revenue_trajectory"] = True
+        signals.append(f"Micro/dormant accounts despite {company_age} yrs operation — possible run-down / exit mode")
+    elif acct in ("total-exemption-small", "total-exemption-full") and company_age >= 20:
+        # Long-established company capped at exemption threshold — possible plateau
+        flags["H_revenue_trajectory"] = True
+        signals.append("Long-established company at total-exemption threshold — revenue plateau signal")
+    else:
+        flags["H_revenue_trajectory"] = False
+
+    # ── I. No Recent Hiring ───────────────────────────────────────────────────
+    # Proxy: last director appointment >5 years ago (from pre-enriched data)
+    # We use max_tenure of existing directors vs company_age as a proxy for stagnation
+    newest_appointment_years_ago = None
+    if tenures:
+        # The director with SHORTEST tenure was appointed most recently
+        min_tenure = min(tenures)
+        # If min tenure > 5 = no new director in 5+ years
+        newest_appointment_years_ago = min_tenure
+
+    if newest_appointment_years_ago is not None and newest_appointment_years_ago > 5:
+        flags["I_no_recent_hiring"] = True
+        signals.append(f"No new director appointment in ~{newest_appointment_years_ago:.0f} yrs — stagnant board, exit mode signal")
+    elif newest_appointment_years_ago is None and company_age >= 10:
+        flags["I_no_recent_hiring"] = True
+        signals.append("Director appointment dates unavailable — inferred stagnation from age + size")
+    else:
+        flags["I_no_recent_hiring"] = False
+
+    # ── J. Director Count Reduction ───────────────────────────────────────────
+    # Proxy: company has 1-2 active directors but sell_intent shows multiple resignations
+    sell_intent   = company.get("sell_intent") or {}
+    resignations  = ((sell_intent.get("components") or {})
+                     .get("operational_stress") or {}).get("resignations_3yr", 0) or 0
+    if resignations >= 2 and len(active_dirs) <= 2:
+        flags["J_director_reduction"] = True
+        signals.append(f"{resignations} director resignation(s) + only {len(active_dirs)} remaining — board unwinding")
+    elif len(active_dirs) == 1 and company_age >= 15:
+        # Sole director in mature company = directorship already reduced
+        flags["J_director_reduction"] = True
+        signals.append("Sole active director in mature company — board unwound to bare minimum")
+    else:
+        flags["J_director_reduction"] = False
+
+    # ── Classification ────────────────────────────────────────────────────────
+    confirmed = sum(1 for v in flags.values() if v)
+    if   confirmed >= 4: likelihood = "High"
+    elif confirmed >= 2: likelihood = "Medium"
+    else:                likelihood = "Low"
+
+    return {
+        "seller_likelihood":       likelihood,
+        "seller_likelihood_score": confirmed,
+        "seller_signals":          signals,
+        "seller_signal_count":     confirmed,
+        "seller_signal_flags":     flags,
+        "data_tier": "Tier 1 — Companies House officers register + Tier 4 derived",
+    }
+
+
 # ── Composite Sell Intent Score ───────────────────────────────────────────────
 
 def sell_intent_score(company: dict, company_number: str) -> dict:
@@ -339,6 +496,9 @@ def sell_intent_score(company: dict, company_number: str) -> dict:
     total = a["score"] + b["score"] + c["score"] + d["score"]
     total = min(total, 100)
 
+    # Seller likelihood (E–J) — no additional API calls
+    e = seller_likelihood_score(company, company_number)
+
     # Aggregate all signals
     all_signals = a["signals"] + b["signals"] + c["signals"] + d["signals"]
 
@@ -348,17 +508,23 @@ def sell_intent_score(company: dict, company_number: str) -> dict:
     else:             band = "Low"
 
     return {
-        "sell_intent_score": total,
-        "sell_intent_band":  band,
-        "sell_signals":      all_signals,
-        "signal_count":      len(all_signals),
+        "sell_intent_score":  total,
+        "sell_intent_band":   band,
+        "sell_signals":       all_signals,
+        "signal_count":       len(all_signals),
+        # Seller likelihood (E–J dimensions from master prompt)
+        "seller_likelihood":         e["seller_likelihood"],
+        "seller_likelihood_score":   e["seller_likelihood_score"],
+        "seller_signals":            e["seller_signals"],
+        "seller_signal_flags":       e["seller_signal_flags"],
         "components": {
-            "age_tenure":        a,
+            "age_tenure":         a,
             "business_structure": b,
             "operational_stress": c,
             "company_maturity":   d,
+            "seller_likelihood":  e,
         },
-        "formula":    "Age/Tenure(40) + Structure(25) + Stress(20) + Maturity(15)",
+        "formula":    "Age/Tenure(40) + Structure(25) + Stress(20) + Maturity(15) | Seller Likelihood E–J",
         "data_tier":  "Tier 1 — Companies House",
     }
 

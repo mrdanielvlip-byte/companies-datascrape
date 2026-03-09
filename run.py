@@ -6,19 +6,32 @@ Pipeline steps:
                     OR reg_sources.py   — regulatory register discovery (--reg-source)
   2.  Filter        (inline)            — remove false positives → filtered_companies.json
   3.  Enrich        ch_enrich.py        — directors, PSC, charges, dealability, scoring
-  4.  Financials    ch_financials.py    — accounts data + 6-model revenue/EBITDA estimation
+  4.  Financials    ch_financials.py    — accounts data + 8-model revenue/EBITDA estimation
+                                         Models: Employee RPE, Asset Turnover, Staff Cost,
+                                         Net Asset, Location, Director Hybrid,
+                                         Debtor Book (Model 7 — highest accuracy for B2B),
+                                         Debt Capacity (Model 8 — floor estimate)
   4b. Accounts OCR  ch_accounts_ocr.py — CH Document API + Tesseract OCR: pulls actual P&L
                                          and balance sheet from filed PDF accounts; replaces
                                          estimates with real Tier 1 figures where available.
                                          Tier A (full/medium/group/small): actual turnover + PBT
-                                         Tier B (total-exemption/abridged): real net assets
+                                         Tier B (total-exemption/abridged): real net assets + debtors
   5.  Contacts      ch_contacts.py      — website identification + email inference (Disify verified)
-  6.  Sell Signals  sell_signals.py     — exit readiness: late filings, director churn, Sell Intent Score
+  6.  Sell Signals  sell_signals.py     — exit readiness: late filings, director churn,
+                                         Sell Intent Score (A–D) + Seller Likelihood (E–J)
+                                         E: Ownership concentration  F: Succession gap
+                                         G: Long ownership (>15yr)   H: Revenue trajectory
+                                         I: No recent hiring          J: Director reduction
   7.  Contracts     contracts_finder.py — government contract intelligence (Contracts Finder + FTS)
   8.  Digital       digital_health.py   — domain age, LinkedIn, job postings, website health
   9.  Accreditations accreditations.py  — regulatory registers + ISO/CHAS/Gas Safe detection
   10. Bolt-on       bolt_on.py          — sector adjacency + fragmentation analysis
-  11. Excel         build_excel.py      — 10-sheet workbook output
+  11. Competitor Map competitor_map.py  — 10 closest geographic/operational competitors per company
+                                         PE-backed competitor flags, roll-up opportunity scoring
+  12. Acq Score     acquisition_score.py — 5-dimension acquisition attractiveness score (0–100)
+                                         Fragmentation(20) + Recurring(20) + OpsImprovement(20)
+                                         + BoltOn(20) + Exit Attractiveness(20)
+  13. Excel         build_excel.py      — 10-sheet workbook output
 
 Report depth presets (choose one, default is --full):
   python run.py --sector "lift maintenance" --quick     # Quick: Steps 1-4 + Excel only (~5x faster; skips OCR)
@@ -451,56 +464,72 @@ Examples:
     # Step 4b — Accounts OCR (skipped in --quick mode or with --no-accounts-ocr)
     skip_ocr = args.quick or getattr(args, "no_accounts_ocr", False)
     if not skip_ocr:
-        print("\nStep 4b/11 — Accounts OCR (CH Document API + Tesseract: pull actual P&L from filed PDFs)")
+        print("\nStep 4b/13 — Accounts OCR (CH Document API + Tesseract: pull actual P&L from filed PDFs)")
         ocr = reload("ch_accounts_ocr")
         ocr.run(resume=True)
     else:
-        print("\nStep 4b/11 — Accounts OCR SKIPPED (--quick mode; use --full or omit --no-accounts-ocr)")
+        print("\nStep 4b/13 — Accounts OCR SKIPPED (--quick mode; use --full or omit --no-accounts-ocr)")
 
     if not args.skip_contacts:
         run_disify = not args.no_disify
         label = "Disify verified" if run_disify else "unverified (no Disify)"
-        print(f"\nStep 5/11 — Contact intelligence (website + email inference, {label})")
+        print(f"\nStep 5/13 — Contact intelligence (website + email inference, {label})")
         contacts = reload("ch_contacts")
         contacts.run(run_disify=run_disify)
     else:
-        print("\nStep 5/11 — Contact intelligence SKIPPED (--skip-contacts)")
+        print("\nStep 5/13 — Contact intelligence SKIPPED (--skip-contacts)")
 
     # ── Enhanced intelligence steps (6–9) ────────────────────────────────────
 
     if not skip_extras and not args.no_sell_signals:
-        print("\nStep 6/11 — Sell intent signals (late filings, director churn, age/tenure)")
+        print("\nStep 6/13 — Sell intent signals (late filings, director churn, age/tenure)")
         sell = reload("sell_signals")
         sell.run()
     else:
-        print("\nStep 6/11 — Sell signals SKIPPED")
+        print("\nStep 6/13 — Sell signals SKIPPED")
 
     if not skip_extras and not args.no_contracts:
-        print("\nStep 7/11 — Government contracts (Contracts Finder + Find a Tender)")
+        print("\nStep 7/13 — Government contracts (Contracts Finder + Find a Tender)")
         contracts = reload("contracts_finder")
         contracts.run()
     else:
-        print("\nStep 7/11 — Government contracts SKIPPED")
+        print("\nStep 7/13 — Government contracts SKIPPED")
 
     if not skip_extras and not args.no_digital:
-        print("\nStep 8/11 — Digital health (domain age, LinkedIn, job postings)")
+        print("\nStep 8/13 — Digital health (domain age, LinkedIn, job postings)")
         digital = reload("digital_health")
         digital.run()
     else:
-        print("\nStep 8/11 — Digital health SKIPPED")
+        print("\nStep 8/13 — Digital health SKIPPED")
 
     if not skip_extras and not args.no_accreditations:
-        print("\nStep 9/11 — Accreditations (CQC, Environment Agency, ICO, ISO/CHAS)")
+        print("\nStep 9/13 — Accreditations (CQC, Environment Agency, ICO, ISO/CHAS)")
         accreds = reload("accreditations")
         accreds.run()
     else:
-        print("\nStep 9/11 — Accreditations SKIPPED")
+        print("\nStep 9/13 — Accreditations SKIPPED")
 
-    print("\nStep 10/11 — Bolt-on sector adjacency analysis")
+    print("\nStep 10/13 — Bolt-on sector adjacency analysis")
     bolt = reload("bolt_on")
     bolt.run()
 
-    print("\nStep 11/11 — Build Excel (9-sheet workbook)")
+    # ── Step 11: Competitor Map (geographic + operational) ────────────────────
+    if not skip_extras:
+        print("\nStep 11/13 — Competitor mapping (10 closest rivals per company, PE-backed flags)")
+        comp_map = reload("competitor_map")
+        comp_map.run()
+    else:
+        print("\nStep 11/13 — Competitor mapping SKIPPED (--quick mode)")
+
+    # ── Step 12: Acquisition Attractiveness Score ──────────────────────────────
+    if not skip_extras:
+        print("\nStep 12/13 — Acquisition attractiveness scoring (5-dimension, 0–100)")
+        acq = reload("acquisition_score")
+        acq.run()
+    else:
+        print("\nStep 12/13 — Acquisition scoring SKIPPED (--quick mode)")
+
+    print("\nStep 13/13 — Build Excel (10-sheet workbook)")
     excel = reload("build_excel")
     out   = excel.run()
 

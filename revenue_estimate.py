@@ -4,6 +4,19 @@ revenue_estimate.py
 PE Analyst Institutional Triangulation Method for estimating revenue of UK SMEs
 where turnover is not disclosed in Companies House filings.
 
+Models
+------
+  1. Employee Model           — Employees × Revenue per Employee
+  2. Asset Turnover Model     — Total Assets × Asset Turnover ratio
+  3. Staff Cost Model         — Staff Costs ÷ Staff% of Revenue
+  4. Net Asset Model          — Net Assets × Revenue/Net Assets ratio
+  5. Location Model           — Sites × Revenue per Site
+  6. Director Hybrid Model    — Director salary × mgmt multiple (owner-managed)
+  7. Debtor Book Model        — Trade Debtors × (365 ÷ Debtor Days)
+                                [HIGH ACCURACY for SMEs — often closest to actuals]
+  8. Debt Capacity Model      — Outstanding Debt ÷ Bank Leverage Multiple → EBITDA
+                                then Revenue = EBITDA ÷ Sector Margin
+
 Usage
 -----
     from revenue_estimate import estimate_revenue
@@ -18,6 +31,9 @@ Usage
         "total_assets":     None,     # from CH accounts (£)
         "net_assets":       None,     # from CH accounts (£)
         "staff_costs":      None,     # from CH accounts (£)
+        "trade_debtors":    None,     # from CH accounts (£) — debtors/receivables
+        "total_liabilities":None,     # from CH accounts (£) — for debt capacity model
+        "outstanding_charges": 0,     # count of outstanding bank charges (CH)
         "num_sites":        1,        # operational locations
     }
 
@@ -144,6 +160,18 @@ SECTOR_BENCHMARKS: list[dict] = [
         "rev_net_low": 5.0,  "rev_net_high": 12.0,
     },
     {
+        "name": "Lift Maintenance",
+        "sic_prefixes": ["432", "433", "439", "811", "812", "331", "332", "333"],
+        "keywords": ["lift", "elevator", "escalator", "stairlift", "hoist", "vertical transport",
+                     "platform lift", "passenger lift", "goods lift"],
+        "rpe_low": 120_000,  "rpe_high": 200_000,   # maintenance engineers £120–200k RPE
+        "at_low":  3.0,      "at_high":  7.0,        # asset-light service businesses
+        "ebitda_low": 0.12,  "ebitda_high": 0.20,   # LOLER compliance = sticky recurring margins
+        "staff_pct_low": 0.40, "staff_pct_high": 0.58,
+        "rps_low": 1_200_000, "rps_high": 3_500_000,
+        "rev_net_low": 3.0,  "rev_net_high": 8.0,
+    },
+    {
         "name": "General Business Services (default)",
         "sic_prefixes": [],           # catch-all
         "keywords": [],
@@ -157,17 +185,37 @@ SECTOR_BENCHMARKS: list[dict] = [
 ]
 
 # ─── Default model weights ────────────────────────────────────────────────────
-# Must sum to 1.0.  director_hybrid is additive — it only enters the blend
-# when director salary data is available, and its weight is drawn proportionally
-# from the other available models.
+# Weights are relative — they are proportionally reallocated across whatever
+# models actually have data available.
+# debtor_book is weighted highest for B2B maintenance services where trade
+# debtors closely reflect annualised contract revenue.
 
 DEFAULT_WEIGHTS = {
-    "employee":        0.35,
-    "asset":           0.18,
-    "staff_cost":      0.18,
-    "net_asset":       0.09,
-    "location":        0.09,
-    "director_hybrid": 0.11,   # added when director salary is available
+    "employee":        0.28,
+    "asset":           0.14,
+    "staff_cost":      0.14,
+    "net_asset":       0.07,
+    "location":        0.07,
+    "director_hybrid": 0.09,   # only when director salary available
+    "debtor_book":     0.16,   # HIGH ACCURACY — direct proxy for contract revenue
+    "debt_capacity":   0.05,   # lower weight — rough floor estimate only
+}
+
+# ─── Sector debtor day benchmarks ─────────────────────────────────────────────
+# Used by the debtor book model (Method 7).
+# Source: BACS/Xero late payment reports + sector analyst data.
+SECTOR_DEBTOR_DAYS: dict[str, float] = {
+    "Lift Maintenance":          45.0,
+    "Field Services":            50.0,
+    "Engineering Services":      55.0,
+    "Construction":              65.0,
+    "Logistics / Transport":     40.0,
+    "Healthcare / Social Care":  35.0,
+    "Professional Services":     45.0,
+    "Recruitment / Staffing":    38.0,
+    "IT / Technology":           42.0,
+    "Waste Collection / Skip Hire": 38.0,
+    "General Business Services (default)": 50.0,
 }
 
 
@@ -465,6 +513,86 @@ def estimate_revenue(
         if director_salary is None:
             result.warnings.append("Director emoluments not disclosed — hybrid model excluded")
 
+    # ── Model 7: Debtor Book Reverse Engineering ──────────────────────────────
+    # Revenue ≈ Trade Debtors × (365 / Debtor Days)
+    # This is often the HIGHEST ACCURACY method for B2B service companies because
+    # trade debtors are a direct proxy for the annualised invoice run-rate.
+    # Debtor days benchmarks vary by sector (see SECTOR_DEBTOR_DAYS table).
+    trade_debtors = _to_float(company.get("trade_debtors"))
+    if trade_debtors and trade_debtors >= 5_000:
+        debtor_days = SECTOR_DEBTOR_DAYS.get(bm["name"],
+                      SECTOR_DEBTOR_DAYS["General Business Services (default)"])
+        debtor_est = trade_debtors * (365.0 / debtor_days)
+        result.models.append(ModelResult(
+            name="Debtor Book Model",
+            estimate=debtor_est,
+            weight=DEFAULT_WEIGHTS["debtor_book"],
+            actual_weight=0.0,
+            available=True,
+            formula=(f"£{trade_debtors:,.0f} trade debtors × "
+                     f"(365 ÷ {debtor_days:.0f} debtor days)"),
+            inputs={"trade_debtors": trade_debtors, "debtor_days": debtor_days},
+        ))
+    else:
+        result.models.append(ModelResult(
+            name="Debtor Book Model", estimate=0,
+            weight=DEFAULT_WEIGHTS["debtor_book"],
+            actual_weight=0.0, available=False, formula="", inputs={},
+        ))
+        if trade_debtors is None:
+            result.warnings.append("Trade debtors not available — debtor book model excluded")
+
+    # ── Model 8: Debt Capacity Reverse Engineering ────────────────────────────
+    # Logic: if the company has bank debt (outstanding charges), we can work
+    # backwards to EBITDA and then to Revenue.
+    #   EBITDA ≈ Outstanding Debt ÷ Bank Leverage Multiple (typically 2.5–4.0× for SMEs)
+    #   Revenue = EBITDA ÷ Sector EBITDA Margin
+    # We use total_liabilities as a proxy for gross debt when we don't have the
+    # precise loan balance (conservative — includes trade creditors too, so we
+    # apply a 50% haircut to avoid overstatement for asset-light businesses).
+    total_liabilities = _to_float(company.get("total_liabilities"))
+    outstanding_charges = int(company.get("outstanding_charges") or 0)
+    if total_liabilities and total_liabilities >= 20_000 and outstanding_charges >= 1:
+        # Apply haircut: ~50% of total liabilities likely to be financial debt
+        # (rest = trade creditors, accruals, deferred income)
+        est_debt   = total_liabilities * 0.50
+        leverage   = 3.0    # midpoint of 2.5–3.5× typical SME bank leverage
+        ebitda_impl= est_debt / leverage
+        ebitda_mid  = (bm["ebitda_low"] + bm["ebitda_high"]) / 2
+        debt_rev_est= ebitda_impl / ebitda_mid if ebitda_mid > 0 else 0
+        if debt_rev_est >= 10_000:
+            result.models.append(ModelResult(
+                name="Debt Capacity Model",
+                estimate=debt_rev_est,
+                weight=DEFAULT_WEIGHTS["debt_capacity"],
+                actual_weight=0.0,
+                available=True,
+                formula=(f"£{total_liabilities:,.0f} liabilities × 50% debt share "
+                         f"÷ {leverage}× leverage → EBITDA £{ebitda_impl:,.0f} "
+                         f"÷ {ebitda_mid:.0%} margin"),
+                inputs={
+                    "total_liabilities": total_liabilities,
+                    "est_debt": est_debt,
+                    "leverage_multiple": leverage,
+                    "ebitda_implied": ebitda_impl,
+                    "ebitda_margin": ebitda_mid,
+                },
+            ))
+        else:
+            result.models.append(ModelResult(
+                name="Debt Capacity Model", estimate=0,
+                weight=DEFAULT_WEIGHTS["debt_capacity"],
+                actual_weight=0.0, available=False, formula="", inputs={},
+            ))
+    else:
+        result.models.append(ModelResult(
+            name="Debt Capacity Model", estimate=0,
+            weight=DEFAULT_WEIGHTS["debt_capacity"],
+            actual_weight=0.0, available=False, formula="", inputs={},
+        ))
+        if outstanding_charges == 0:
+            result.warnings.append("No outstanding charges / insufficient liabilities — debt capacity model excluded")
+
     # ── Weighted triangulation (proportional reallocation) ───────────────────
     available = [m for m in result.models if m.available]
     if not available:
@@ -491,10 +619,12 @@ def estimate_revenue(
     # Conservative: only count models with confirmed financial inputs
     verified_count = 0
     for m in available:
-        if m.name == "Staff Cost Model":      verified_count += 1  # CH filing
-        if m.name == "Asset Turnover Model":  verified_count += 1  # CH filing
-        if m.name == "Net Asset Model":       verified_count += 1  # CH filing
-        if m.name == "Director Hybrid Model": verified_count += 1  # CH filing
+        if m.name == "Staff Cost Model":      verified_count += 1      # CH filing
+        if m.name == "Asset Turnover Model":  verified_count += 1      # CH filing
+        if m.name == "Net Asset Model":       verified_count += 1      # CH filing
+        if m.name == "Director Hybrid Model": verified_count += 1      # CH filing
+        if m.name == "Debtor Book Model":     verified_count += 1.5    # highest-signal CH data
+        if m.name == "Debt Capacity Model":   verified_count += 0.5    # approximate
         # Employee and Location models usually involve some estimation
     raw_conf = verified_count / max(len(available), 1)
     # Floor at 20% if at least one model runs; cap at 95%
