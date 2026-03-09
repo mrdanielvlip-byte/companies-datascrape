@@ -6,7 +6,12 @@ Pipeline steps:
                     OR reg_sources.py   — regulatory register discovery (--reg-source)
   2.  Filter        (inline)            — remove false positives → filtered_companies.json
   3.  Enrich        ch_enrich.py        — directors, PSC, charges, dealability, scoring
-  4.  Financials    ch_financials.py    — accounts data + 3-model revenue/EBITDA estimation
+  4.  Financials    ch_financials.py    — accounts data + 6-model revenue/EBITDA estimation
+  4b. Accounts OCR  ch_accounts_ocr.py — CH Document API + Tesseract OCR: pulls actual P&L
+                                         and balance sheet from filed PDF accounts; replaces
+                                         estimates with real Tier 1 figures where available.
+                                         Tier A (full/medium/group/small): actual turnover + PBT
+                                         Tier B (total-exemption/abridged): real net assets
   5.  Contacts      ch_contacts.py      — website identification + email inference (Disify verified)
   6.  Sell Signals  sell_signals.py     — exit readiness: late filings, director churn, Sell Intent Score
   7.  Contracts     contracts_finder.py — government contract intelligence (Contracts Finder + FTS)
@@ -16,8 +21,8 @@ Pipeline steps:
   11. Excel         build_excel.py      — 10-sheet workbook output
 
 Report depth presets (choose one, default is --full):
-  python run.py --sector "lift maintenance" --quick     # Quick: Steps 1-4 + Excel only (~5x faster)
-  python run.py --sector "lift maintenance" --full      # Full: all 10 steps (default)
+  python run.py --sector "lift maintenance" --quick     # Quick: Steps 1-4 + Excel only (~5x faster; skips OCR)
+  python run.py --sector "lift maintenance" --full      # Full: all steps inc. OCR of filed accounts (default)
 
 Usage:
   python run.py --sector "fire safety"                  # Full pipeline, auto SIC discovery
@@ -264,7 +269,7 @@ Examples:
         action="store_true",
         help=(
             "Quick report mode: Steps 1–4 + Excel only (search, filter, enrich, financials). "
-            "Skips contacts, sell signals, contracts, digital health, accreditations. "
+            "Skips accounts OCR, contacts, sell signals, contracts, digital health, accreditations. "
             "~5x faster. Ideal for initial sector screening."
         ),
     )
@@ -278,10 +283,12 @@ Examples:
         ),
     )
 
-    parser.add_argument("--search-only",     action="store_true", help="Steps 1-2 only")
-    parser.add_argument("--enrich-only",     action="store_true", help="Step 3 only")
-    parser.add_argument("--financials-only", action="store_true", help="Step 4 only")
-    parser.add_argument("--contacts-only",   action="store_true", help="Step 5 only")
+    parser.add_argument("--search-only",       action="store_true", help="Steps 1-2 only")
+    parser.add_argument("--enrich-only",       action="store_true", help="Step 3 only")
+    parser.add_argument("--financials-only",   action="store_true", help="Step 4 only")
+    parser.add_argument("--accounts-ocr-only", action="store_true", help="Step 4b only — download + OCR filed accounts PDFs")
+    parser.add_argument("--contacts-only",     action="store_true", help="Step 5 only")
+    parser.add_argument("--no-accounts-ocr",   action="store_true", help="Skip Step 4b (accounts PDF OCR). Use with --quick or if OCR already done.")
     parser.add_argument("--excel-only",      action="store_true", help="Steps 10–11 only (bolt-on + Excel)")
     parser.add_argument("--skip-contacts",   action="store_true", help="Skip contact enrichment (faster)")
     parser.add_argument("--no-disify",       action="store_true", help="Skip Disify email verification")
@@ -373,6 +380,11 @@ Examples:
         fin.run()
         return
 
+    if getattr(args, "accounts_ocr_only", False):
+        ocr = reload("ch_accounts_ocr")
+        ocr.run()
+        return
+
     if args.contacts_only:
         contacts = reload("ch_contacts")
         contacts.run()
@@ -435,6 +447,15 @@ Examples:
     print("\nStep 4/11 — Financial estimation (PE 6-model triangulation: Employee, Asset, Staff Cost, Net Asset, Location, Director Hybrid)")
     fin = reload("ch_financials")
     fin.run()
+
+    # Step 4b — Accounts OCR (skipped in --quick mode or with --no-accounts-ocr)
+    skip_ocr = args.quick or getattr(args, "no_accounts_ocr", False)
+    if not skip_ocr:
+        print("\nStep 4b/11 — Accounts OCR (CH Document API + Tesseract: pull actual P&L from filed PDFs)")
+        ocr = reload("ch_accounts_ocr")
+        ocr.run(resume=True)
+    else:
+        print("\nStep 4b/11 — Accounts OCR SKIPPED (--quick mode; use --full or omit --no-accounts-ocr)")
 
     if not args.skip_contacts:
         run_disify = not args.no_disify
