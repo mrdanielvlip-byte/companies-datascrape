@@ -15,6 +15,10 @@ Pipeline steps:
   10. Bolt-on       bolt_on.py          — sector adjacency + fragmentation analysis
   11. Excel         build_excel.py      — 10-sheet workbook output
 
+Report depth presets (choose one, default is --full):
+  python run.py --sector "lift maintenance" --quick     # Quick: Steps 1-4 + Excel only (~5x faster)
+  python run.py --sector "lift maintenance" --full      # Full: all 10 steps (default)
+
 Usage:
   python run.py --sector "fire safety"                  # Full pipeline, auto SIC discovery
   python run.py --sector "electrical contractors"       # Any freetext sector description
@@ -253,7 +257,28 @@ Examples:
     )
 
     # ── Step flags ────────────────────────────────────────────────────────────
-    parser.add_argument("--search-only",     action="store_true", help="Steps 1–2 only")
+    # ── Report depth preset ───────────────────────────────────────────────────
+    depth_group = parser.add_mutually_exclusive_group()
+    depth_group.add_argument(
+        "--quick",
+        action="store_true",
+        help=(
+            "Quick report mode: Steps 1–4 + Excel only (search, filter, enrich, financials). "
+            "Skips contacts, sell signals, contracts, digital health, accreditations. "
+            "~5x faster. Ideal for initial sector screening."
+        ),
+    )
+    depth_group.add_argument(
+        "--full",
+        action="store_true",
+        help=(
+            "Full detailed report mode (default): all 10 steps including contacts, sell signals, "
+            "government contracts, digital health and accreditation enrichment. "
+            "Produces the richest output but takes significantly longer."
+        ),
+    )
+
+    parser.add_argument("--search-only",     action="store_true", help="Steps 1-2 only")
     parser.add_argument("--enrich-only",     action="store_true", help="Step 3 only")
     parser.add_argument("--financials-only", action="store_true", help="Step 4 only")
     parser.add_argument("--contacts-only",   action="store_true", help="Step 5 only")
@@ -361,6 +386,13 @@ Examples:
         return
 
     # ── Full pipeline ─────────────────────────────────────────────────────────
+
+    # --quick preset: skip contacts + all extra enrichment steps (5x faster)
+    if args.quick:
+        args.skip_contacts = True
+        args.skip_extras   = True
+        print("  [QUICK MODE]  Steps 1-4 + Excel only. Use --full for contacts, sell signals,")
+        print("                contracts, digital health and accreditations.\n")
 
     skip_extras = args.skip_extras
 
