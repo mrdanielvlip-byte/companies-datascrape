@@ -3,12 +3,18 @@ smart_search.py — Interactive sector search with guided filtering
 
 The smart search flow:
   1. User provides a sector description (e.g. "plumbers", "fire safety")
-  2. Auto-discovers relevant SIC codes via fuzzy matching against the local DB
-  3. Also identifies relevant regulatory registers (Gas Safe, NICEIC, CQC, etc.)
-  4. Queries local DB to get initial count
-  5. Asks user for filtering criteria (employees, age, region, etc.)
-  6. Applies filters → shows refined count estimate
-  7. User confirms → writes filtered_companies.json → rest of pipeline runs
+  2. Check sector_cache for pre-scraped register data for this sector
+  3. Auto-discovers relevant SIC codes via fuzzy matching against the local DB
+  4. Also identifies relevant regulatory registers (Gas Safe, NICEIC, CQC, etc.)
+  5. Queries local DB to get initial count (or uses cached register list)
+  6. Asks user for filtering criteria (employees, age, region, etc.)
+  7. Applies filters → shows refined count estimate
+  8. User confirms → writes filtered_companies.json → rest of pipeline runs
+
+Register-first principle:
+  If a cached register exists for the sector (e.g. CQC for care homes, EA_WASTE
+  for waste companies), that verified list is used as the starting point instead
+  of the broad SIC sweep.  Remaining criteria are applied as filters on top.
 
 Usage (interactive):
   python smart_search.py --sector "plumbers"
@@ -208,6 +214,14 @@ SECTOR_REGISTERS = {
     "roofing":    ["TrustMark"],
     "glazing":    ["FENSA"],
     "window":     ["FENSA"],
+    # Accountancy — mapped to the scraped Audit Register
+    "accountant": ["AUDIT_REGISTER"],
+    "accounting": ["AUDIT_REGISTER"],
+    "auditor":    ["AUDIT_REGISTER"],
+    "audit":      ["AUDIT_REGISTER"],
+    "bookkeeper": ["AUDIT_REGISTER"],
+    "bookkeeping":["AUDIT_REGISTER"],
+    "tax":        ["AUDIT_REGISTER"],
 }
 
 
@@ -529,28 +543,54 @@ def run_interactive(sector: str, non_interactive: bool = False, **kwargs):
     # Use top 10 by default (user can narrow)
     selected_sic_codes = [s["sic_code"] for s in sic_matches[:10]]
 
-    # ── 2. Identify relevant registers ────────────────────────────────────────
+    # ── 2. Identify relevant registers + check cache ──────────────────────────
     registers = discover_registers(sector)
+    cached_register_key  = None
+    cached_register_rows = None
+
     if registers:
-        from reg_sources import REGISTER_CATALOGUE
+        from reg_sources import REGISTER_CATALOGUE, load_register_from_cache, cache_stats
         print(f"\n  🏛  Relevant regulatory registers:")
         for reg_key in registers:
             reg_info = REGISTER_CATALOGUE.get(reg_key, {})
             disc     = "✅ discoverable" if reg_info.get("discovery") else "⚠️  verify only"
             blocked  = reg_info.get("type") == "blocked"
-            status_s = "❌ blocked" if blocked else disc
-            print(f"    • {reg_key:<18} {reg_info.get('name','')[:40]}  ({status_s})")
+            # Check if we have cached data for this register
+            stats    = cache_stats(reg_key)
+            sector_key = f"reg_{reg_key.lower()}"
+            cached_n = stats.get(sector_key, {}).get("total", 0)
+            if cached_n and not cached_register_key:
+                cached_register_key  = reg_key
+                cached_register_rows = load_register_from_cache(reg_key)
+                cache_label = f"  📦 {cached_n:,} cached"
+            elif cached_n:
+                cache_label = f"  📦 {cached_n:,} cached"
+            elif blocked:
+                cache_label = "❌ blocked"
+            else:
+                cache_label = disc
+            print(f"    • {reg_key:<18} {reg_info.get('name','')[:38]}  ({cache_label})")
 
-    # ── 3. Initial count ──────────────────────────────────────────────────────
-    print(f"\n  🔍 Initial count (active companies, no filters) ...")
-    initial = count_companies(selected_sic_codes, status="Active")
-    print(f"\n  {'─'*50}")
-    print(f"  ✅ {initial['total']:,} active companies found across {len(selected_sic_codes)} SIC codes")
-    if initial.get("by_sic"):
-        for code, cnt in sorted(initial["by_sic"].items(), key=lambda x: -x[1])[:5]:
-            desc = next((s["description"] for s in sic_matches if s["sic_code"] == code), "")
-            print(f"     {code}  {cnt:>8,}  {desc[:45]}")
-    print(f"  {'─'*50}")
+    # ── 3. Initial count — register cache first, SIC sweep as fallback ───────
+    using_register_cache = bool(cached_register_rows)
+
+    if using_register_cache:
+        print(f"\n  🏛  Using cached register data ({cached_register_key}) as primary source ...")
+        initial_total = len(cached_register_rows)
+        print(f"\n  {'─'*50}")
+        print(f"  ✅ {initial_total:,} companies from {cached_register_key} register (cached)")
+        print(f"  {'─'*50}")
+    else:
+        print(f"\n  🔍 Initial count (active companies, no filters) ...")
+        initial = count_companies(selected_sic_codes, status="Active")
+        initial_total = initial["total"]
+        print(f"\n  {'─'*50}")
+        print(f"  ✅ {initial_total:,} active companies found across {len(selected_sic_codes)} SIC codes")
+        if initial.get("by_sic"):
+            for code, cnt in sorted(initial["by_sic"].items(), key=lambda x: -x[1])[:5]:
+                desc = next((s["description"] for s in sic_matches if s["sic_code"] == code), "")
+                print(f"     {code}  {cnt:>8,}  {desc[:45]}")
+        print(f"  {'─'*50}")
 
     # ── 4. Gather filter criteria ─────────────────────────────────────────────
     if non_interactive:
@@ -613,29 +653,52 @@ def run_interactive(sector: str, non_interactive: bool = False, **kwargs):
 
     # ── 5. Refined count ─────────────────────────────────────────────────────
     print(f"\n  🔢 Applying filters ...")
-    refined = count_companies(
-        sic_codes          = selected_sic_codes,
-        status             = "Active",
-        min_age_yrs        = min_age_yrs,
-        max_age_yrs        = max_age_yrs,
-        postcode_prefix    = postcode_prefix,
-        postcode_prefixes  = postcode_prefixes_list,
-        max_mortgages      = max_mortgages,
-        company_types      = ["Private Limited Company",
-                              "Limited Liability Partnership"],
-    )
+
+    if using_register_cache:
+        # Filter cached rows in-Python
+        filtered_cache = cached_register_rows
+        all_prefixes = postcode_prefixes_list or ([postcode_prefix] if postcode_prefix else [])
+        if min_age_yrs is not None:
+            filtered_cache = [r for r in filtered_cache
+                              if r.get("company_age_years") and r["company_age_years"] >= min_age_yrs]
+        if max_age_yrs is not None:
+            filtered_cache = [r for r in filtered_cache
+                              if r.get("company_age_years") and r["company_age_years"] <= max_age_yrs]
+        if all_prefixes:
+            filtered_cache = [r for r in filtered_cache
+                              if any((r.get("postcode") or "").upper().startswith(p.upper())
+                                     for p in all_prefixes)]
+        if max_mortgages is not None:
+            filtered_cache = [r for r in filtered_cache
+                              if (r.get("mortgages_outstanding") or 0) <= max_mortgages]
+        refined_total = len(filtered_cache)
+    else:
+        refined = count_companies(
+            sic_codes          = selected_sic_codes,
+            status             = "Active",
+            min_age_yrs        = min_age_yrs,
+            max_age_yrs        = max_age_yrs,
+            postcode_prefix    = postcode_prefix,
+            postcode_prefixes  = postcode_prefixes_list,
+            max_mortgages      = max_mortgages,
+            company_types      = ["Private Limited Company",
+                                  "Limited Liability Partnership"],
+        )
+        refined_total  = refined["total"]
+        filtered_cache = None
 
     print(f"\n  {'─'*50}")
     print(f"  Filter summary:")
+    if using_register_cache: print(f"    • Source:          {cached_register_key} register (cached)")
     if min_age_yrs:                    print(f"    • Min age:         {min_age_yrs} years")
     if max_age_yrs:                    print(f"    • Max age:         {max_age_yrs} years")
     if display_region:                 print(f"    • Region:          {display_region}")
     elif postcode_prefix:              print(f"    • Postcode prefix: {postcode_prefix}")
     if max_mortgages is not None:      print(f"    • Max charges:     {max_mortgages}")
-    print(f"    • Types:           Private Ltd + LLP")
-    print(f"\n  → {refined['total']:,} companies match your criteria")
+    if not using_register_cache:       print(f"    • Types:           Private Ltd + LLP")
+    print(f"\n  → {refined_total:,} companies match your criteria")
     print(f"  → Processing cap:  {limit:,}")
-    actual_to_process = min(refined["total"], limit)
+    actual_to_process = min(refined_total, limit)
     print(f"  → Will process:    {actual_to_process:,} companies")
     print(f"  {'─'*50}")
 
@@ -651,19 +714,43 @@ def run_interactive(sector: str, non_interactive: bool = False, **kwargs):
         return None
 
     # ── 6. Fetch and write ────────────────────────────────────────────────────
-    print(f"\n  Fetching {actual_to_process:,} companies from local DB ...")
-    companies = fetch_companies(
-        sic_codes       = selected_sic_codes,
-        status             = "Active",
-        min_age_yrs        = min_age_yrs,
-        max_age_yrs        = max_age_yrs,
-        postcode_prefix    = postcode_prefix,
-        postcode_prefixes  = postcode_prefixes_list,
-        max_mortgages      = max_mortgages,
-        company_types      = ["Private Limited Company",
-                              "Limited Liability Partnership"],
-        limit              = limit,
-    )
+    if using_register_cache and filtered_cache is not None:
+        # Use the already-filtered cache rows directly
+        print(f"\n  Using {actual_to_process:,} companies from '{cached_register_key}' cache ...")
+        companies = filtered_cache[:limit]
+        # Normalise to pipeline dict format
+        from local_search import _normalise_row
+        import sqlite3 as _sq
+        norm = []
+        for r in companies:
+            # cached rows are already dicts; ensure required pipeline keys exist
+            c = dict(r)
+            c.setdefault("company_number",   c.get("company_number", ""))
+            c.setdefault("company_name",      c.get("company_name", ""))
+            c.setdefault("company_status",    c.get("company_status", "Active"))
+            c.setdefault("sic_codes",         [c.get("sic1", "")] if c.get("sic1") else [])
+            c.setdefault("registered_office_address", {
+                "postal_code": c.get("postcode", ""),
+                "locality":    c.get("address_town", ""),
+            })
+            c.setdefault("date_of_creation",  c.get("incorporation_date", ""))
+            c["_source"] = f"register_cache:{cached_register_key}"
+            norm.append(c)
+        companies = norm
+    else:
+        print(f"\n  Fetching {actual_to_process:,} companies from local DB ...")
+        companies = fetch_companies(
+            sic_codes          = selected_sic_codes,
+            status             = "Active",
+            min_age_yrs        = min_age_yrs,
+            max_age_yrs        = max_age_yrs,
+            postcode_prefix    = postcode_prefix,
+            postcode_prefixes  = postcode_prefixes_list,
+            max_mortgages      = max_mortgages,
+            company_types      = ["Private Limited Company",
+                                  "Limited Liability Partnership"],
+            limit              = limit,
+        )
 
     os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
 

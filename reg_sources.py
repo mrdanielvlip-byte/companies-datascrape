@@ -51,8 +51,247 @@ import os
 import re
 import json
 import time
+import sqlite3
 import requests
+from datetime import datetime, timedelta
+from pathlib import Path
 from urllib.parse import quote_plus
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  DB cache — every register scrape is persisted for instant future access
+# ─────────────────────────────────────────────────────────────────────────────
+
+_DB_PATH = Path(__file__).parent / "data" / "companies_house.db"
+_CACHE_TTL_DAYS = 30   # re-scrape if cached data is older than this
+
+
+def _db_connect() -> sqlite3.Connection | None:
+    """Return a read-write connection to the local CH DB, or None if unavailable."""
+    if not _DB_PATH.exists():
+        return None
+    con = sqlite3.connect(str(_DB_PATH))
+    con.row_factory = sqlite3.Row
+    return con
+
+
+def _ensure_cache_table(con: sqlite3.Connection):
+    """Create sector_cache + register columns if they don't already exist."""
+    con.executescript("""
+    CREATE TABLE IF NOT EXISTS sector_cache (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        sector               TEXT NOT NULL,
+        company_number       TEXT,
+        company_name         TEXT,
+        company_status       TEXT,
+        company_type         TEXT,
+        sic1                 TEXT,
+        sic2                 TEXT,
+        sic3                 TEXT,
+        sic4                 TEXT,
+        postcode             TEXT,
+        address_town         TEXT,
+        address_county       TEXT,
+        incorporation_date   TEXT,
+        company_age_years    REAL,
+        mortgages_outstanding INTEGER,
+        uri                  TEXT,
+        cached_at            TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_sc_sector ON sector_cache(sector);
+    CREATE INDEX IF NOT EXISTS idx_sc_number ON sector_cache(company_number);
+    """)
+    # Add register-specific columns that may not exist in older DBs
+    existing_cols = {r[1] for r in con.execute("PRAGMA table_info(sector_cache)")}
+    extras = [
+        ("register_name",    "TEXT"),
+        ("register_source",  "TEXT"),
+        ("register_reg_no",  "TEXT"),
+        ("register_rsb",     "TEXT"),
+        ("register_address", "TEXT"),
+        ("register_website", "TEXT"),
+        ("register_legal_form", "TEXT"),
+        ("register_raw",     "TEXT"),   # full JSON blob of raw register entry
+        ("ch_matched",       "INTEGER DEFAULT 0"),
+    ]
+    for col, defn in extras:
+        if col not in existing_cols:
+            con.execute(f"ALTER TABLE sector_cache ADD COLUMN {col} {defn}")
+    try:
+        con.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_sc_sector_number "
+            "ON sector_cache(sector, company_number) WHERE company_number IS NOT NULL"
+        )
+    except Exception:
+        pass
+    con.commit()
+
+
+def save_register_to_cache(
+    register_key: str,
+    companies: list[dict],
+    source_url: str = "",
+) -> int:
+    """
+    Persist a list of discovered register companies into sector_cache.
+    Called automatically after every discover() run.
+
+    Args:
+        register_key: e.g. "EA_WASTE", "CQC", "AUDIT_REGISTER"
+        companies:    list of company dicts (output of discover() or custom scrapers)
+        source_url:   URL scraped (for provenance)
+
+    Returns:
+        Number of rows inserted.
+    """
+    con = _db_connect()
+    if con is None:
+        return 0
+    _ensure_cache_table(con)
+
+    now    = datetime.utcnow().isoformat()
+    sector = f"reg_{register_key.lower()}"
+    rows   = []
+
+    for c in companies:
+        # Support both pipeline-format dicts and raw register dicts
+        reg_raw = c.get("registrations", {}).get(register_key, {})
+        rows.append((
+            sector,
+            c.get("company_number") or c.get("CompanyNumber"),
+            c.get("company_name")   or c.get("company_name_raw") or c.get("name"),
+            c.get("company_status", "Active"),
+            c.get("company_type"),
+            c.get("sic_codes", [None])[0] if isinstance(c.get("sic_codes"), list)
+                else c.get("sic1"),
+            None, None, None,          # sic2/3/4
+            c.get("registered_office_address", {}).get("postal_code") or c.get("postcode"),
+            c.get("registered_office_address", {}).get("locality")    or c.get("address_town"),
+            c.get("registered_office_address", {}).get("region")      or c.get("address_county"),
+            c.get("date_of_creation") or c.get("incorporation_date"),
+            c.get("company_age_years"),
+            None,                      # mortgages_outstanding
+            c.get("links", {}).get("self") or c.get("uri"),
+            now,
+            # register columns
+            reg_raw.get("company_name") or c.get("company_name"),
+            source_url or register_key,
+            reg_raw.get("registration_number") or c.get("reg_no"),
+            reg_raw.get("rsb") or reg_raw.get("register_key"),
+            reg_raw.get("address_raw") or reg_raw.get("permit_location"),
+            reg_raw.get("website"),
+            reg_raw.get("legal_form") or c.get("company_type"),
+            json.dumps(reg_raw) if reg_raw else None,
+            1 if c.get("company_number") else 0,
+        ))
+
+    if not rows:
+        con.close()
+        return 0
+
+    con.executemany("""
+        INSERT OR REPLACE INTO sector_cache (
+            sector, company_number, company_name, company_status, company_type,
+            sic1, sic2, sic3, sic4, postcode, address_town, address_county,
+            incorporation_date, company_age_years, mortgages_outstanding, uri,
+            cached_at, register_name, register_source, register_reg_no,
+            register_rsb, register_address, register_website,
+            register_legal_form, register_raw, ch_matched
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    """, rows)
+    con.commit()
+    inserted = con.execute(
+        "SELECT COUNT(*) FROM sector_cache WHERE sector=?", (sector,)
+    ).fetchone()[0]
+    con.close()
+    print(f"  💾 Cached {inserted:,} '{register_key}' results → sector_cache (sector='{sector}')")
+    return inserted
+
+
+def load_register_from_cache(
+    register_key: str,
+    max_age_days: int = _CACHE_TTL_DAYS,
+) -> list[dict] | None:
+    """
+    Load previously cached register results from the DB.
+
+    Returns:
+        List of company dicts if cache is fresh, None if cache is missing/stale.
+    """
+    con = _db_connect()
+    if con is None:
+        return None
+    try:
+        _ensure_cache_table(con)
+    except Exception:
+        con.close()
+        return None
+
+    sector     = f"reg_{register_key.lower()}"
+    cutoff     = (datetime.utcnow() - timedelta(days=max_age_days)).isoformat()
+    count      = con.execute(
+        "SELECT COUNT(*) FROM sector_cache WHERE sector=? AND cached_at > ?",
+        (sector, cutoff)
+    ).fetchone()[0]
+
+    if count == 0:
+        con.close()
+        return None
+
+    rows = con.execute(
+        "SELECT * FROM sector_cache WHERE sector=? AND cached_at > ? ORDER BY id",
+        (sector, cutoff)
+    ).fetchall()
+    con.close()
+
+    results = []
+    for r in rows:
+        d = dict(r)
+        # Re-inflate register_raw JSON
+        if d.get("register_raw"):
+            try:
+                d["register_raw"] = json.loads(d["register_raw"])
+            except Exception:
+                pass
+        results.append(d)
+
+    print(f"  📦 Loaded {len(results):,} '{register_key}' results from cache "
+          f"(sector='{sector}', ≤{max_age_days}d old)")
+    return results
+
+
+def cache_stats(register_key: str | None = None) -> dict:
+    """
+    Return summary stats for the sector_cache table.
+    If register_key is given, scoped to that register only.
+    """
+    con = _db_connect()
+    if con is None:
+        return {}
+    try:
+        _ensure_cache_table(con)
+    except Exception:
+        con.close()
+        return {}
+
+    if register_key:
+        sector = f"reg_{register_key.lower()}"
+        rows = con.execute("""
+            SELECT sector, COUNT(*) as total,
+                   SUM(ch_matched) as matched,
+                   MAX(cached_at) as last_updated
+            FROM sector_cache WHERE sector=? GROUP BY sector
+        """, (sector,)).fetchall()
+    else:
+        rows = con.execute("""
+            SELECT sector, COUNT(*) as total,
+                   SUM(ch_matched) as matched,
+                   MAX(cached_at) as last_updated
+            FROM sector_cache GROUP BY sector ORDER BY total DESC
+        """).fetchall()
+
+    con.close()
+    return {r["sector"]: dict(r) for r in rows}
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Configuration
@@ -901,6 +1140,16 @@ def discover(
 
     print(f"\n  Discovery complete: {ch_found} Companies House matches from "
           f"{len(reg_results)} register entries ({ch_not_found} not matched)")
+
+    # ── Auto-save to local DB cache ───────────────────────────────────────────
+    try:
+        save_register_to_cache(
+            register_key = register_key,
+            companies    = companies,
+            source_url   = cfg_entry.get("base_url", register_key),
+        )
+    except Exception as e:
+        print(f"  ⚠️  Cache save failed: {e} (results still returned)")
 
     return companies
 
