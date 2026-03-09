@@ -1,0 +1,53 @@
+{
+  "sector": "lift_maintenance",
+  "description": "UK lift maintenance, installation and service companies (CH name-matched)",
+  "search_method": "company name keyword matching (lift service/maintenance/install/engineer, elevator, escalator, stairlift, hoist maintenance, platform lift etc.)",
+  "total_active_companies": 1089,
+  "cached_at": "2026-03-09T16:17:33.183752",
+  "stats": {
+    "age_brackets": {
+      "2-4y (early stage)": 249,
+      "5-9y (growing)": 328,
+      "10-19y (established)": 301,
+      "20-29y (mature)": 161,
+      "30y+ (legacy)": 50
+    },
+    "sic_dist": {
+      "43290": 152,
+      "33190": 145,
+      "71129": 121,
+      "43999": 111,
+      "33120": 86,
+      "28220": 74,
+      "33200": 68,
+      "82990": 51,
+      "96090": 40,
+      "43210": 33
+    },
+    "area_dist": {
+      "DA": 95,
+      "ME": 43,
+      "RM": 42,
+      "BD": 39,
+      "BR": 27,
+      "TN": 27,
+      "LE": 26,
+      "SE": 23,
+      "N1": 21,
+      "SS": 19,
+      "NG": 19,
+      "CM": 18,
+      "E1": 17,
+      "CR": 16,
+      "DY": 16,
+      "BS": 16,
+      "BH": 16,
+      "BN": 16,
+      "LS": 15,
+      "SP": 15
+    },
+    "total_rev_estimate": 2740250000,
+    "avg_rev": 2516299.357208448,
+    "targets_10y_plus": 506
+  }
+}
