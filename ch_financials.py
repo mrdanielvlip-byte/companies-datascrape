@@ -2,10 +2,12 @@
 ch_financials.py — Financial estimation engine
 
 Pulls accounts metadata and balance sheet data from Companies House,
-then applies three estimation models:
+then applies revenue estimation models:
   1. Employee model   — Employees × Revenue per Employee
   2. Asset model      — Total Assets × Sector Asset Turnover
   3. Location model   — Locations × Revenue per Site
+  4. PE Triangulation — Sector-aware multi-model via revenue_estimate.py
+     (Staff Cost Model, Net Asset Scaling, Activity cross-check)
 
 Produces low / base / high revenue estimates, EBITDA estimates,
 key balance sheet ratios, and a data reliability tier for every figure.
@@ -17,6 +19,8 @@ import time
 import os
 import re
 from datetime import datetime
+
+from revenue_estimate import estimate_revenue
 
 import config as cfg
 
@@ -390,14 +394,52 @@ def enrich_financials(company: dict) -> dict:
     charges   = get_charges(num)
     time.sleep(0.1)
 
-    # Financial models
+    # ── Legacy single-sector models (kept for backward compat) ───────────────
     emp_est  = employee_model(employees)
     asset_est= asset_model(bs.get("total_assets"))
     loc_est  = location_model(company.get("location_count"))
-
     blended  = blend_estimates([m for m in [emp_est, asset_est, loc_est] if m])
     ebitda   = ebitda_estimate(blended.get("revenue_base"))
     ratios   = balance_sheet_ratios(bs)
+
+    # ── PE triangulation model (sector-aware, multi-signal) ──────────────────
+    pe_input = {
+        "company_name":  company.get("company_name", ""),
+        "sic1":          company.get("sic1") or company.get("sic_codes", [None])[0],
+        "employees":     employees,
+        "total_assets":  bs.get("total_assets"),
+        "net_assets":    (bs.get("total_assets") or 0) - (bs.get("total_liabilities") or 0)
+                         if bs.get("total_assets") else None,
+        "staff_costs":   bs.get("staff_costs"),
+        "num_sites":     company.get("location_count") or 1,
+    }
+    pe_est = estimate_revenue(pe_input)
+    pe_dict = pe_est.to_dict()
+
+    # Use PE triangulation as the primary revenue_estimate if it has at least
+    # 2 models available (more reliable than the legacy single-sector blended),
+    # otherwise fall back to the legacy blended result.
+    available_models = len(pe_dict.get("models_used", []))
+    if available_models >= 2:
+        revenue_estimate = {
+            "revenue_low":    pe_dict["revenue_low"],
+            "revenue_base":   pe_dict["revenue_base"],
+            "revenue_high":   pe_dict["revenue_high"],
+            "confidence":     pe_dict["confidence_label"],
+            "models_used":    pe_dict["models_used"],
+            "formula":        f"PE Triangulation ({', '.join(pe_dict['models_used'])})",
+            "sector":         pe_dict["sector"],
+            "warnings":       pe_dict.get("warnings", []),
+        }
+        ebitda_out = {
+            "ebitda_low":     pe_dict["ebitda_low"],
+            "ebitda_base":    pe_dict["ebitda_base"],
+            "ebitda_high":    pe_dict["ebitda_high"],
+            "formula":        f"Sector EBITDA margin applied to triangulated base",
+        }
+    else:
+        revenue_estimate = blended
+        ebitda_out       = ebitda
 
     return {
         "balance_sheet":         bs,
@@ -405,9 +447,10 @@ def enrich_financials(company: dict) -> dict:
         "employee_model":        emp_est,
         "asset_model":           asset_est,
         "location_model":        loc_est,
-        "revenue_estimate":      blended,
-        "ebitda_estimate":       ebitda,
+        "revenue_estimate":      revenue_estimate,
+        "ebitda_estimate":       ebitda_out,
         "balance_sheet_ratios":  ratios,
+        "pe_triangulation":      pe_dict,   # full detail always stored
     }
 
 
