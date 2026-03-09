@@ -88,3 +88,41 @@ jobs:
           path: output/UK_Lift_Maintenance_Companies_March2026.xlsx
           retention-days: 30
           overwrite: true
+
+      # ── 10. Send completion email ─────────────────────────────────────────────
+      # Requires two GitHub secrets:
+      #   MAIL_USERNAME — your iCloud email address (daniellipinski@mac.com)
+      #   MAIL_PASSWORD — iCloud app-specific password (NOT your Apple ID password)
+      #                   Generate at: appleid.apple.com → Sign-In & Security → App-Specific Passwords
+      - name: Send completion email
+        if: always()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.mail.me.com
+          server_port: 587
+          secure: false
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "✅ Lift Maintenance Deal Sourcing — Excel Ready (${{ job.status }})"
+          to: daniellipinski@mac.com
+          from: "PE Deal Sourcing <${{ secrets.MAIL_USERNAME }}>"
+          body: |
+            Your UK Lift Maintenance intelligence report has finished.
+
+            Status: ${{ job.status }}
+
+            📥 DOWNLOAD YOUR EXCEL:
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            → Open the link above → scroll to bottom → click "lift-maintenance-excel"
+
+            What's in the file:
+            - Summary Dashboard
+            - All 542 companies with acquisition scores
+            - Prime Targets (Tier 1 & 2)
+            - Competitor Maps
+            - Directors Register
+            - Family Businesses
+
+            Run ID: ${{ github.run_id }}
+            — PE Deal Sourcing Pipeline
