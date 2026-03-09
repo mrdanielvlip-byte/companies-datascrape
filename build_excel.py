@@ -387,11 +387,12 @@ def build_financials(wb, companies):
     ws = wb.create_sheet("Financial Estimates")
     n  = 14
 
-    title_row(ws, 1, n, "FINANCIAL ESTIMATION — Revenue & EBITDA Models")
+    title_row(ws, 1, n, "FINANCIAL ESTIMATION — PE Triangulation Revenue Model")
     sub_row(ws, 2, n,
-            "Employee Model: Revenue = Employees × Rev/Head  |  "
-            "Asset Model: Revenue = Total Assets × Turnover Ratio  |  "
-            "All estimates Tier 4 — derived  |  Actual turnover not publicly available for Total Exemption filers")
+            "6-model PE triangulation: Employee × RPE  |  Asset Turnover  |  "
+            "Staff Cost reverse-engineering  |  Net Asset scaling  |  "
+            "Location/Site  |  Director Salary Hybrid  —  "
+            "Sector-specific benchmarks applied  |  Actual turnover not disclosed (Total Exemption filers)")
 
     headers = ["Rank", "Company", "Accts Type", "Period End",
                "Rev Low (£)", "Rev Base (£)", "Rev High (£)", "Confidence",

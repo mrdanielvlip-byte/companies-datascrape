@@ -400,7 +400,7 @@ Examples:
     enrich = reload("ch_enrich")
     enrich.run()
 
-    print("\nStep 4/11 — Financial estimation (3-model revenue + EBITDA)")
+    print("\nStep 4/11 — Financial estimation (PE 6-model triangulation: Employee, Asset, Staff Cost, Net Asset, Location, Director Hybrid)")
     fin = reload("ch_financials")
     fin.run()
 

@@ -754,6 +754,22 @@ def run_interactive(sector: str, non_interactive: bool = False, **kwargs):
 
     os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
 
+    # ── 7. Quick revenue estimates (local-data only, pre-CH-API enrichment) ───
+    try:
+        from revenue_estimate import estimate_revenue as _est_rev
+        print(f"\n  💰 Adding quick revenue estimates (pre-enrichment) ...")
+        for c in companies:
+            sic1 = c.get("sic1") or (c.get("sic_codes") or [None])[0]
+            pe   = _est_rev({
+                "company_name": c.get("company_name", ""),
+                "sic1":         sic1,
+                "num_sites":    c.get("location_count") or 1,
+                # balance sheet / employee data not yet available at this stage
+            })
+            c["revenue_quick_estimate"] = pe.to_dict()
+    except Exception as _e:
+        print(f"  ⚠️  Revenue pre-estimate skipped: {_e}")
+
     # Write raw JSON
     raw_path = os.path.join(cfg.OUTPUT_DIR, cfg.RAW_JSON)
     with open(raw_path, "w") as f:
@@ -765,6 +781,28 @@ def run_interactive(sector: str, non_interactive: bool = False, **kwargs):
         json.dump(companies, f, indent=2)
 
     print(f"\n  ✅ {len(companies):,} companies written → {filt_path}")
+
+    # ── 8. Preview table — top 15 companies with quick revenue estimate ───────
+    print(f"\n  {'─'*80}")
+    print(f"  {'COMPANY':<42} {'AGE':>5}  {'POSTCODE':<9}  {'REV BASE':>10}  CONF")
+    print(f"  {'─'*80}")
+    for c in companies[:15]:
+        rev  = c.get("revenue_quick_estimate", {})
+        base = rev.get("revenue_base")
+        conf = rev.get("confidence_label", "?")
+        base_str = f"£{base:>9,.0f}" if base else "        —"
+        age_str  = (f"{c.get('company_age_years'):.0f}y"
+                    if c.get("company_age_years") else "  ?")
+        pc       = (c.get("postcode") or
+                    c.get("registered_office_address", {}).get("postal_code", ""))[:8]
+        name     = c.get("company_name", "")[:41]
+        print(f"  {name:<42} {age_str:>5}  {pc:<9}  {base_str}  {conf}")
+    if len(companies) > 15:
+        print(f"  ... and {len(companies)-15:,} more")
+    print(f"  {'─'*80}")
+    print(f"  Note: estimates above use Location model only (no CH balance sheet yet).")
+    print(f"        Run ch_financials.py to add Employee + Staff Cost + Asset models.")
+
     print(f"\n  SIC codes used: {', '.join(selected_sic_codes)}")
     if registers:
         print(f"  Registers to check in Step 9: {', '.join(registers)}")
