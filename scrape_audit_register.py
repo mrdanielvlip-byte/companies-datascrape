@@ -111,58 +111,94 @@ def parse_detail_page(html: str) -> dict:
     return data
 
 
-# ─── CH cross-reference ───────────────────────────────────────────────────────
+# ─── CH cross-reference (streaming approach — memory-efficient) ───────────────
 
-def ch_lookup_by_name(con, firm_name: str) -> dict | None:
+# Common suffixes to strip when doing fallback matching
+_SUFFIX_RE = re.compile(
+    r'\s+(LIMITED|LTD|LLP|PLC|PARTNERSHIP|CO|AND CO|COMPANY|'
+    r'CHARTERED ACCOUNTANTS?|CERTIFIED ACCOUNTANTS?|'
+    r'AUDIT|ASSURANCE|ADVISORY|CONSULTING|ASSOCIATES?|'
+    r'GROUP|HOLDINGS?|INTERNATIONAL|SERVICES?)\s*$',
+    re.IGNORECASE,
+)
+
+
+def _normalise_name(name: str) -> str:
+    """Normalise a company name: upper-case, drop punctuation, collapse spaces."""
+    name = name.upper()
+    name = re.sub(r'[^A-Z0-9 ]', ' ', name)
+    name = re.sub(r'\s+', ' ', name).strip()
+    return name
+
+
+def _strip_suffixes(name: str) -> str:
+    """Iteratively remove common company-type suffixes."""
+    prev = None
+    while prev != name:
+        prev = name
+        name = _SUFFIX_RE.sub('', name).strip(' ,.')
+    return name
+
+
+def ch_match_stream(con, firm_names: list[str]) -> dict[str, dict]:
     """
-    Fuzzy-match a firm name against the local CH companies table.
-    Tries: exact upper match, then LIKE prefix match.
-    Returns best match dict or None.
+    Match firm names against CH by streaming through the companies table.
+
+    Avoids loading all 5.6M rows into Python at once — only retains matched rows.
+    Typical runtime: ~10-20 s for a full table scan on a local SSD.
+
+    Returns {original_firm_name: ch_row_dict}
     """
-    name_up = firm_name.upper()
+    # Build target set: normalised original + suffix-stripped fallback
+    norm_to_orig: dict[str, str] = {}
+    for name in firm_names:
+        n1 = _normalise_name(name)
+        if n1:
+            norm_to_orig.setdefault(n1, name)
+        n2 = _normalise_name(_strip_suffixes(name))
+        if n2 and n2 != n1:
+            norm_to_orig.setdefault(n2, name)
 
-    # 1. Exact match (case insensitive)
-    row = con.execute(
-        "SELECT company_number, company_name, company_status, sic1, postcode, "
-        "incorporation_date, company_age_years FROM companies "
-        "WHERE company_name_upper=? LIMIT 1",
-        (name_up,)
-    ).fetchone()
-    if row:
-        return dict(row)
+    targets = set(norm_to_orig.keys())
+    print(f"  🔍 Streaming CH DB for {len(firm_names):,} firms "
+          f"({len(targets):,} name variants) ...", flush=True)
 
-    # 2. LIKE prefix (first 30 chars)
-    prefix = name_up[:30]
-    row = con.execute(
-        "SELECT company_number, company_name, company_status, sic1, postcode, "
-        "incorporation_date, company_age_years FROM companies "
-        "WHERE company_name_upper LIKE ? AND company_status='Active' LIMIT 1",
-        (prefix + "%",)
-    ).fetchone()
-    if row:
-        return dict(row)
+    # Stream through companies — cursor fetches rows lazily, low RAM
+    ch_best: dict[str, dict] = {}   # norm_name → best CH row
+    cursor = con.execute(
+        "SELECT company_number, company_name, company_status, "
+        "sic1, postcode, incorporation_date, company_age_years "
+        "FROM companies"
+    )
+    scanned = 0
+    for row in cursor:
+        scanned += 1
+        key = _normalise_name(row["company_name"] or "")
+        if key in targets:
+            existing = ch_best.get(key)
+            if existing is None or (
+                row["company_status"] == "Active"
+                and existing["company_status"] != "Active"
+            ):
+                ch_best[key] = dict(row)
+        if scanned % 1_000_000 == 0:
+            print(f"  Scanned {scanned / 1e6:.1f}M rows, "
+                  f"{len(ch_best)} matches so far ...", flush=True)
 
-    # 3. FTS5 search as last resort
-    try:
-        clean = re.sub(r'[^a-zA-Z0-9 ]', ' ', firm_name)
-        words = clean.split()[:4]
-        if words:
-            query = " ".join(f'"{w}"' for w in words if len(w) > 2)
-            if query:
-                row = con.execute(
-                    "SELECT c.company_number, c.company_name, c.company_status, "
-                    "c.sic1, c.postcode, c.incorporation_date, c.company_age_years "
-                    "FROM companies c "
-                    "JOIN companies_fts fts ON c.rowid = fts.rowid "
-                    "WHERE companies_fts MATCH ? LIMIT 1",
-                    (query,)
-                ).fetchone()
-                if row:
-                    return dict(row)
-    except Exception:
-        pass
+    print(f"  ✅ Scanned {scanned:,} CH rows → {len(ch_best)} unique names matched",
+          flush=True)
 
-    return None
+    # Map back from normalised keys to original register firm names
+    results: dict[str, dict] = {}
+    for name in firm_names:
+        n1 = _normalise_name(name)
+        n2 = _normalise_name(_strip_suffixes(name))
+        for n in (n1, n2):
+            if n in ch_best:
+                results[name] = ch_best[n]
+                break
+
+    return results
 
 
 # ─── Main scrape ──────────────────────────────────────────────────────────────
@@ -221,11 +257,13 @@ def scrape_and_store(fetch_details: bool = False):
 
     # ── 3. Cross-reference with CH DB + build pipeline dicts ─────────────────
     print(f"\n🔗 Cross-referencing {len(all_firms):,} firms with CH database ...")
-    matched   = 0
-    companies = []
+    firm_names = [f["firm_name"] for f in all_firms]
+    ch_index   = ch_match_stream(con, firm_names)  # {firm_name: ch_row}
+    matched    = 0
+    companies  = []
 
     for i, firm in enumerate(all_firms):
-        ch = ch_lookup_by_name(con, firm["firm_name"])
+        ch = ch_index.get(firm["firm_name"])
         matched += bool(ch)
 
         # Build a pipeline-compatible dict; register details go into registrations

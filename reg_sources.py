@@ -100,6 +100,50 @@ def _ensure_cache_table(con: sqlite3.Connection):
     CREATE INDEX IF NOT EXISTS idx_sc_sector ON sector_cache(sector);
     CREATE INDEX IF NOT EXISTS idx_sc_number ON sector_cache(company_number);
     """)
+
+    # ── Migration: drop NOT NULL on company_number if it was added in an older version ──
+    col_info = con.execute("PRAGMA table_info(sector_cache)").fetchall()
+    cn_col = next((r for r in col_info if r[1] == "company_number"), None)
+    if cn_col and cn_col[3] == 1:   # notnull == 1 → must migrate
+        print("  ⚙️  Migrating sector_cache: removing NOT NULL from company_number ...",
+              flush=True)
+        con.executescript("""
+        ALTER TABLE sector_cache RENAME TO sector_cache_old;
+        CREATE TABLE sector_cache (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            sector               TEXT NOT NULL,
+            company_number       TEXT,
+            company_name         TEXT,
+            company_status       TEXT,
+            company_type         TEXT,
+            sic1                 TEXT,
+            sic2                 TEXT,
+            sic3                 TEXT,
+            sic4                 TEXT,
+            postcode             TEXT,
+            address_town         TEXT,
+            address_county       TEXT,
+            incorporation_date   TEXT,
+            company_age_years    REAL,
+            mortgages_outstanding INTEGER,
+            uri                  TEXT,
+            cached_at            TEXT NOT NULL,
+            register_name        TEXT,
+            register_source      TEXT,
+            register_reg_no      TEXT,
+            register_rsb         TEXT,
+            register_address     TEXT,
+            register_website     TEXT,
+            register_legal_form  TEXT,
+            ch_matched           INTEGER DEFAULT 0,
+            register_raw         TEXT
+        );
+        INSERT INTO sector_cache SELECT * FROM sector_cache_old;
+        DROP TABLE sector_cache_old;
+        CREATE INDEX IF NOT EXISTS idx_sc_sector ON sector_cache(sector);
+        CREATE INDEX IF NOT EXISTS idx_sc_number ON sector_cache(company_number);
+        """)
+        print("  ✅ Migration complete", flush=True)
     # Add register-specific columns that may not exist in older DBs
     existing_cols = {r[1] for r in con.execute("PRAGMA table_info(sector_cache)")}
     extras = [
