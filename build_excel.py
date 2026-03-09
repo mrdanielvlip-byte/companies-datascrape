@@ -2,15 +2,16 @@
 build_excel.py — Generate PE pipeline Excel workbook from enriched JSON
 
 Sheets:
-  1. PE Pipeline       — all companies ranked by acquisition score
-  2. Top 30 Profiles   — detailed per-company intelligence cards
-  3. Director Contacts — contact intelligence for top companies
-  4. Financials        — revenue/EBITDA estimates and balance sheet
-  5. Bolt-On Analysis  — sector adjacency and roll-up opportunities
-  6. Sell Signals      — sell intent scores and signal breakdown
-  7. Gov. Contracts    — government contract intelligence
-  8. Digital Health    — domain age, LinkedIn, job postings, web presence
-  9. Summary Stats     — pipeline KPIs
+  1.  PE Pipeline          — all companies ranked by acquisition score
+  2.  Top 30 Profiles      — detailed per-company intelligence cards
+  3.  Director Contacts    — contact intelligence for top companies
+  4.  Financials           — revenue/EBITDA estimates and balance sheet
+  5.  Bolt-On Analysis     — sector adjacency and roll-up opportunities
+  6.  Sell Signals         — sell intent scores and signal breakdown
+  7.  Gov. Contracts       — government contract intelligence
+  8.  Digital Health       — domain age, LinkedIn, job postings, web presence
+  9.  Regulatory Registers — EA, CQC, FCA, ICO, Ofsted, SIA register checks
+  10. Summary Stats        — pipeline KPIs
 """
 
 import json
@@ -719,7 +720,116 @@ def build_digital_health(wb, companies):
     ws.auto_filter.ref = f"A3:{get_column_letter(n)}{len(assessed)+3}"
 
 
-# ── Sheet 9: Summary stats ────────────────────────────────────────────────────
+# ── Sheet 9: Regulatory Registers ────────────────────────────────────────────
+
+REG_DISPLAY = {
+    "EA_WASTE":    ("EA Waste Permit",    "EA"),
+    "EA_CARRIERS": ("EA Carrier/Broker",  "EA"),
+    "CQC":         ("CQC Registered",     "CQC"),
+    "FCA":         ("FCA Authorised",     "FCA"),
+    "ICO":         ("ICO Data Controller","ICO"),
+    "OFSTED":      ("Ofsted Provider",    "Ofsted"),
+    "SIA":         ("SIA Approved",       "SIA"),
+}
+
+
+def build_regulatory(wb, companies):
+    ws = wb.create_sheet("Regulatory Registers")
+
+    reg_keys = list(REG_DISPLAY.keys())
+    n_fixed  = 5   # Rank, Company, Reg Score, Band, Confirmed
+    n_cols   = n_fixed + len(reg_keys) + 2  # + Accred Score + Combined
+
+    title_row(ws, 1, n_cols,
+              "REGULATORY REGISTER VERIFICATION — UK Public Register Checks")
+    sub_row(ws, 2, n_cols,
+            "Tier 1 public registers: EA Waste | EA Carriers | CQC | FCA | ICO | Ofsted | SIA  |  "
+            "✅ = Confirmed registration  ❌ = Not found / N/A  |  Score 0–25")
+
+    col_headers = (
+        ["Rank", "Company", "Reg. Score", "Reg. Band", "Confirmed Registrations"] +
+        [REG_DISPLAY[k][0] for k in reg_keys] +
+        ["Accred. Score", "Combined Score"]
+    )
+    col_widths = (
+        [6, 42, 11, 18, 60] +
+        [16] * len(reg_keys) +
+        [12, 13]
+    )
+
+    ws.row_dimensions[3].height = 28
+    for ci, (h, w) in enumerate(zip(col_headers, col_widths), 1):
+        cell(ws, 3, ci, h, bg=NAVY, fg=WHITE, bold=True, align="center", wrap=True)
+        ws.column_dimensions[get_column_letter(ci)].width = w
+
+    # Only include companies that had accreditation enrichment run
+    assessed = [
+        c for c in companies
+        if c.get("accreditations", {}).get("combined_band", "Not assessed") != "Not assessed"
+    ]
+    # Sort by combined score descending
+    assessed.sort(
+        key=lambda c: c.get("accreditations", {}).get("combined_score", 0) or 0,
+        reverse=True,
+    )
+
+    for rank, c in enumerate(assessed, 1):
+        row = rank + 3
+        bg  = ALT if rank % 2 == 0 else None
+        ac  = c.get("accreditations", {})
+        regs = ac.get("registrations", {})
+
+        reg_score = ac.get("regulatory_score")
+        reg_band  = ac.get("regulatory_band", "")
+        confirmed = "  |  ".join(ac.get("confirmed_regs", []))[:80] or "—"
+        accred_s  = ac.get("accreditation_score")
+        combined  = ac.get("combined_score")
+        comb_band = ac.get("combined_band", "")
+
+        cell(ws, row, 1, rank, bg=bg, align="center", bold=True)
+        cell(ws, row, 2, c["company_name"], bg=bg)
+
+        # Regulatory score — colour by band
+        rs_bg = fill("375623") if (reg_score or 0) >= 15 else \
+                fill("70AD47") if (reg_score or 0) >= 9  else \
+                fill(AMBER)    if (reg_score or 0) >= 4  else fill(GREY)
+        cx = ws.cell(row=row, column=3, value=reg_score if reg_score is not None else "—")
+        cx.fill = rs_bg; cx.font = Font(name="Arial", size=9, bold=True, color="000000")
+        cx.alignment = Alignment(horizontal="center", vertical="center"); cx.border = THIN
+
+        cell(ws, row, 4, reg_band or "—", bg=bg, size=9)
+        cell(ws, row, 5, confirmed, bg=bg, size=8, wrap=True)
+
+        # Individual register columns
+        for ci, key in enumerate(reg_keys, n_fixed + 1):
+            r = regs.get(key, {})
+            found = r.get("found", False) if isinstance(r, dict) else False
+            ref   = (r.get("permit_reference") or r.get("cqc_provider_id") or
+                     r.get("fca_ref") or r.get("ico_reg_number") or "") if isinstance(r, dict) else ""
+            label = f"✅ {ref[:12]}" if (found and ref) else "✅" if found else "❌"
+            cell(ws, row, ci, label,
+                 bg=GREEN if found else (RED if isinstance(r, dict) and "found" in r else bg),
+                 align="center", size=9)
+
+        cell(ws, row, n_fixed + len(reg_keys) + 1,
+             accred_s if accred_s is not None else "—", bg=bg, align="center")
+
+        # Combined score
+        comb_bg = fill("375623") if (combined or 0) >= 35 else \
+                  fill("70AD47") if (combined or 0) >= 25 else \
+                  fill(AMBER)    if (combined or 0) >= 15 else fill(GREY)
+        cx2 = ws.cell(row=row, column=n_fixed + len(reg_keys) + 2,
+                      value=combined if combined is not None else "—")
+        cx2.fill = comb_bg; cx2.font = Font(name="Arial", size=9, bold=True, color="000000")
+        cx2.alignment = Alignment(horizontal="center", vertical="center"); cx2.border = THIN
+
+        ws.row_dimensions[row].height = 20
+
+    ws.freeze_panes = "A4"
+    ws.auto_filter.ref = f"A3:{get_column_letter(n_cols)}{len(assessed)+3}"
+
+
+# ── Sheet 10: Summary stats ───────────────────────────────────────────────────
 
 def build_summary(wb, companies):
     ws = wb.create_sheet("Summary Stats")
@@ -770,8 +880,18 @@ def build_summary(wb, companies):
         ("Active job postings detected",       sum(1 for c in companies if c.get("digital_health",{}).get("has_job_postings",False))),
         ("Government contracts found",         sum(1 for c in companies if (c.get("government_contracts",{}).get("contracts_found",0) or 0) > 0)),
         ("With detected accreditations",       sum(1 for c in companies if (c.get("accreditations",{}).get("accreditation_count",0) or 0) > 0)),
-        ("CQC registered (healthcare)",        sum(1 for c in companies if c.get("accreditations",{}).get("cqc",{}).get("cqc_registered",False))),
-        ("ICO registered",                     sum(1 for c in companies if c.get("accreditations",{}).get("ico",{}).get("ico_registered",False))),
+        ("", ""),
+        ("REGULATORY REGISTERS", ""),
+        ("Any register confirmed",             sum(1 for c in companies if (c.get("accreditations",{}).get("reg_count",0) or 0) > 0)),
+        ("EA Waste permit holders",            sum(1 for c in companies if c.get("accreditations",{}).get("registrations",{}).get("EA_WASTE",{}).get("found",False))),
+        ("EA Carrier / Broker registered",     sum(1 for c in companies if c.get("accreditations",{}).get("registrations",{}).get("EA_CARRIERS",{}).get("found",False))),
+        ("CQC registered provider",            sum(1 for c in companies if c.get("accreditations",{}).get("registrations",{}).get("CQC",{}).get("found",False))),
+        ("FCA authorised firm",                sum(1 for c in companies if c.get("accreditations",{}).get("registrations",{}).get("FCA",{}).get("found",False))),
+        ("ICO data controller",                sum(1 for c in companies if c.get("accreditations",{}).get("registrations",{}).get("ICO",{}).get("found",False))),
+        ("Ofsted registered provider",         sum(1 for c in companies if c.get("accreditations",{}).get("registrations",{}).get("OFSTED",{}).get("found",False))),
+        ("SIA Approved Contractor",            sum(1 for c in companies if c.get("accreditations",{}).get("registrations",{}).get("SIA",{}).get("found",False))),
+        ("Regulatory score ≥ 15 (Highly Reg.)",sum(1 for c in companies if (c.get("accreditations",{}).get("regulatory_score") or 0) >= 15)),
+        ("Combined score ≥ 25 (Strong)",       sum(1 for c in companies if (c.get("accreditations",{}).get("combined_score") or 0) >= 25)),
     ]
 
     for ri, (label, val) in enumerate(stats, 2):
@@ -811,6 +931,7 @@ def run():
     build_sell_signals(wb, companies)
     build_contracts(wb, companies)
     build_digital_health(wb, companies)
+    build_regulatory(wb, companies)
     build_summary(wb, companies)
 
     out_path = os.path.join(cfg.OUTPUT_DIR, cfg.EXCEL_OUTPUT)

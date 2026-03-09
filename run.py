@@ -3,6 +3,7 @@ run.py — End-to-end PE deal-sourcing pipeline
 
 Pipeline steps:
   1.  Search        ch_search.py        — SIC sweep + name search → raw_companies.json
+                    OR reg_sources.py   — regulatory register discovery (--reg-source)
   2.  Filter        (inline)            — remove false positives → filtered_companies.json
   3.  Enrich        ch_enrich.py        — directors, PSC, charges, dealability, scoring
   4.  Financials    ch_financials.py    — accounts data + 3-model revenue/EBITDA estimation
@@ -10,14 +11,21 @@ Pipeline steps:
   6.  Sell Signals  sell_signals.py     — exit readiness: late filings, director churn, Sell Intent Score
   7.  Contracts     contracts_finder.py — government contract intelligence (Contracts Finder + FTS)
   8.  Digital       digital_health.py   — domain age, LinkedIn, job postings, website health
-  9.  Accreditations accreditations.py  — CQC, Environment Agency, ICO, ISO/CHAS/Gas Safe detection
+  9.  Accreditations accreditations.py  — regulatory registers + ISO/CHAS/Gas Safe detection
   10. Bolt-on       bolt_on.py          — sector adjacency + fragmentation analysis
-  11. Excel         build_excel.py      — 9-sheet workbook output
+  11. Excel         build_excel.py      — 10-sheet workbook output
 
 Usage:
   python run.py --sector "fire safety"                  # Full pipeline, auto SIC discovery
   python run.py --sector "electrical contractors"       # Any freetext sector description
   python run.py --sector "waste management" --save-config configs/waste_mgmt.py
+
+  # Register-first discovery (Step 1 via regulatory register instead of SIC sweep):
+  python run.py --reg-source EA_WASTE    --reg-query "drainage"
+  python run.py --reg-source EA_CARRIERS --reg-query ""
+  python run.py --reg-source CQC         --reg-query "domiciliary care"
+  python run.py --reg-source FCA         --reg-query "mortgage"
+  python run.py --list-registers                        # Show all available registers
 
   python run.py                                         # Full pipeline with default config.py
   python run.py --config configs.plumbing_hvac          # Different pre-built sector config
@@ -38,8 +46,12 @@ Usage:
   # Combine flags:
   python run.py --sector "drainage and sewerage" --search-only
   python run.py --sector "industrial cleaning" --skip-contacts --skip-extras
+  python run.py --reg-source EA_WASTE --reg-query "drainage" --skip-extras
 
 API key is read from .ch_api_key in project root.
+Register API keys (optional — add to .ch_api_key):
+  CQC_API_KEY=your_key_here
+  FCA_SUBSCRIPTION_KEY=your_key_here
 """
 
 import argparse
@@ -105,6 +117,90 @@ def _is_genuine(name: str, cfg) -> bool:
     return any(kw in n for kw in stems)
 
 
+def _build_reg_config(register_key: str):
+    """
+    Build a minimal config module object for register-first discovery.
+    Uses the register's sector hints and name to populate config fields.
+    """
+    from reg_sources import REGISTER_CATALOGUE
+    import types
+
+    entry = REGISTER_CATALOGUE.get(register_key)
+    if not entry:
+        print(f"Unknown register: {register_key!r}")
+        sys.exit(1)
+
+    cfg_mod = types.ModuleType("config")
+
+    # Label
+    cfg_mod.SECTOR_LABEL   = entry["name"]
+    cfg_mod.OUTPUT_DIR     = "output"
+
+    # JSON filenames
+    cfg_mod.RAW_JSON       = "raw_companies.json"
+    cfg_mod.FILTERED_JSON  = "filtered_companies.json"
+    cfg_mod.ENRICHED_JSON  = "enriched_companies.json"
+    cfg_mod.EXCEL_OUTPUT   = f"pe_pipeline_{register_key.lower()}.xlsx"
+
+    # SIC codes from register hints (used by ch_enrich, ch_financials etc.)
+    cfg_mod.SIC_CODES      = entry.get("sic_hints", [])
+    cfg_mod.NAME_QUERIES   = []
+
+    # Filtering — permissive for register-sourced companies (already pre-qualified)
+    cfg_mod.EXCLUDE_TERMS      = ["holding", "holdings", "group plc", "listed"]
+    cfg_mod.EXCLUDE_SUBSECTORS = []
+    cfg_mod.INCLUDE_STEMS      = []   # empty = include all
+
+    # Pipeline limits
+    cfg_mod.FINANCIALS_TOP_N      = 100
+    cfg_mod.CONTACTS_TOP_N        = 75
+    cfg_mod.SELL_SIGNALS_TOP_N    = 100
+    cfg_mod.CONTRACTS_TOP_N       = 50
+    cfg_mod.DIGITAL_TOP_N         = 75
+    cfg_mod.ACCREDITATIONS_TOP_N  = 75
+    cfg_mod.BOLT_ON_TOP_N         = 50
+
+    sys.modules["config"] = cfg_mod
+    return cfg_mod
+
+
+def _run_register_discovery(register_key: str, reg_query: str, cfg) -> list:
+    """
+    Step 1 (register-first mode): Query the regulatory register, cross-reference
+    with Companies House, write raw_companies.json and filtered_companies.json.
+    Returns the list of filtered companies.
+    """
+    from reg_sources import discover, REGISTER_CATALOGUE
+
+    api_key = load_api_key()
+    companies = discover(
+        register_key=register_key,
+        keyword=reg_query,
+        ch_api_key=api_key,
+    )
+
+    if not companies:
+        print(f"\n  No companies found via {register_key}. Exiting.")
+        sys.exit(0)
+
+    os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
+
+    raw_path = os.path.join(cfg.OUTPUT_DIR, cfg.RAW_JSON)
+    with open(raw_path, "w") as f:
+        json.dump(companies, f, indent=2)
+    print(f"  Raw: {len(companies)} companies saved → {raw_path}")
+
+    # Filter (register-sourced companies are already pre-qualified; apply basic filter)
+    before   = len(companies)
+    filtered = [c for c in companies if _is_genuine(c.get("company_name", ""), cfg)]
+    out_path = os.path.join(cfg.OUTPUT_DIR, cfg.FILTERED_JSON)
+    with open(out_path, "w") as f:
+        json.dump(filtered, f, indent=2)
+    print(f"  Filter: {before} → {len(filtered)} companies → {out_path}")
+
+    return filtered
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Companies House PE pipeline",
@@ -135,6 +231,26 @@ Examples:
         metavar="MODULE",
         help="Config module path (default: config). Example: --config configs.plumbing_hvac",
     )
+    source_group.add_argument(
+        "--reg-source",
+        metavar="REGISTER",
+        help='Use a regulatory register as the primary discovery source instead of '
+             'SIC sweep. Example: --reg-source EA_WASTE. '
+             'Use --list-registers to see all options.',
+    )
+
+    parser.add_argument(
+        "--reg-query",
+        metavar="KEYWORD",
+        default="",
+        help='Keyword to search the regulatory register. Pass "" for all entries. '
+             'Example: --reg-query "drainage"',
+    )
+    parser.add_argument(
+        "--list-registers",
+        action="store_true",
+        help="List all available regulatory registers and exit",
+    )
 
     # ── Step flags ────────────────────────────────────────────────────────────
     parser.add_argument("--search-only",     action="store_true", help="Steps 1–2 only")
@@ -164,6 +280,12 @@ Examples:
 
     args = parser.parse_args()
 
+    # ── --list-registers: print register catalogue and exit ───────────────────
+    if args.list_registers:
+        from reg_sources import list_registers
+        list_registers()
+        sys.exit(0)
+
     # ── Load config ───────────────────────────────────────────────────────────
     if args.sector:
         cfg = load_discovered_config(args.sector, validate=args.validate_sic)
@@ -171,6 +293,9 @@ Examples:
             from sic_discovery import save_config_file
             saved = save_config_file(cfg, args.save_config)
             print(f"\n  Config saved → {saved}")
+    elif args.reg_source:
+        # Register-first mode: build a minimal config from the register metadata
+        cfg = _build_reg_config(args.reg_source)
     else:
         cfg = load_config(args.config)
 
@@ -219,12 +344,20 @@ Examples:
 
     skip_extras = args.skip_extras
 
-    print("Step 1/11 — Search")
-    search = reload("ch_search")
-    search.run()
+    if args.reg_source:
+        # ── Register-first discovery ──────────────────────────────────────────
+        reg_query = getattr(args, "reg_query", "")
+        print(f"Step 1/11 — Register Discovery ({args.reg_source}: '{reg_query}')")
+        _run_register_discovery(args.reg_source, reg_query, cfg)
+        print("\nStep 2/11 — Filter (applied during register discovery)")
+    else:
+        # ── Standard SIC sweep ────────────────────────────────────────────────
+        print("Step 1/11 — Search")
+        search = reload("ch_search")
+        search.run()
 
-    print("\nStep 2/11 — Filter")
-    filter_companies(cfg)
+        print("\nStep 2/11 — Filter")
+        filter_companies(cfg)
 
     print("\nStep 3/11 — Enrich (directors, PSC, charges, acquisition scoring)")
     enrich = reload("ch_enrich")

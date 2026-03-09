@@ -5,235 +5,91 @@ Checks whether target companies hold key UK regulatory accreditations
 and appear on public professional registers. Accreditations are a strong
 indicator of quality, market positioning, and defensible revenue.
 
-Sources (all free, no auth required):
+Sources:
   1. CQC API        — Care Quality Commission (health/social care)
-     https://api.cqc.org.uk/public/v1/providers/search
-  2. Env Agency API — Environment Agency (waste/environmental permits)
-     https://environment.data.gov.uk/public-register/view/search-waste-operations
+  2. Env Agency     — EA Waste Operations + Waste Carriers registers (HTML)
   3. ICO Register   — Information Commissioner's Office (data protection)
-     https://ico.org.uk/ESDWebPages/Search (HTML scrape)
-  4. Website text   — Detect accreditation keywords (ISO, CHAS, Gas Safe, etc.)
-     from digital_health.py accreditations_on_site field
+  4. FCA Register   — FCA Authorised Firms (financial services, key required)
+  5. Ofsted         — Registered providers (education / children's care)
+  6. SIA            — Security Industry Authority Approved Contractors
+  7. Website text   — ISO, CHAS, Gas Safe, NICEIC, etc. from digital_health
+
+These checks are performed via reg_sources.py (verification mode) which
+handles all HTTP calls, name matching, and error handling consistently.
 
 Output per company:
-  • cqc_registered         — bool + registration number + status
-  • environment_permitted  — bool + permit details
-  • ico_registered         — bool (data controller)
-  • accreditations         — list of detected accreditations
-  • accreditation_score    — 0–25 quality signal score
-  • data_tier              — Tier 1 / Tier 2
-
-Sector relevance:
-  • CQC       — healthcare, social care, domiciliary care
-  • EA permit — waste management, hazardous materials, skip hire
-  • ICO       — any data-handling company (broad signal)
-  • ISO / trade accreditations — construction, engineering, IT, professional
+  • registrations       — dict of {register_key: result} from reg_sources
+  • regulatory_score    — 0–25 from reg_sources.score_registrations()
+  • regulatory_band     — "Highly Regulated" / "Well Regulated" / etc.
+  • confirmed_regs      — list of confirmed register entries
+  • accreditation_score — 0–25 from website keyword detection
+  • accreditation_band  — "Highly Certified" / "Well Certified" / etc.
+  • accreditations      — list of detected accreditations (keyword)
+  • combined_score      — 0–50 (regulatory + accreditation)
+  • data_tier           — "Tier 1–3 blended"
 """
 
-import requests
 import json
-import time
 import os
+import time
 import re
-from urllib.parse import urlencode
 
 import config as cfg
 
-CQC_BASE  = "https://api.cqc.org.uk/public/v1"
-EA_BASE   = "https://environment.data.gov.uk"
-ICO_BASE  = "https://ico.org.uk/ESDWebPages/Search"
-
-HEADERS = {
-    "Accept":     "application/json",
-    "User-Agent": "PE-Research-Bot/1.0",
-}
-SESSION = requests.Session()
-SESSION.headers.update(HEADERS)
+try:
+    from reg_sources import verify_all, score_registrations
+    HAS_REG_SOURCES = True
+except ImportError:
+    HAS_REG_SOURCES = False
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ── Accreditation keyword scoring ──────────────────────────────────────────
 
-def _clean_name(name: str) -> str:
-    return (name
-            .replace(" LIMITED", "").replace(" LTD", "")
-            .replace(" LLP", "").replace("  ", " ").strip())
-
-
-def _get(url: str, params: dict = None, timeout: int = 12) -> dict | list:
-    try:
-        r = SESSION.get(url, params=params, timeout=timeout)
-        if r.status_code == 200:
-            return r.json()
-    except Exception:
-        pass
-    return {}
-
-
-# ── CQC Provider Search ───────────────────────────────────────────────────────
-
-def check_cqc(company_name: str) -> dict:
-    """
-    Search CQC provider register for registered care providers.
-    Relevant sectors: health, social care, domiciliary care, dentistry, GP.
-    """
-    clean = _clean_name(company_name)
-    data  = _get(f"{CQC_BASE}/providers/search", params={"providerName": clean, "pageSize": 5})
-
-    providers = []
-    if isinstance(data, dict):
-        providers = data.get("providers", [])
-    elif isinstance(data, list):
-        providers = data
-
-    if not providers:
-        return {"cqc_registered": False, "data_tier": "Tier 1 — CQC register"}
-
-    # Take closest name match
-    for p in providers:
-        p_name = p.get("name", "").lower()
-        if _name_match(clean, p_name):
-            return {
-                "cqc_registered":    True,
-                "cqc_provider_id":   p.get("providerId", ""),
-                "cqc_name":          p.get("name", ""),
-                "cqc_status":        p.get("registrationStatus", ""),
-                "cqc_type":          p.get("type", ""),
-                "cqc_inspections":   p.get("numberOfLocations", 0),
-                "cqc_overall_rating":p.get("currentRatings", {}).get("overall", {}).get("rating", ""),
-                "data_tier":         "Tier 1 — CQC public register",
-            }
-
-    return {"cqc_registered": False, "data_tier": "Tier 1 — CQC register"}
-
-
-# ── Environment Agency Permit Search ─────────────────────────────────────────
-
-def check_env_agency(company_name: str) -> dict:
-    """
-    Search Environment Agency waste operations permit register.
-    Relevant sectors: waste management, skip hire, recycling, remediation.
-    """
-    clean = _clean_name(company_name)
-
-    # EA open data API — waste operations
-    data = _get(
-        f"{EA_BASE}/public-register/view/search-waste-operations.json",
-        params={"_search": clean, "pageSize": 5}
-    )
-
-    results = data.get("items", []) if isinstance(data, dict) else []
-
-    for item in results:
-        holder = item.get("permitHolder", item.get("operatorName", ""))
-        if _name_match(clean, holder.lower()):
-            return {
-                "env_permitted":    True,
-                "permit_number":    item.get("permitNumber", item.get("permitId", "")),
-                "permit_type":      item.get("permitType", item.get("activityDescription", "")),
-                "permit_status":    item.get("permitStatus", ""),
-                "permit_holder":    holder,
-                "data_tier":        "Tier 1 — Environment Agency public register",
-            }
-
-    return {"env_permitted": False, "data_tier": "Tier 1 — Environment Agency register"}
-
-
-# ── ICO Registration Check ────────────────────────────────────────────────────
-
-def check_ico(company_name: str) -> dict:
-    """
-    Check ICO data protection register.
-    Almost all data-handling companies should be registered.
-    Absence can signal compliance weakness.
-    """
-    clean = _clean_name(company_name)
-    params = {
-        "SearchType": "Organisation",
-        "SearchText": clean,
-        "SubmitButton": "Search",
-    }
-
-    try:
-        r = SESSION.get(ICO_BASE, params=params, timeout=12,
-                        headers={"Accept": "text/html"})
-        if r.status_code == 200:
-            # Look for registration number pattern in HTML
-            rn_match = re.search(r"Z\d{6,8}", r.text)
-            name_match = clean.lower()[:10] in r.text.lower()
-            if rn_match and name_match:
-                return {
-                    "ico_registered":  True,
-                    "ico_reg_number":  rn_match.group(0),
-                    "data_tier":       "Tier 1 — ICO public register",
-                }
-    except Exception:
-        pass
-
-    return {"ico_registered": False, "data_tier": "Tier 1 — ICO register"}
-
-
-# ── Accreditation scoring ─────────────────────────────────────────────────────
-
-# Weighted accreditation values — higher = stronger quality signal
 ACCREDITATION_WEIGHTS = {
-    "ISO 9001":      5,
-    "ISO 14001":     4,
-    "ISO 27001":     5,
-    "ISO 45001":     4,
-    "UKAS":          5,
-    "CHAS":          3,
-    "Safe Contractor": 3,
-    "Constructionline": 3,
-    "Gas Safe":      4,
-    "NICEIC":        4,
-    "NAPIT":         4,
-    "ELECSA":        4,
-    "CQC":           5,
-    "Ofsted":        5,
-    "FCA":           4,
-    "Environment Permit": 4,
-    "ICO":           2,
+    "ISO 9001":          5,
+    "ISO 14001":         4,
+    "ISO 27001":         5,
+    "ISO 45001":         4,
+    "UKAS":              5,
+    "CHAS":              3,
+    "Safe Contractor":   3,
+    "Constructionline":  3,
+    "Gas Safe":          4,
+    "NICEIC":            4,
+    "NAPIT":             4,
+    "ELECSA":            4,
+    "BAFE":              4,
+    "NSI":               3,
+    "FIRAS":             3,
+    "CQC":               5,
+    "Ofsted":            5,
+    "FCA":               4,
+    "Environment Permit":4,
+    "ICO":               2,
+    "TrustMark":         3,
+    "Which? Trusted":    3,
+    "Cyber Essentials":  3,
 }
+
 
 def _name_match(query: str, target: str) -> bool:
-    words = [w for w in query.lower().split() if len(w) > 3]
+    q = re.sub(r"\b(LIMITED|LTD|LLP|PLC|CIC|AND|THE|OF|&)\b", "", query.upper()).strip()
+    t = re.sub(r"\b(LIMITED|LTD|LLP|PLC|CIC|AND|THE|OF|&)\b", "", target.upper()).strip()
+    words = [w for w in q.split() if len(w) > 3]
     if not words:
         return False
-    hits = sum(1 for w in words if w in target)
+    hits = sum(1 for w in words if w in t)
     return hits / len(words) >= 0.5
 
 
-def score_accreditations(
-    cqc:        dict,
-    env:        dict,
-    ico:        dict,
-    site_accreds: list[str],
-) -> dict:
+def score_website_accreditations(site_accreds: list) -> dict:
     """
-    Compute accreditation score (0–25) based on detected accreditations.
-    Sources: CQC register + EA permit + ICO + website text.
-
-    Higher score = more regulated / quality-certified business
-    Interpretation in PE context:
-      • Higher certification barrier → more defensible market position
-      • Buyer inherits certified status → valuation premium
+    Score accreditations detected from website keyword scanning
+    (populated by digital_health.py). Returns 0–25 score.
     """
-    score   = 0
-    found   = []
+    score = 0
+    found = []
 
-    if cqc.get("cqc_registered"):
-        score += ACCREDITATION_WEIGHTS["CQC"]
-        found.append("CQC Registered")
-
-    if env.get("env_permitted"):
-        score += ACCREDITATION_WEIGHTS["Environment Permit"]
-        found.append(f"EA Permit: {env.get('permit_type','')[:40]}")
-
-    if ico.get("ico_registered"):
-        score += ACCREDITATION_WEIGHTS["ICO"]
-        found.append(f"ICO Registered ({ico.get('ico_reg_number','')})")
-
-    # Website-detected accreditations
     for a in site_accreds:
         for key, weight in ACCREDITATION_WEIGHTS.items():
             if key.lower() in a.lower() and key not in " ".join(found):
@@ -241,10 +97,9 @@ def score_accreditations(
                 found.append(a)
                 break
 
-    # Cap score
     score = min(score, 25)
 
-    if   score >= 18: band = "Highly Regulated"
+    if   score >= 18: band = "Highly Certified"
     elif score >= 12: band = "Well Certified"
     elif score >= 6:  band = "Some Accreditation"
     else:             band = "Minimal Certification"
@@ -254,51 +109,92 @@ def score_accreditations(
         "accreditation_band":  band,
         "accreditations":      found,
         "accreditation_count": len(found),
-        "data_tier":           "Tier 1–3 blended",
     }
 
 
-# ── Main enrichment function ──────────────────────────────────────────────────
+# ── Main enrichment function ────────────────────────────────────────────────
 
 def enrich_accreditations(company: dict) -> dict:
-    """Full accreditation enrichment for one company."""
-    name     = company.get("company_name", "")
-    sic_list = [str(s) for s in company.get("sic_codes", [])]
+    """
+    Full accreditation & regulatory register enrichment for one company.
 
-    # Determine which checks are sector-relevant
-    is_health  = any(s.startswith("86") or s.startswith("87") or s.startswith("88") for s in sic_list)
-    is_waste   = any(s.startswith("38") for s in sic_list)
+    Step 1: Run all applicable register checks via reg_sources.verify_all()
+    Step 2: Score website-detected accreditation keywords
+    Step 3: Merge and combine scores
+    """
 
-    # CQC — health/care sectors
-    if is_health:
-        cqc = check_cqc(name)
-        time.sleep(0.3)
+    # ── Step 1: Register checks via reg_sources ──────────────────────────────
+    if HAS_REG_SOURCES:
+        reg_results = verify_all(company)
+        reg_scoring = score_registrations(reg_results)
     else:
-        cqc = {"cqc_registered": False, "data_tier": "N/A — not a health sector company"}
+        reg_results = {}
+        reg_scoring = {
+            "regulatory_score": 0,
+            "regulatory_band":  "Not assessed",
+            "confirmed_regs":   [],
+            "reg_count":        0,
+        }
 
-    # Environment Agency — waste sectors
-    if is_waste:
-        env = check_env_agency(name)
-        time.sleep(0.3)
-    else:
-        env = {"env_permitted": False, "data_tier": "N/A — not a waste/environmental company"}
-
-    # ICO — all companies (broad signal)
-    ico = check_ico(name)
-    time.sleep(0.3)
-
-    # Site accreditations from digital_health module (already enriched)
+    # ── Step 2: Website accreditation keywords ───────────────────────────────
     site_accreds = company.get("digital_health", {}).get("accreditations_on_site", [])
 
-    scoring = score_accreditations(cqc, env, ico, site_accreds)
+    # Supplement site_accreds with any register confirmations (avoid double-count)
+    confirmed_names = [r for r in reg_scoring.get("confirmed_regs", [])]
+
+    # Add register-based virtual accreditations to site list if not already there
+    reg_accred_map = {
+        "EA_WASTE":    "Environment Permit",
+        "EA_CARRIERS": "Environment Permit",
+        "CQC":         "CQC",
+        "FCA":         "FCA",
+        "OFSTED":      "Ofsted",
+        "ICO":         "ICO",
+        "SIA":         "SIA ACS",
+    }
+    extra_accreds = []
+    for reg_key, accred_name in reg_accred_map.items():
+        r = reg_results.get(reg_key, {})
+        if r.get("found") and accred_name not in " ".join(site_accreds):
+            extra_accreds.append(accred_name)
+
+    all_site_accreds = list(set(site_accreds + extra_accreds))
+    accred_scoring   = score_website_accreditations(all_site_accreds)
+
+    # ── Step 3: Combined score (cap at 50) ───────────────────────────────────
+    combined = min(
+        reg_scoring.get("regulatory_score", 0) +
+        accred_scoring.get("accreditation_score", 0),
+        50
+    )
+
+    if   combined >= 35: combined_band = "Premium — Highly Regulated & Certified"
+    elif combined >= 25: combined_band = "Strong — Regulated or Well Certified"
+    elif combined >= 15: combined_band = "Moderate — Some Regulation/Certification"
+    else:                combined_band = "Low — Limited Verifiable Credentials"
 
     return {
-        "cqc":          cqc,
-        "env_agency":   env,
-        "ico":          ico,
-        **scoring,
+        # Register verification results
+        "registrations":    reg_results,
+        "regulatory_score": reg_scoring.get("regulatory_score", 0),
+        "regulatory_band":  reg_scoring.get("regulatory_band", "Not assessed"),
+        "confirmed_regs":   reg_scoring.get("confirmed_regs", []),
+        "reg_count":        reg_scoring.get("reg_count", 0),
+
+        # Website-detected accreditation keywords
+        "accreditation_score": accred_scoring["accreditation_score"],
+        "accreditation_band":  accred_scoring["accreditation_band"],
+        "accreditations":      accred_scoring["accreditations"],
+        "accreditation_count": accred_scoring["accreditation_count"],
+
+        # Combined
+        "combined_score": combined,
+        "combined_band":  combined_band,
+        "data_tier":      "Tier 1–3 blended",
     }
 
+
+# ── Pipeline runner ──────────────────────────────────────────────────────────
 
 def run():
     enriched_path = os.path.join(cfg.OUTPUT_DIR, cfg.ENRICHED_JSON)
@@ -309,24 +205,39 @@ def run():
     to_enrich = companies[:top_n]
     skipped   = len(companies) - top_n
 
-    print(f"\nAccreditation enrichment for top {len(to_enrich)} companies"
+    print(f"\nAccreditation & regulatory enrichment for top {len(to_enrich)} companies"
           f" ({skipped} skipped)...")
 
+    if not HAS_REG_SOURCES:
+        print("  ⚠️  reg_sources.py not available — website keyword detection only")
+
     accred_count = 0
+    reg_count    = 0
+
     for i, c in enumerate(to_enrich):
         if i % 15 == 0:
-            print(f"  [{i+1}/{len(to_enrich)}] processing {c['company_name'][:40]}...")
+            print(f"  [{i+1}/{len(to_enrich)}] {c['company_name'][:45]}...")
         result = enrich_accreditations(c)
         c["accreditations"] = result
         if result.get("accreditation_count", 0) > 0:
             accred_count += 1
+        if result.get("reg_count", 0) > 0:
+            reg_count += 1
 
     for c in companies[top_n:]:
         c["accreditations"] = {
-            "accreditation_score": None,
+            "registrations":      {},
+            "regulatory_score":   None,
+            "regulatory_band":    "Not assessed",
+            "confirmed_regs":     [],
+            "reg_count":          0,
+            "accreditation_score":None,
             "accreditation_band": "Not assessed",
-            "accreditations": [],
-            "data_tier": "N/A",
+            "accreditations":     [],
+            "accreditation_count":0,
+            "combined_score":     None,
+            "combined_band":      "Not assessed",
+            "data_tier":          "N/A",
         }
 
     out_path = os.path.join(cfg.OUTPUT_DIR, cfg.ENRICHED_JSON)
@@ -334,7 +245,8 @@ def run():
         json.dump(companies, f, indent=2)
 
     print(f"\nAccreditation enrichment complete → {out_path}")
-    print(f"  {accred_count} / {len(to_enrich)} companies have detected accreditations")
+    print(f"  Register confirmed: {reg_count} / {len(to_enrich)}")
+    print(f"  Site keywords:      {accred_count} / {len(to_enrich)}")
     return companies
 
 
