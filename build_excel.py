@@ -7,7 +7,10 @@ Sheets:
   3. Director Contacts — contact intelligence for top companies
   4. Financials        — revenue/EBITDA estimates and balance sheet
   5. Bolt-On Analysis  — sector adjacency and roll-up opportunities
-  6. Summary Stats     — pipeline KPIs
+  6. Sell Signals      — sell intent scores and signal breakdown
+  7. Gov. Contracts    — government contract intelligence
+  8. Digital Health    — domain age, LinkedIn, job postings, web presence
+  9. Summary Stats     — pipeline KPIs
 """
 
 import json
@@ -28,6 +31,8 @@ RED    = "FCE4D6"
 AMBER  = "FFEB9C"
 GREY   = "F2F2F2"
 DKGREY = "404040"
+PURPLE = "7030A0"
+TEAL   = "00B0F0"
 
 THIN = Border(
     left=Side(style="thin", color="D9D9D9"),
@@ -47,6 +52,27 @@ def score_fill(score):
 
 def score_font_color(score):
     return WHITE if score >= 65 else "000000"
+
+def sell_intent_fill(band: str):
+    mapping = {
+        "Strong":   "375623",
+        "Moderate": "70AD47",
+        "Weak":     AMBER,
+        "Low":      "D9D9D9",
+    }
+    return fill(mapping.get(band, "D9D9D9"))
+
+def sell_intent_font(band: str):
+    return WHITE if band in ("Strong", "Moderate") else "000000"
+
+def digital_band_fill(band: str):
+    mapping = {
+        "Mature":        "375623",
+        "Adequate":      "70AD47",
+        "Below Average": AMBER,
+        "Poor":          "FF7070",
+    }
+    return fill(mapping.get(band, "D9D9D9"))
 
 def cell(ws, row, col, value, bg=None, fg="000000", bold=False,
          align="left", wrap=False, size=9, border=True):
@@ -82,9 +108,10 @@ PIPELINE_COLS = [
     ("Rank", 5), ("Reg. No.", 12), ("Company Name", 48), ("Incorp.", 11),
     ("Age", 7), ("Dirs", 5), ("Max Age", 8), ("Avg Age", 8),
     ("Succ.", 7), ("Deal.", 7), ("Acq. Score", 10), ("Grade", 10),
+    ("Sell Intent", 10), ("SI Band", 10),
     ("PE", 5), ("Family", 6),
     ("Scale", 7), ("Market", 7), ("Own./Succ.", 10), ("Dealability", 11),
-    ("Charges", 8), ("SIC", 22),
+    ("Charges", 8), ("Contracts", 9), ("Digital", 9), ("Accreds", 8), ("SIC", 22),
 ]
 
 def build_pipeline(wb, companies):
@@ -94,8 +121,8 @@ def build_pipeline(wb, companies):
 
     title_row(ws, 1, n, f"{cfg.SECTOR_LABEL}  —  PE Pipeline  ({len(companies)} companies)  |  March 2026")
     sub_row(ws, 2, n,
-            f"Acquisition Score = Scale & Financial(30%) + Market Attractiveness(20%) + "
-            f"Ownership & Succession(30%) + Dealability(20%)  |  Source: Companies House API  |  All data Tier 1")
+            f"Acquisition Score = Scale(30%) + Market(20%) + Ownership/Succession(30%) + Dealability(20%)  |  "
+            f"Sell Intent = Age/Tenure(40) + Structure(25) + Stress(20) + Maturity(15)  |  Source: Companies House API")
 
     ws.row_dimensions[3].height = 36
     for ci, (label, width) in enumerate(PIPELINE_COLS, 1):
@@ -103,13 +130,17 @@ def build_pipeline(wb, companies):
         ws.column_dimensions[get_column_letter(ci)].width = width
 
     for i, c in enumerate(companies, 1):
-        row = i + 3
-        bg  = ALT if i % 2 == 0 else None
-        acq = c["acquisition_score"]
-        comp= c.get("acq_components", {})
-        ss  = c.get("succession", {})
-        deal= c.get("dealability", {})
-        ch  = c.get("charges", {})
+        row  = i + 3
+        bg   = ALT if i % 2 == 0 else None
+        acq  = c["acquisition_score"]
+        comp = c.get("acq_components", {})
+        ss   = c.get("succession", {})
+        deal = c.get("dealability", {})
+        ch   = c.get("charges", {})
+        si   = c.get("sell_intent", {})
+        gc   = c.get("government_contracts", {})
+        dh   = c.get("digital_health", {})
+        ac   = c.get("accreditations", {})
 
         cell(ws, row, 1,  i,                              bg=bg, align="center", bold=True)
         cell(ws, row, 2,  c["company_number"],            bg=bg)
@@ -122,7 +153,7 @@ def build_pipeline(wb, companies):
         cell(ws, row, 9,  ss.get("total", 0),            bg=bg, align="center")
         cell(ws, row, 10, deal.get("score", 0),          bg=bg, align="center")
 
-        # Acquisition score
+        # Acquisition score (cols 11–12)
         for col in (11, 12):
             val = acq if col == 11 else c.get("acquisition_grade", "")
             cx  = ws.cell(row=row, column=col, value=val)
@@ -131,17 +162,37 @@ def build_pipeline(wb, companies):
             cx.alignment = Alignment(horizontal="center", vertical="center")
             cx.border    = THIN
 
-        cell(ws, row, 13, "⚠" if c.get("pe_backed") else "-",
+        # Sell Intent Score (cols 13–14)
+        si_score = si.get("sell_intent_score")
+        si_band  = si.get("sell_intent_band", "")
+        for col in (13, 14):
+            val = si_score if col == 13 else si_band
+            cx  = ws.cell(row=row, column=col, value=val if val is not None else "-")
+            cx.fill      = sell_intent_fill(si_band) if si_band else fill(GREY)
+            cx.font      = Font(name="Arial", size=9, bold=True, color=sell_intent_font(si_band))
+            cx.alignment = Alignment(horizontal="center", vertical="center")
+            cx.border    = THIN
+
+        cell(ws, row, 15, "⚠" if c.get("pe_backed") else "-",
              bg=RED if c.get("pe_backed") else bg, align="center")
-        cell(ws, row, 14, "✓" if c.get("is_family") else "-",
+        cell(ws, row, 16, "✓" if c.get("is_family") else "-",
              bg=GREEN if c.get("is_family") else bg, align="center")
 
-        cell(ws, row, 15, comp.get("scale_financial", 0),       bg=bg, align="center")
-        cell(ws, row, 16, comp.get("market_attractiveness", 0), bg=bg, align="center")
-        cell(ws, row, 17, comp.get("ownership_succession", 0),  bg=bg, align="center")
-        cell(ws, row, 18, comp.get("dealability", 0),           bg=bg, align="center")
-        cell(ws, row, 19, ch.get("outstanding_charges", "-"),   bg=bg, align="center")
-        cell(ws, row, 20, ", ".join(c.get("sic_codes", [])),    bg=bg, size=8)
+        cell(ws, row, 17, comp.get("scale_financial", 0),       bg=bg, align="center")
+        cell(ws, row, 18, comp.get("market_attractiveness", 0), bg=bg, align="center")
+        cell(ws, row, 19, comp.get("ownership_succession", 0),  bg=bg, align="center")
+        cell(ws, row, 20, comp.get("dealability", 0),           bg=bg, align="center")
+        cell(ws, row, 21, ch.get("outstanding_charges", "-"),   bg=bg, align="center")
+        # Contracts found
+        cf = gc.get("contracts_found")
+        cell(ws, row, 22, cf if cf is not None else "-",        bg=GREEN if cf else bg, align="center")
+        # Digital score
+        ds = dh.get("digital_health_score")
+        cell(ws, row, 23, ds if ds is not None else "-",        bg=bg, align="center")
+        # Accreditation count
+        ac_n = ac.get("accreditation_count")
+        cell(ws, row, 24, ac_n if ac_n is not None else "-",    bg=GREEN if ac_n else bg, align="center")
+        cell(ws, row, 25, ", ".join(c.get("sic_codes", [])),    bg=bg, size=8)
 
     ws.freeze_panes = "A4"
     ws.auto_filter.ref = f"A3:{get_column_letter(n)}{len(companies)+3}"
@@ -223,6 +274,21 @@ def build_top30(wb, companies):
             sc.font      = Font(name="Arial", size=8, italic=True, color="1F3864")
             sc.alignment = Alignment(horizontal="left", vertical="center")
             sc.border    = THIN
+            row += 1
+
+        # Sell intent signals
+        si = c.get("sell_intent", {})
+        if si.get("sell_intent_score") is not None:
+            ws.merge_cells(f"A{row}:{get_column_letter(n)}{row}")
+            si_sigs = "  |  ".join(si.get("sell_signals", [])[:4])
+            si_txt  = (f"  Sell Intent: {si.get('sell_intent_score')} / 100  "
+                       f"({si.get('sell_intent_band','')})  |  {si_sigs}")
+            si_c = ws.cell(row=row, column=1, value=si_txt)
+            si_c.fill      = sell_intent_fill(si.get("sell_intent_band", ""))
+            si_c.font      = Font(name="Arial", size=8, italic=True,
+                                  color=sell_intent_font(si.get("sell_intent_band", "")))
+            si_c.alignment = Alignment(horizontal="left", vertical="center")
+            si_c.border    = THIN
             row += 1
 
         # Directors
@@ -445,13 +511,223 @@ def build_bolt_on(wb, bolt_on_data: dict):
         ws.column_dimensions[get_column_letter(ci)].width = w if w > 1 else 5
 
 
-# ── Sheet 6: Summary stats ────────────────────────────────────────────────────
+# ── Sheet 6: Sell Signals ─────────────────────────────────────────────────────
+
+def build_sell_signals(wb, companies):
+    ws = wb.create_sheet("Sell Signals")
+    n  = 12
+
+    title_row(ws, 1, n, "SELL INTENT ANALYSIS — Owner Exit Readiness Signals")
+    sub_row(ws, 2, n,
+            "Score 0–100: Strong(70+) = priority outreach  |  Moderate(50–69) = pipeline  |  "
+            "Dimensions: Age/Tenure(40) + Structure(25) + Stress(20) + Maturity(15)  |  Tier 1 — Companies House")
+
+    headers = ["Rank", "Company", "Sell Intent Score", "Band",
+               "Age/Tenure", "Structure", "Stress", "Maturity",
+               "Late Filings", "Dir. Departs", "Sell Signals Summary"]
+    widths  = [6, 44, 14, 12, 12, 12, 10, 10, 12, 12, 70]
+
+    ws.row_dimensions[3].height = 22
+    for ci, (h, w) in enumerate(zip(headers, widths), 1):
+        cell(ws, 3, ci, h, bg=NAVY, fg=WHITE, bold=True, align="center", wrap=True)
+        ws.column_dimensions[get_column_letter(ci)].width = w
+
+    for rank, c in enumerate(companies, 1):
+        row = rank + 3
+        bg  = ALT if rank % 2 == 0 else None
+        si  = c.get("sell_intent", {})
+        if not si:
+            cell(ws, row, 1, rank, bg=bg, align="center")
+            cell(ws, row, 2, c["company_name"], bg=bg)
+            for col in range(3, n + 1):
+                cell(ws, row, col, "-", bg=bg, align="center")
+            continue
+
+        band     = si.get("sell_intent_band", "")
+        score    = si.get("sell_intent_score", 0)
+        comps    = si.get("components", {})
+        at_sc    = comps.get("age_tenure", {}).get("score", 0)
+        st_sc    = comps.get("business_structure", {}).get("score", 0)
+        op_sc    = comps.get("operational_stress", {}).get("score", 0)
+        mat_sc   = comps.get("company_maturity", {}).get("score", 0)
+        late     = comps.get("operational_stress", {}).get("late_filings", 0)
+        departs  = comps.get("operational_stress", {}).get("resignations_3yr", 0)
+        sigs     = "  |  ".join(si.get("sell_signals", [])[:5])
+
+        cell(ws, row, 1, rank,  bg=bg, align="center", bold=True)
+        cell(ws, row, 2, c["company_name"], bg=bg)
+
+        for col, val in [(3, score), (4, band)]:
+            cx = ws.cell(row=row, column=col, value=val)
+            cx.fill      = sell_intent_fill(band)
+            cx.font      = Font(name="Arial", size=9, bold=True, color=sell_intent_font(band))
+            cx.alignment = Alignment(horizontal="center", vertical="center")
+            cx.border    = THIN
+
+        cell(ws, row, 5,  at_sc,   bg=bg, align="center")
+        cell(ws, row, 6,  st_sc,   bg=bg, align="center")
+        cell(ws, row, 7,  op_sc,   bg=bg, align="center")
+        cell(ws, row, 8,  mat_sc,  bg=bg, align="center")
+        cell(ws, row, 9,  late,    bg=RED if late > 0 else bg,    align="center")
+        cell(ws, row, 10, departs, bg=AMBER if departs > 0 else bg, align="center")
+        cell(ws, row, 11, sigs,    bg=bg, size=8, wrap=True)
+        ws.row_dimensions[row].height = 28
+
+    ws.freeze_panes = "A4"
+    ws.auto_filter.ref = f"A3:{get_column_letter(n)}{len(companies)+3}"
+
+
+# ── Sheet 7: Government Contracts ─────────────────────────────────────────────
+
+def build_contracts(wb, companies):
+    ws = wb.create_sheet("Gov. Contracts")
+    n  = 10
+
+    title_row(ws, 1, n, "GOVERNMENT CONTRACT INTELLIGENCE — Revenue Quality Signals")
+    sub_row(ws, 2, n,
+            "Source: Contracts Finder + Find a Tender  |  Tier 1 — Public procurement registers  |  "
+            "Government revenue = recurring, creditworthy counterparty — multiple = strong PE valuation signal")
+
+    headers = ["Rank", "Company", "Contracts Found", "Total Value (£)",
+               "Latest Date", "Buyers", "Revenue Quality", "Top Contract Title"]
+    widths  = [6, 44, 15, 16, 14, 45, 42, 60]
+
+    ws.row_dimensions[3].height = 22
+    for ci, (h, w) in enumerate(zip(headers, widths), 1):
+        cell(ws, 3, ci, h, bg=NAVY, fg=WHITE, bold=True, align="center", wrap=True)
+        ws.column_dimensions[get_column_letter(ci)].width = w
+
+    # Filter to companies with government contract data
+    with_contracts = [c for c in companies if c.get("government_contracts", {}).get("contracts_found", 0) > 0]
+    no_contracts   = [c for c in companies if c.get("government_contracts", {}).get("contracts_found", 0) == 0
+                      and c.get("government_contracts", {}).get("revenue_quality", "") != "Not searched"]
+
+    row = 4
+    # Show companies WITH contracts first
+    ws.merge_cells(f"A{row}:{get_column_letter(n)}{row}")
+    hdr = ws.cell(row=row, column=1, value=f"  COMPANIES WITH GOVERNMENT CONTRACTS ({len(with_contracts)} found)")
+    hdr.fill = fill(TEAL); hdr.font = Font(name="Arial", bold=True, size=9, color=WHITE)
+    hdr.alignment = Alignment(horizontal="left", vertical="center")
+    row += 1
+
+    for rank, c in enumerate(with_contracts, 1):
+        bg  = ALT if rank % 2 == 0 else None
+        gc  = c.get("government_contracts", {})
+        cl  = gc.get("contract_list", [])
+        top = cl[0].get("title", "") if cl else ""
+        buyers_str = "  |  ".join(gc.get("buyers", [])[:3])
+
+        cell(ws, row, 1, rank,                           bg=bg, align="center", bold=True)
+        cell(ws, row, 2, c["company_name"],              bg=bg)
+        cx3 = ws.cell(row=row, column=3, value=gc.get("contracts_found", 0))
+        cx3.fill = fill(GREEN); cx3.font = Font(name="Arial", size=9, bold=True)
+        cx3.alignment = Alignment(horizontal="center", vertical="center"); cx3.border = THIN
+        tv = gc.get("total_contract_value", 0)
+        cell(ws, row, 4, f"£{tv:,.0f}" if tv else "-",  bg=bg, align="right", bold=True)
+        cell(ws, row, 5, gc.get("latest_contract_date","")[:10], bg=bg, align="center")
+        cell(ws, row, 6, buyers_str,                     bg=bg, size=8)
+        cell(ws, row, 7, gc.get("revenue_quality",""),   bg=GREEN, size=8)
+        cell(ws, row, 8, top[:80],                       bg=bg, size=8)
+        row += 1
+
+    # Summary of no-contract companies
+    if no_contracts:
+        row += 1
+        ws.merge_cells(f"A{row}:{get_column_letter(n)}{row}")
+        nh = ws.cell(row=row, column=1, value=f"  NO GOVERNMENT CONTRACTS DETECTED ({len(no_contracts)} companies searched)")
+        nh.fill = fill(GREY); nh.font = Font(name="Arial", bold=True, size=9)
+        nh.alignment = Alignment(horizontal="left", vertical="center")
+        row += 1
+        for rank, c in enumerate(no_contracts[:20], 1):
+            bg = ALT if rank % 2 == 0 else None
+            cell(ws, row, 1, rank,              bg=bg, align="center")
+            cell(ws, row, 2, c["company_name"], bg=bg)
+            for col in range(3, n + 1):
+                cell(ws, row, col, "-", bg=bg, align="center")
+            row += 1
+
+    ws.freeze_panes = "A4"
+
+
+# ── Sheet 8: Digital Health ───────────────────────────────────────────────────
+
+def build_digital_health(wb, companies):
+    ws = wb.create_sheet("Digital Health")
+    n  = 12
+
+    title_row(ws, 1, n, "DIGITAL HEALTH ASSESSMENT — Online Presence & Maturity Signals")
+    sub_row(ws, 2, n,
+            "Score 0–100: Mature(80+) | Adequate(60–79) | Below Average(40–59) | Poor(<40)  |  "
+            "Poor digital = underinvestment = pre-exit signal  |  Tier 3 — Website analysis + WHOIS")
+
+    headers = ["Rank", "Company", "Digital Score", "Band", "Domain Age (yrs)",
+               "Website Live", "LinkedIn", "Job Postings",
+               "Accreditations Detected", "Accred. Score", "Domain"]
+    widths  = [6, 44, 13, 14, 15, 12, 10, 12, 50, 13, 35]
+
+    ws.row_dimensions[3].height = 22
+    for ci, (h, w) in enumerate(zip(headers, widths), 1):
+        cell(ws, 3, ci, h, bg=NAVY, fg=WHITE, bold=True, align="center", wrap=True)
+        ws.column_dimensions[get_column_letter(ci)].width = w
+
+    assessed = [c for c in companies if c.get("digital_health", {}).get("digital_health_band", "Not assessed") != "Not assessed"]
+
+    for rank, c in enumerate(assessed, 1):
+        row = rank + 3
+        bg  = ALT if rank % 2 == 0 else None
+        dh  = c.get("digital_health", {})
+        ac  = c.get("accreditations", {})
+        ds  = dh.get("digital_health_score")
+        band= dh.get("digital_health_band", "")
+
+        cell(ws, row, 1, rank, bg=bg, align="center", bold=True)
+        cell(ws, row, 2, c["company_name"], bg=bg)
+
+        # Digital score + band (colour-coded)
+        for col, val in [(3, ds), (4, band)]:
+            cx = ws.cell(row=row, column=col, value=val if val is not None else "-")
+            cx.fill      = digital_band_fill(band) if band else fill(GREY)
+            cx.font      = Font(name="Arial", size=9, bold=True,
+                               color=WHITE if band in ("Mature",) else "000000")
+            cx.alignment = Alignment(horizontal="center", vertical="center")
+            cx.border    = THIN
+
+        da = dh.get("domain_age_years")
+        cell(ws, row, 5, f"{da:.1f}" if da else "Unknown",  bg=bg, align="center")
+
+        live = dh.get("website_live", False)
+        cell(ws, row, 6, "✓" if live else "✗",
+             bg=GREEN if live else RED, align="center", bold=True)
+
+        li = dh.get("has_linkedin", False)
+        cell(ws, row, 7, "✓" if li else "✗",
+             bg=GREEN if li else bg, align="center")
+
+        jobs = dh.get("has_job_postings", False)
+        cell(ws, row, 8, "Hiring" if jobs else "-",
+             bg=GREEN if jobs else bg, align="center")
+
+        accreds_site = dh.get("accreditations_on_site", [])
+        accreds_all  = ac.get("accreditations", [])
+        all_accreds  = list(set(accreds_site + accreds_all))
+        cell(ws, row, 9,  "  |  ".join(all_accreds[:6]) or "-",    bg=bg, size=8)
+        cell(ws, row, 10, ac.get("accreditation_score", "-"),      bg=bg, align="center")
+        cell(ws, row, 11, dh.get("domain", ""),                    bg=bg, size=8)
+        ws.row_dimensions[row].height = 18
+
+    ws.freeze_panes = "A4"
+    ws.auto_filter.ref = f"A3:{get_column_letter(n)}{len(assessed)+3}"
+
+
+# ── Sheet 9: Summary stats ────────────────────────────────────────────────────
 
 def build_summary(wb, companies):
     ws = wb.create_sheet("Summary Stats")
     title_row(ws, 1, 4, "PIPELINE SUMMARY STATISTICS")
 
     acq_scores = [c["acquisition_score"] for c in companies]
+
+    si_scores = [c.get("sell_intent",{}).get("sell_intent_score",0) or 0 for c in companies]
 
     stats = [
         ("PIPELINE OVERVIEW", ""),
@@ -460,6 +736,14 @@ def build_summary(wb, companies):
         ("High priority  (65–79)",          sum(1 for s in acq_scores if 65 <= s < 80)),
         ("Medium priority  (50–64)",        sum(1 for s in acq_scores if 50 <= s < 65)),
         ("Intelligence only  (< 50)",       sum(1 for s in acq_scores if s < 50)),
+        ("", ""),
+        ("SELL INTENT SIGNALS", ""),
+        ("Strong sell intent  (score 70+)",    sum(1 for c in companies if (c.get("sell_intent",{}).get("sell_intent_score") or 0) >= 70)),
+        ("Moderate sell intent  (50–69)",      sum(1 for c in companies if 50 <= (c.get("sell_intent",{}).get("sell_intent_score") or 0) < 70)),
+        ("Weak sell intent  (30–49)",          sum(1 for c in companies if 30 <= (c.get("sell_intent",{}).get("sell_intent_score") or 0) < 50)),
+        ("Low sell intent  (< 30)",            sum(1 for c in companies if 0 < (c.get("sell_intent",{}).get("sell_intent_score") or 0) < 30)),
+        ("Late filing history detected",       sum(1 for c in companies if (c.get("sell_intent",{}).get("components",{}).get("operational_stress",{}).get("late_filings",0)) > 0)),
+        ("Director departure in last 3 yrs",   sum(1 for c in companies if (c.get("sell_intent",{}).get("components",{}).get("operational_stress",{}).get("resignations_3yr",0)) > 0)),
         ("", ""),
         ("OWNERSHIP & SUCCESSION", ""),
         ("PE-backed (flagged for exclusion)",  sum(1 for c in companies if c.get("pe_backed"))),
@@ -479,6 +763,15 @@ def build_summary(wb, companies):
         ("With dealability signals",           sum(1 for c in companies if c.get("dealability",{}).get("signal_count",0) > 0)),
         ("With outstanding charges (debt)",    sum(1 for c in companies if c.get("charges",{}).get("outstanding_charges",0) > 0)),
         ("Clean charge register",              sum(1 for c in companies if c.get("charges",{}).get("outstanding_charges",0) == 0)),
+        ("", ""),
+        ("DIGITAL & ACCREDITATIONS", ""),
+        ("Live website confirmed",             sum(1 for c in companies if c.get("digital_health",{}).get("website_live",False))),
+        ("LinkedIn presence detected",         sum(1 for c in companies if c.get("digital_health",{}).get("has_linkedin",False))),
+        ("Active job postings detected",       sum(1 for c in companies if c.get("digital_health",{}).get("has_job_postings",False))),
+        ("Government contracts found",         sum(1 for c in companies if (c.get("government_contracts",{}).get("contracts_found",0) or 0) > 0)),
+        ("With detected accreditations",       sum(1 for c in companies if (c.get("accreditations",{}).get("accreditation_count",0) or 0) > 0)),
+        ("CQC registered (healthcare)",        sum(1 for c in companies if c.get("accreditations",{}).get("cqc",{}).get("cqc_registered",False))),
+        ("ICO registered",                     sum(1 for c in companies if c.get("accreditations",{}).get("ico",{}).get("ico_registered",False))),
     ]
 
     for ri, (label, val) in enumerate(stats, 2):
@@ -515,6 +808,9 @@ def run():
     build_financials(wb, companies)
     if bolt_on_data:
         build_bolt_on(wb, bolt_on_data)
+    build_sell_signals(wb, companies)
+    build_contracts(wb, companies)
+    build_digital_health(wb, companies)
     build_summary(wb, companies)
 
     out_path = os.path.join(cfg.OUTPUT_DIR, cfg.EXCEL_OUTPUT)

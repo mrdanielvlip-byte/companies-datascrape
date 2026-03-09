@@ -2,17 +2,21 @@
 run.py — End-to-end PE deal-sourcing pipeline
 
 Pipeline steps:
-  1. Search     ch_search.py    — SIC sweep + name search → raw_companies.json
-  2. Filter     (inline)        — remove false positives → filtered_companies.json
-  3. Enrich     ch_enrich.py    — directors, PSC, charges, dealability, scoring → enriched_companies.json
-  4. Financials ch_financials.py— accounts data + 3-model revenue/EBITDA estimation
-  5. Contacts   ch_contacts.py  — website identification + email inference (top N)
-  6. Bolt-on    bolt_on.py      — sector adjacency + fragmentation analysis
-  7. Excel      build_excel.py  — 6-sheet workbook output
+  1.  Search        ch_search.py        — SIC sweep + name search → raw_companies.json
+  2.  Filter        (inline)            — remove false positives → filtered_companies.json
+  3.  Enrich        ch_enrich.py        — directors, PSC, charges, dealability, scoring
+  4.  Financials    ch_financials.py    — accounts data + 3-model revenue/EBITDA estimation
+  5.  Contacts      ch_contacts.py      — website identification + email inference (Disify verified)
+  6.  Sell Signals  sell_signals.py     — exit readiness: late filings, director churn, Sell Intent Score
+  7.  Contracts     contracts_finder.py — government contract intelligence (Contracts Finder + FTS)
+  8.  Digital       digital_health.py   — domain age, LinkedIn, job postings, website health
+  9.  Accreditations accreditations.py  — CQC, Environment Agency, ICO, ISO/CHAS/Gas Safe detection
+  10. Bolt-on       bolt_on.py          — sector adjacency + fragmentation analysis
+  11. Excel         build_excel.py      — 9-sheet workbook output
 
 Usage:
-  python run.py --sector "fire safety"                  # ← NEW: full pipeline, auto SIC discovery
-  python run.py --sector "electrical contractors"       # ← any freetext sector description
+  python run.py --sector "fire safety"                  # Full pipeline, auto SIC discovery
+  python run.py --sector "electrical contractors"       # Any freetext sector description
   python run.py --sector "waste management" --save-config configs/waste_mgmt.py
 
   python run.py                                         # Full pipeline with default config.py
@@ -21,12 +25,19 @@ Usage:
   python run.py --enrich-only                           # Step 3 only (requires filtered JSON)
   python run.py --financials-only                       # Step 4 only
   python run.py --contacts-only                         # Step 5 only
-  python run.py --excel-only                            # Steps 6–7 only
+  python run.py --excel-only                            # Steps 10–11 only
   python run.py --skip-contacts                         # Skip contact enrichment (faster)
+  python run.py --skip-extras                           # Skip steps 6–9 (faster pipeline)
 
-  # Combine --sector with step flags:
+  # Skip individual enrichment steps:
+  python run.py --no-sell-signals
+  python run.py --no-contracts
+  python run.py --no-digital
+  python run.py --no-accreditations
+
+  # Combine flags:
   python run.py --sector "drainage and sewerage" --search-only
-  python run.py --sector "industrial cleaning" --skip-contacts
+  python run.py --sector "industrial cleaning" --skip-contacts --skip-extras
 
 API key is read from .ch_api_key in project root.
 """
@@ -100,8 +111,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python run.py --sector "fire safety"
+  python run.py --sector "fire safety"                           # Full 11-step pipeline
   python run.py --sector "electrical contractors" --skip-contacts
+  python run.py --sector "waste management" --skip-extras        # Skip steps 6-9 (faster)
+  python run.py --sector "IT managed services" --no-contracts    # Skip gov contracts only
   python run.py --sector "waste management" --save-config configs/waste.py
   python run.py --config configs.plumbing_hvac
   python run.py  (uses default config.py — calibration sector)
@@ -128,9 +141,14 @@ Examples:
     parser.add_argument("--enrich-only",     action="store_true", help="Step 3 only")
     parser.add_argument("--financials-only", action="store_true", help="Step 4 only")
     parser.add_argument("--contacts-only",   action="store_true", help="Step 5 only")
-    parser.add_argument("--excel-only",      action="store_true", help="Steps 6–7 only")
+    parser.add_argument("--excel-only",      action="store_true", help="Steps 10–11 only (bolt-on + Excel)")
     parser.add_argument("--skip-contacts",   action="store_true", help="Skip contact enrichment (faster)")
-    parser.add_argument("--no-disify",       action="store_true", help="Skip Disify email verification (faster but unverified)")
+    parser.add_argument("--no-disify",       action="store_true", help="Skip Disify email verification")
+    parser.add_argument("--skip-extras",     action="store_true", help="Skip steps 6–9 (sell signals, contracts, digital, accreditations)")
+    parser.add_argument("--no-sell-signals", action="store_true", help="Skip sell intent signal analysis (step 6)")
+    parser.add_argument("--no-contracts",    action="store_true", help="Skip government contracts lookup (step 7)")
+    parser.add_argument("--no-digital",      action="store_true", help="Skip digital health assessment (step 8)")
+    parser.add_argument("--no-accreditations", action="store_true", help="Skip accreditation enrichment (step 9)")
 
     # ── Discovery options ─────────────────────────────────────────────────────
     parser.add_argument(
@@ -199,35 +217,67 @@ Examples:
 
     # ── Full pipeline ─────────────────────────────────────────────────────────
 
-    print("Step 1/7 — Search")
+    skip_extras = args.skip_extras
+
+    print("Step 1/11 — Search")
     search = reload("ch_search")
     search.run()
 
-    print("\nStep 2/7 — Filter")
+    print("\nStep 2/11 — Filter")
     filter_companies(cfg)
 
-    print("\nStep 3/7 — Enrich (directors, PSC, charges, scoring)")
+    print("\nStep 3/11 — Enrich (directors, PSC, charges, acquisition scoring)")
     enrich = reload("ch_enrich")
     enrich.run()
 
-    print("\nStep 4/7 — Financial estimation")
+    print("\nStep 4/11 — Financial estimation (3-model revenue + EBITDA)")
     fin = reload("ch_financials")
     fin.run()
 
     if not args.skip_contacts:
         run_disify = not args.no_disify
-        label = "website + email inference + Disify verification" if run_disify else "website + email inference (no Disify)"
-        print(f"\nStep 5/7 — Contact intelligence ({label})")
+        label = "Disify verified" if run_disify else "unverified (no Disify)"
+        print(f"\nStep 5/11 — Contact intelligence (website + email inference, {label})")
         contacts = reload("ch_contacts")
         contacts.run(run_disify=run_disify)
     else:
-        print("\nStep 5/7 — Contact intelligence SKIPPED (--skip-contacts)")
+        print("\nStep 5/11 — Contact intelligence SKIPPED (--skip-contacts)")
 
-    print("\nStep 6/7 — Bolt-on analysis")
+    # ── Enhanced intelligence steps (6–9) ────────────────────────────────────
+
+    if not skip_extras and not args.no_sell_signals:
+        print("\nStep 6/11 — Sell intent signals (late filings, director churn, age/tenure)")
+        sell = reload("sell_signals")
+        sell.run()
+    else:
+        print("\nStep 6/11 — Sell signals SKIPPED")
+
+    if not skip_extras and not args.no_contracts:
+        print("\nStep 7/11 — Government contracts (Contracts Finder + Find a Tender)")
+        contracts = reload("contracts_finder")
+        contracts.run()
+    else:
+        print("\nStep 7/11 — Government contracts SKIPPED")
+
+    if not skip_extras and not args.no_digital:
+        print("\nStep 8/11 — Digital health (domain age, LinkedIn, job postings)")
+        digital = reload("digital_health")
+        digital.run()
+    else:
+        print("\nStep 8/11 — Digital health SKIPPED")
+
+    if not skip_extras and not args.no_accreditations:
+        print("\nStep 9/11 — Accreditations (CQC, Environment Agency, ICO, ISO/CHAS)")
+        accreds = reload("accreditations")
+        accreds.run()
+    else:
+        print("\nStep 9/11 — Accreditations SKIPPED")
+
+    print("\nStep 10/11 — Bolt-on sector adjacency analysis")
     bolt = reload("bolt_on")
     bolt.run()
 
-    print("\nStep 7/7 — Build Excel")
+    print("\nStep 11/11 — Build Excel (9-sheet workbook)")
     excel = reload("build_excel")
     out   = excel.run()
 
