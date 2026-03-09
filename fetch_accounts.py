@@ -20,14 +20,21 @@ import requests
 import fitz          # PyMuPDF
 
 # ── API auth ───────────────────────────────────────────────────────────────────
-key_file = os.path.join(os.path.dirname(__file__),
-                        'ch-pe-sourcing/.ch_api_key')
-API_KEY = ""
-with open(key_file) as f:
-    for line in f:
-        if "=" in line:
-            API_KEY = line.strip().split("=", 1)[1].strip()
-            break
+# Priority: COMPANIES_HOUSE_API_KEY env var (set by GitHub Actions secret)
+# Fallback: .ch_api_key file in script directory
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+API_KEY     = os.environ.get("COMPANIES_HOUSE_API_KEY", "")
+if not API_KEY:
+    for _kf in [os.path.join(_script_dir, '.ch_api_key'),
+                os.path.join(_script_dir, 'ch-pe-sourcing/.ch_api_key')]:
+        if os.path.exists(_kf):
+            with open(_kf) as f:
+                for line in f:
+                    if "=" in line:
+                        API_KEY = line.strip().split("=", 1)[1].strip()
+                        break
+            if API_KEY:
+                break
 
 BASE     = "https://api.company-information.service.gov.uk"
 DOC_BASE = "https://document-api.company-information.service.gov.uk"
@@ -291,10 +298,18 @@ def scrape_company_accounts(company_number, company_name, acct_type, period_end)
 
 # ── batch run ──────────────────────────────────────────────────────────────────
 def main():
-    data = json.load(open("/tmp/lift_enriched_patched.json"))
+    # Input: enriched JSON — env var override for CI, else default local path
+    _script_dir     = os.path.dirname(os.path.abspath(__file__))
+    enriched_default = os.path.join(_script_dir, "data/sectors/lift_maintenance_enriched.json")
+    enriched_path    = os.environ.get("ENRICHED_JSON", enriched_default)
+    # Also check legacy /tmp path (local Cowork sessions)
+    if not os.path.exists(enriched_path):
+        if os.path.exists("/tmp/lift_enriched_patched.json"):
+            enriched_path = "/tmp/lift_enriched_patched.json"
+    data = json.load(open(enriched_path))
 
-    # Load checkpoint
-    checkpoint_path = "/tmp/lift_accounts.json"
+    # Checkpoint path — env var override for CI
+    checkpoint_path = os.environ.get("OCR_JSON", "/tmp/lift_accounts.json")
     done = {}
     if os.path.exists(checkpoint_path):
         try:

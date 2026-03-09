@@ -21,12 +21,22 @@ import sqlite3
 from pathlib import Path
 import datetime
 
-# ── paths ──────────────────────────────────────────────────────────────────────
-REPO_DIR      = Path("/sessions/vibrant-modest-einstein/ch-pe-sourcing")
-ENRICHED_JSON = REPO_DIR / "data/sectors/lift_maintenance_enriched.json"
-OCR_JSON      = Path("/tmp/lift_accounts.json")
-DB_PATH       = REPO_DIR / "data/companies_house.db"
-OUT_PATH      = Path("/sessions/vibrant-modest-einstein/mnt/outputs/UK_Lift_Maintenance_Companies_March2026.xlsx")
+# ── paths — supports local and CI (GitHub Actions) environments ───────────────
+# When running on GitHub Actions, the working directory IS the repo root.
+# When running locally in the Cowork VM, use the absolute paths below.
+# Override any path via environment variables.
+
+_SCRIPT_DIR = Path(__file__).resolve().parent  # wherever this script lives
+
+REPO_DIR      = Path(os.environ.get("REPO_DIR",      str(_SCRIPT_DIR)))
+ENRICHED_JSON = Path(os.environ.get("ENRICHED_JSON", str(REPO_DIR / "data/sectors/lift_maintenance_enriched.json")))
+OCR_JSON      = Path(os.environ.get("OCR_JSON",      "/tmp/lift_accounts.json"))
+DB_PATH       = Path(os.environ.get("DB_PATH",       str(REPO_DIR / "data/companies_house.db")))
+
+# Output: use CI_OUTPUT_PATH env var (set by workflow), else default local path
+_default_out  = str(_SCRIPT_DIR.parent / "mnt/outputs/UK_Lift_Maintenance_Companies_March2026.xlsx")
+OUT_PATH      = Path(os.environ.get("CI_OUTPUT_PATH", _default_out))
+OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 sys.path.insert(0, str(REPO_DIR))
 
@@ -53,7 +63,13 @@ try:
             patched += 1
     print(f"  {patched} companies patched with company_age_years")
 except Exception as e:
-    print(f"  DB patch failed: {e} — using existing ages")
+    print(f"  DB patch failed: {e} — falling back to age_years from JSON")
+
+# Fallback: ensure every record has company_age_years set
+# (enriched JSON stores this as age_years; DB patches it as company_age_years)
+for r in data:
+    if not r.get("company_age_years"):
+        r["company_age_years"] = r.get("age_years") or 0
 
 # ── 3. Merge OCR accounts data ────────────────────────────────────────────────
 print("Merging OCR accounts data...")

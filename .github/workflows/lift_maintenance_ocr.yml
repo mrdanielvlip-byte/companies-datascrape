@@ -1,0 +1,90 @@
+name: Lift Maintenance — OCR Batch + Intelligence Rebuild
+
+# Trigger manually from the GitHub Actions tab
+on:
+  workflow_dispatch:
+    inputs:
+      sector:
+        description: 'Sector name (for logging)'
+        required: false
+        default: 'lift_maintenance'
+
+jobs:
+  ocr-batch:
+    name: Fetch Accounts (OCR) + Rebuild Excel
+    runs-on: ubuntu-latest
+    timeout-minutes: 330   # 5.5 hours — stays inside GitHub's 6hr limit
+
+    steps:
+      # ── 1. Checkout repo ──────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. System dependencies (Tesseract) ───────────────────────────────────
+      - name: Install Tesseract OCR
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y tesseract-ocr
+
+      # ── 3. Python dependencies ───────────────────────────────────────────────
+      - name: Install Python packages
+        run: |
+          pip install --upgrade pip
+          pip install requests openpyxl python-dateutil PyMuPDF
+
+      # ── 4. Write CH API key from GitHub secret ───────────────────────────────
+      - name: Write API key
+        run: echo "COMPANIES_HOUSE_API_KEY=${{ secrets.CH_API_KEY }}" > .ch_api_key
+
+      # ── 5. Download previous checkpoint (enables resume across runs) ─────────
+      # Uses dawidd6/action-download-artifact which can fetch the latest artifact
+      # by name even when no run ID is specified. On first run this step is skipped.
+      - name: Download previous OCR checkpoint (if exists)
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          name: ocr-checkpoint
+          path: /tmp/
+          if_no_artifact_found: ignore   # first run: no checkpoint yet
+          workflow_conclusion: ''         # accept from any conclusion (incl. cancelled)
+        continue-on-error: true
+
+      # ── 6. Run OCR batch ─────────────────────────────────────────────────────
+      # fetch_accounts.py reads from data/sectors/lift_maintenance_enriched.json
+      # and writes checkpoint to /tmp/lift_accounts.json every 10 records.
+      - name: Run OCR batch (fetch_accounts.py)
+        env:
+          COMPANIES_HOUSE_API_KEY: ${{ secrets.CH_API_KEY }}
+          OCR_JSON: /tmp/lift_accounts.json
+        run: python3 fetch_accounts.py
+
+      # ── 7. Save checkpoint (runs even if batch timed out / failed) ───────────
+      # This means a second run of this workflow will resume from where it left off.
+      - name: Upload OCR checkpoint
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ocr-checkpoint
+          path: /tmp/lift_accounts.json
+          retention-days: 30
+          overwrite: true
+
+      # ── 8. Run intelligence rebuild ──────────────────────────────────────────
+      # Merges OCR data, runs competitor_map + acquisition_score, builds Excel.
+      - name: Run merge and rebuild (merge_and_rebuild.py)
+        env:
+          COMPANIES_HOUSE_API_KEY: ${{ secrets.CH_API_KEY }}
+          OCR_JSON: /tmp/lift_accounts.json
+          CI_OUTPUT_PATH: output/UK_Lift_Maintenance_Companies_March2026.xlsx
+        run: |
+          mkdir -p output
+          python3 merge_and_rebuild.py
+
+      # ── 9. Upload final Excel ─────────────────────────────────────────────────
+      - name: Upload Excel output
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lift-maintenance-excel
+          path: output/UK_Lift_Maintenance_Companies_March2026.xlsx
+          retention-days: 30
+          overwrite: true
