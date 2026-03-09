@@ -266,6 +266,20 @@ Examples:
     parser.add_argument("--no-digital",      action="store_true", help="Skip digital health assessment (step 8)")
     parser.add_argument("--no-accreditations", action="store_true", help="Skip accreditation enrichment (step 9)")
 
+    parser.add_argument(
+        "--local-db",
+        action="store_true",
+        help="Use local SQLite database for Step 1 search instead of Companies House API. "
+             "Dramatically faster (~1s vs 10+ min). Requires: python build_local_db.py",
+    )
+    parser.add_argument(
+        "--smart",
+        action="store_true",
+        help="Interactive guided search: auto-discovers SIC codes, asks filtering criteria "
+             "(age, region, charges), shows count estimate, then runs pipeline. "
+             "Requires --sector and local DB. Best starting point for new sectors.",
+    )
+
     # ── Discovery options ─────────────────────────────────────────────────────
     parser.add_argument(
         "--validate-sic",
@@ -296,6 +310,8 @@ Examples:
     elif args.reg_source:
         # Register-first mode: build a minimal config from the register metadata
         cfg = _build_reg_config(args.reg_source)
+    elif args.smart and args.sector:
+        cfg = load_discovered_config(args.sector, validate=False)
     else:
         cfg = load_config(args.config)
 
@@ -313,9 +329,13 @@ Examples:
     # ── Individual step flags ─────────────────────────────────────────────────
 
     if args.search_only:
-        search = reload("ch_search")
-        search.run()
-        filter_companies(cfg)
+        if args.local_db:
+            local = reload("local_search")
+            local.run()
+        else:
+            search = reload("ch_search")
+            search.run()
+            filter_companies(cfg)
         return
 
     if args.enrich_only:
@@ -344,15 +364,32 @@ Examples:
 
     skip_extras = args.skip_extras
 
-    if args.reg_source:
+    if args.smart:
+        # ── Smart guided search ───────────────────────────────────────────────
+        print(f"Step 1/11 — Smart Sector Search  ⚡")
+        smart = reload("smart_search")
+        result = smart.run_interactive(
+            sector=args.sector or cfg.SECTOR_LABEL,
+            non_interactive=False,
+        )
+        if not result:
+            return
+        print("\nStep 2/11 — Filter (applied during smart search)")
+    elif args.reg_source:
         # ── Register-first discovery ──────────────────────────────────────────
         reg_query = getattr(args, "reg_query", "")
         print(f"Step 1/11 — Register Discovery ({args.reg_source}: '{reg_query}')")
         _run_register_discovery(args.reg_source, reg_query, cfg)
         print("\nStep 2/11 — Filter (applied during register discovery)")
+    elif args.local_db:
+        # ── Local SQLite DB search (fast, no API calls) ───────────────────────
+        print("Step 1/11 — Local DB Search  ⚡ (SQLite, no API)")
+        local = reload("local_search")
+        local.run()
+        print("\nStep 2/11 — Filter (applied during local search)")
     else:
-        # ── Standard SIC sweep ────────────────────────────────────────────────
-        print("Step 1/11 — Search")
+        # ── Standard SIC sweep via Companies House API ────────────────────────
+        print("Step 1/11 — Search (Companies House API)")
         search = reload("ch_search")
         search.run()
 

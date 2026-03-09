@@ -4,6 +4,12 @@
 # Output data
 output/
 
+# Local Companies House bulk DB (large binary — not for git, rebuild with build_local_db.py)
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/*.zip
+
 # Python
 __pycache__/
 *.pyc

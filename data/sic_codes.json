@@ -1,0 +1,2926 @@
+{
+  "01110": {
+    "count": 4171,
+    "description": "Growing of cereals (except rice), leguminous crops and oil seeds"
+  },
+  "01120": {
+    "count": 64,
+    "description": "Growing of rice"
+  },
+  "01130": {
+    "count": 1587,
+    "description": "Growing of vegetables and melons, roots and tubers"
+  },
+  "01140": {
+    "count": 14,
+    "description": "Growing of sugar cane"
+  },
+  "01150": {
+    "count": 11,
+    "description": "Growing of tobacco"
+  },
+  "01160": {
+    "count": 77,
+    "description": "Growing of fibre crops"
+  },
+  "01190": {
+    "count": 390,
+    "description": "Growing of other non-perennial crops"
+  },
+  "01210": {
+    "count": 252,
+    "description": "Growing of grapes"
+  },
+  "01220": {
+    "count": 40,
+    "description": "Growing of tropical and subtropical fruits"
+  },
+  "01230": {
+    "count": 10,
+    "description": "Growing of citrus fruits"
+  },
+  "01240": {
+    "count": 172,
+    "description": "Growing of pome fruits and stone fruits"
+  },
+  "01250": {
+    "count": 476,
+    "description": "Growing of other tree and bush fruits and nuts"
+  },
+  "01260": {
+    "count": 15,
+    "description": "Growing of oleaginous fruits"
+  },
+  "01270": {
+    "count": 57,
+    "description": "Growing of beverage crops"
+  },
+  "01280": {
+    "count": 201,
+    "description": "Growing of spices, aromatic, drug and pharmaceutical crops"
+  },
+  "01290": {
+    "count": 459,
+    "description": "Growing of other perennial crops"
+  },
+  "01300": {
+    "count": 753,
+    "description": "Plant propagation"
+  },
+  "01410": {
+    "count": 1656,
+    "description": "Raising of dairy cattle"
+  },
+  "01420": {
+    "count": 842,
+    "description": "Raising of other cattle and buffaloes"
+  },
+  "01430": {
+    "count": 2489,
+    "description": "Raising of horses and other equines"
+  },
+  "01440": {
+    "count": 70,
+    "description": "Raising of camels and camelids"
+  },
+  "01450": {
+    "count": 723,
+    "description": "Raising of sheep and  goats"
+  },
+  "01460": {
+    "count": 388,
+    "description": "Raising of swine/pigs"
+  },
+  "01470": {
+    "count": 1285,
+    "description": "Raising of poultry"
+  },
+  "01490": {
+    "count": 1710,
+    "description": "Raising of other animals"
+  },
+  "01500": {
+    "count": 8812,
+    "description": "Mixed farming"
+  },
+  "01610": {
+    "count": 2820,
+    "description": "Support activities for crop production"
+  },
+  "01621": {
+    "count": 1374,
+    "description": "Farm animal boarding and care"
+  },
+  "01629": {
+    "count": 2202,
+    "description": "Support activities for animal production (other than farm animal boarding and care) n.e.c."
+  },
+  "01630": {
+    "count": 376,
+    "description": "Post-harvest crop activities"
+  },
+  "01640": {
+    "count": 83,
+    "description": "Seed processing for propagation"
+  },
+  "01700": {
+    "count": 682,
+    "description": "Hunting, trapping and related service activities"
+  },
+  "02100": {
+    "count": 2502,
+    "description": "Silviculture and other forestry activities"
+  },
+  "02200": {
+    "count": 684,
+    "description": "Logging"
+  },
+  "02300": {
+    "count": 62,
+    "description": "Gathering of wild growing non-wood products"
+  },
+  "02400": {
+    "count": 2181,
+    "description": "Support services to forestry"
+  },
+  "03110": {
+    "count": 2353,
+    "description": "Marine fishing"
+  },
+  "03120": {
+    "count": 835,
+    "description": "Freshwater fishing"
+  },
+  "03210": {
+    "count": 552,
+    "description": "Marine aquaculture"
+  },
+  "03220": {
+    "count": 281,
+    "description": "Freshwater aquaculture"
+  },
+  "05101": {
+    "count": 32,
+    "description": "Deep coal mines"
+  },
+  "05102": {
+    "count": 63,
+    "description": "Open cast coal working"
+  },
+  "05200": {
+    "count": 11,
+    "description": "Mining of lignite"
+  },
+  "06100": {
+    "count": 1383,
+    "description": "Extraction of crude petroleum"
+  },
+  "06200": {
+    "count": 280,
+    "description": "Extraction of natural gas"
+  },
+  "07100": {
+    "count": 86,
+    "description": "Mining of iron ores"
+  },
+  "07210": {
+    "count": 11,
+    "description": "Mining of uranium and thorium ores"
+  },
+  "07290": {
+    "count": 407,
+    "description": "Mining of other non-ferrous metal ores"
+  },
+  "08110": {
+    "count": 490,
+    "description": "Quarrying of ornamental and building stone, limestone, gypsum, chalk and slate"
+  },
+  "08120": {
+    "count": 318,
+    "description": "Operation of gravel and sand pits; mining of clays and kaolin"
+  },
+  "08910": {
+    "count": 538,
+    "description": "Mining of chemical and fertilizer minerals"
+  },
+  "08920": {
+    "count": 12,
+    "description": "Extraction of peat"
+  },
+  "08930": {
+    "count": 29,
+    "description": "Extraction of salt"
+  },
+  "08990": {
+    "count": 886,
+    "description": "Other mining and quarrying n.e.c."
+  },
+  "09100": {
+    "count": 3410,
+    "description": "Support activities for petroleum and natural gas extraction"
+  },
+  "09900": {
+    "count": 861,
+    "description": "Support activities for other mining and quarrying"
+  },
+  "10110": {
+    "count": 770,
+    "description": "Processing and preserving of meat"
+  },
+  "10120": {
+    "count": 158,
+    "description": "Processing and preserving of poultry meat"
+  },
+  "10130": {
+    "count": 903,
+    "description": "Production of meat and poultry meat products"
+  },
+  "10200": {
+    "count": 397,
+    "description": "Processing and preserving of fish, crustaceans and molluscs"
+  },
+  "10310": {
+    "count": 77,
+    "description": "Processing and preserving of potatoes"
+  },
+  "10320": {
+    "count": 605,
+    "description": "Manufacture of fruit and vegetable juice"
+  },
+  "10390": {
+    "count": 774,
+    "description": "Other processing and preserving of fruit and vegetables"
+  },
+  "10410": {
+    "count": 277,
+    "description": "Manufacture of oils and fats"
+  },
+  "10420": {
+    "count": 16,
+    "description": "Manufacture of margarine and similar edible fats"
+  },
+  "10511": {
+    "count": 212,
+    "description": "Liquid milk and cream production"
+  },
+  "10512": {
+    "count": 261,
+    "description": "Butter and cheese production"
+  },
+  "10519": {
+    "count": 214,
+    "description": "Manufacture of other milk products"
+  },
+  "10520": {
+    "count": 768,
+    "description": "Manufacture of ice cream"
+  },
+  "10611": {
+    "count": 144,
+    "description": "Grain milling"
+  },
+  "10612": {
+    "count": 337,
+    "description": "Manufacture of breakfast cereals and cereals-based food"
+  },
+  "10620": {
+    "count": 31,
+    "description": "Manufacture of starches and starch products"
+  },
+  "10710": {
+    "count": 5513,
+    "description": "Manufacture of bread; manufacture of fresh pastry goods and cakes"
+  },
+  "10720": {
+    "count": 533,
+    "description": "Manufacture of rusks and biscuits; manufacture of preserved pastry goods and cakes"
+  },
+  "10730": {
+    "count": 65,
+    "description": "Manufacture of macaroni, noodles, couscous and similar farinaceous products"
+  },
+  "10810": {
+    "count": 33,
+    "description": "Manufacture of sugar"
+  },
+  "10821": {
+    "count": 809,
+    "description": "Manufacture of cocoa and chocolate confectionery"
+  },
+  "10822": {
+    "count": 394,
+    "description": "Manufacture of sugar confectionery"
+  },
+  "10831": {
+    "count": 429,
+    "description": "Tea processing"
+  },
+  "10832": {
+    "count": 1736,
+    "description": "Production of coffee and coffee substitutes"
+  },
+  "10840": {
+    "count": 894,
+    "description": "Manufacture of condiments and seasonings"
+  },
+  "10850": {
+    "count": 1152,
+    "description": "Manufacture of prepared meals and dishes"
+  },
+  "10860": {
+    "count": 541,
+    "description": "Manufacture of homogenized food preparations and dietetic food"
+  },
+  "10890": {
+    "count": 5913,
+    "description": "Manufacture of other food products n.e.c."
+  },
+  "10910": {
+    "count": 325,
+    "description": "Manufacture of prepared feeds for farm animals"
+  },
+  "10920": {
+    "count": 835,
+    "description": "Manufacture of prepared pet foods"
+  },
+  "11010": {
+    "count": 2183,
+    "description": "Distilling, rectifying and blending of spirits"
+  },
+  "11020": {
+    "count": 354,
+    "description": "Manufacture of wine from grape"
+  },
+  "11030": {
+    "count": 363,
+    "description": "Manufacture of cider and other fruit wines"
+  },
+  "11040": {
+    "count": 244,
+    "description": "Manufacture of other non-distilled fermented beverages"
+  },
+  "11050": {
+    "count": 2149,
+    "description": "Manufacture of beer"
+  },
+  "11060": {
+    "count": 27,
+    "description": "Manufacture of malt"
+  },
+  "11070": {
+    "count": 1494,
+    "description": "Manufacture of soft drinks; production of mineral waters and other bottled waters"
+  },
+  "12000": {
+    "count": 160,
+    "description": "Manufacture of tobacco products"
+  },
+  "13100": {
+    "count": 314,
+    "description": "Preparation and spinning of textile fibres"
+  },
+  "13200": {
+    "count": 460,
+    "description": "Weaving of textiles"
+  },
+  "13300": {
+    "count": 1331,
+    "description": "Finishing of textiles"
+  },
+  "13910": {
+    "count": 412,
+    "description": "Manufacture of knitted and crocheted fabrics"
+  },
+  "13921": {
+    "count": 1727,
+    "description": "Manufacture of soft furnishings"
+  },
+  "13922": {
+    "count": 218,
+    "description": "manufacture of canvas goods, sacks, etc."
+  },
+  "13923": {
+    "count": 831,
+    "description": "manufacture of household textiles"
+  },
+  "13931": {
+    "count": 184,
+    "description": "Manufacture of woven or tufted carpets and rugs"
+  },
+  "13939": {
+    "count": 144,
+    "description": "Manufacture of other carpets and rugs"
+  },
+  "13940": {
+    "count": 98,
+    "description": "Manufacture of cordage, rope, twine and netting"
+  },
+  "13950": {
+    "count": 192,
+    "description": "Manufacture of non-wovens and articles made from non-wovens, except apparel"
+  },
+  "13960": {
+    "count": 429,
+    "description": "Manufacture of other technical and industrial textiles"
+  },
+  "13990": {
+    "count": 1726,
+    "description": "Manufacture of other textiles n.e.c."
+  },
+  "14110": {
+    "count": 651,
+    "description": "Manufacture of leather clothes"
+  },
+  "14120": {
+    "count": 687,
+    "description": "Manufacture of workwear"
+  },
+  "14131": {
+    "count": 1406,
+    "description": "Manufacture of other men's outerwear"
+  },
+  "14132": {
+    "count": 1442,
+    "description": "Manufacture of other women's outerwear"
+  },
+  "14141": {
+    "count": 106,
+    "description": "Manufacture of men's underwear"
+  },
+  "14142": {
+    "count": 290,
+    "description": "Manufacture of women's underwear"
+  },
+  "14190": {
+    "count": 5252,
+    "description": "Manufacture of other wearing apparel and accessories n.e.c."
+  },
+  "14200": {
+    "count": 22,
+    "description": "Manufacture of articles of fur"
+  },
+  "14310": {
+    "count": 103,
+    "description": "Manufacture of knitted and crocheted hosiery"
+  },
+  "14390": {
+    "count": 227,
+    "description": "Manufacture of other knitted and crocheted apparel"
+  },
+  "15110": {
+    "count": 138,
+    "description": "Tanning and dressing of leather; dressing and dyeing of fur"
+  },
+  "15120": {
+    "count": 1090,
+    "description": "Manufacture of luggage, handbags and the like, saddlery and harness"
+  },
+  "15200": {
+    "count": 471,
+    "description": "Manufacture of footwear"
+  },
+  "16100": {
+    "count": 690,
+    "description": "Sawmilling and planing of wood"
+  },
+  "16210": {
+    "count": 279,
+    "description": "Manufacture of veneer sheets and wood-based panels"
+  },
+  "16220": {
+    "count": 107,
+    "description": "Manufacture of assembled parquet floors"
+  },
+  "16230": {
+    "count": 8743,
+    "description": "Manufacture of other builders' carpentry and joinery"
+  },
+  "16240": {
+    "count": 410,
+    "description": "Manufacture of wooden containers"
+  },
+  "16290": {
+    "count": 1914,
+    "description": "Manufacture of other products of wood; manufacture of articles of cork, straw and plaiting materials"
+  },
+  "17110": {
+    "count": 31,
+    "description": "Manufacture of pulp"
+  },
+  "17120": {
+    "count": 260,
+    "description": "Manufacture of paper and paperboard"
+  },
+  "17211": {
+    "count": 168,
+    "description": "Manufacture of corrugated paper and paperboard, sacks and bags"
+  },
+  "17219": {
+    "count": 519,
+    "description": "Manufacture of other paper and paperboard containers"
+  },
+  "17220": {
+    "count": 460,
+    "description": "Manufacture of household and sanitary goods and of toilet requisites"
+  },
+  "17230": {
+    "count": 941,
+    "description": "Manufacture of paper stationery"
+  },
+  "17240": {
+    "count": 76,
+    "description": "Manufacture of wallpaper"
+  },
+  "17290": {
+    "count": 529,
+    "description": "Manufacture of other articles of paper and paperboard n.e.c."
+  },
+  "18110": {
+    "count": 151,
+    "description": "Printing of newspapers"
+  },
+  "18121": {
+    "count": 724,
+    "description": "Manufacture of printed labels"
+  },
+  "18129": {
+    "count": 9295,
+    "description": "Printing n.e.c."
+  },
+  "18130": {
+    "count": 1578,
+    "description": "Pre-press and pre-media services"
+  },
+  "18140": {
+    "count": 204,
+    "description": "Binding and related services"
+  },
+  "18201": {
+    "count": 1160,
+    "description": "Reproduction of sound recording"
+  },
+  "18202": {
+    "count": 466,
+    "description": "Reproduction of video recording"
+  },
+  "18203": {
+    "count": 553,
+    "description": "Reproduction of computer media"
+  },
+  "19100": {
+    "count": 15,
+    "description": "Manufacture of coke oven products"
+  },
+  "19201": {
+    "count": 166,
+    "description": "Mineral oil refining"
+  },
+  "19209": {
+    "count": 157,
+    "description": "Other treatment of petroleum products (excluding petrochemicals manufacture)"
+  },
+  "20110": {
+    "count": 175,
+    "description": "Manufacture of industrial gases"
+  },
+  "20120": {
+    "count": 157,
+    "description": "Manufacture of dyes and pigments"
+  },
+  "20130": {
+    "count": 334,
+    "description": "Manufacture of other inorganic basic chemicals"
+  },
+  "20140": {
+    "count": 334,
+    "description": "Manufacture of other organic basic chemicals"
+  },
+  "20150": {
+    "count": 391,
+    "description": "Manufacture of fertilizers and nitrogen compounds"
+  },
+  "20160": {
+    "count": 384,
+    "description": "Manufacture of plastics in primary forms"
+  },
+  "20170": {
+    "count": 32,
+    "description": "Manufacture of synthetic rubber in primary forms"
+  },
+  "20200": {
+    "count": 170,
+    "description": "Manufacture of pesticides and other agrochemical products"
+  },
+  "20301": {
+    "count": 602,
+    "description": "Manufacture of paints, varnishes and similar coatings, mastics and sealants"
+  },
+  "20302": {
+    "count": 91,
+    "description": "Manufacture of printing ink"
+  },
+  "20411": {
+    "count": 1017,
+    "description": "Manufacture of soap and detergents"
+  },
+  "20412": {
+    "count": 418,
+    "description": "Manufacture of cleaning and polishing preparations"
+  },
+  "20420": {
+    "count": 2280,
+    "description": "Manufacture of perfumes and toilet preparations"
+  },
+  "20510": {
+    "count": 22,
+    "description": "Manufacture of explosives"
+  },
+  "20520": {
+    "count": 85,
+    "description": "Manufacture of glues"
+  },
+  "20530": {
+    "count": 287,
+    "description": "Manufacture of essential oils"
+  },
+  "20590": {
+    "count": 1211,
+    "description": "Manufacture of other chemical products n.e.c."
+  },
+  "20600": {
+    "count": 59,
+    "description": "Manufacture of man-made fibres"
+  },
+  "21100": {
+    "count": 1268,
+    "description": "Manufacture of basic pharmaceutical products"
+  },
+  "21200": {
+    "count": 567,
+    "description": "Manufacture of pharmaceutical preparations"
+  },
+  "22110": {
+    "count": 311,
+    "description": "Manufacture of rubber tyres and tubes; retreading and rebuilding of rubber tyres"
+  },
+  "22190": {
+    "count": 847,
+    "description": "Manufacture of other rubber products"
+  },
+  "22210": {
+    "count": 335,
+    "description": "Manufacture of plastic plates, sheets, tubes and profiles"
+  },
+  "22220": {
+    "count": 547,
+    "description": "Manufacture of plastic packing goods"
+  },
+  "22230": {
+    "count": 388,
+    "description": "Manufacture of builders  ware of plastic"
+  },
+  "22290": {
+    "count": 4035,
+    "description": "Manufacture of other plastic products"
+  },
+  "23110": {
+    "count": 192,
+    "description": "Manufacture of flat glass"
+  },
+  "23120": {
+    "count": 356,
+    "description": "Shaping and processing of flat glass"
+  },
+  "23130": {
+    "count": 33,
+    "description": "Manufacture of hollow glass"
+  },
+  "23140": {
+    "count": 136,
+    "description": "Manufacture of glass fibres"
+  },
+  "23190": {
+    "count": 328,
+    "description": "Manufacture and processing of other glass, including technical glassware"
+  },
+  "23200": {
+    "count": 96,
+    "description": "Manufacture of refractory products"
+  },
+  "23310": {
+    "count": 86,
+    "description": "Manufacture of ceramic tiles and flags"
+  },
+  "23320": {
+    "count": 308,
+    "description": "Manufacture of bricks, tiles and construction products, in baked clay"
+  },
+  "23410": {
+    "count": 594,
+    "description": "Manufacture of ceramic household and ornamental articles"
+  },
+  "23420": {
+    "count": 43,
+    "description": "Manufacture of ceramic sanitary fixtures"
+  },
+  "23430": {
+    "count": 60,
+    "description": "Manufacture of ceramic insulators and insulating fittings"
+  },
+  "23440": {
+    "count": 113,
+    "description": "Manufacture of other technical ceramic products"
+  },
+  "23490": {
+    "count": 155,
+    "description": "Manufacture of other ceramic products n.e.c."
+  },
+  "23510": {
+    "count": 59,
+    "description": "Manufacture of cement"
+  },
+  "23520": {
+    "count": 22,
+    "description": "Manufacture of lime and plaster"
+  },
+  "23610": {
+    "count": 710,
+    "description": "Manufacture of concrete products for construction purposes"
+  },
+  "23620": {
+    "count": 169,
+    "description": "Manufacture of plaster products for construction purposes"
+  },
+  "23630": {
+    "count": 356,
+    "description": "Manufacture of ready-mixed concrete"
+  },
+  "23640": {
+    "count": 13,
+    "description": "Manufacture of mortars"
+  },
+  "23650": {
+    "count": 18,
+    "description": "Manufacture of fibre cement"
+  },
+  "23690": {
+    "count": 206,
+    "description": "Manufacture of other articles of concrete, plaster and cement"
+  },
+  "23700": {
+    "count": 1323,
+    "description": "Cutting, shaping and finishing of stone"
+  },
+  "23910": {
+    "count": 65,
+    "description": "Production of abrasive products"
+  },
+  "23990": {
+    "count": 334,
+    "description": "Manufacture of other non-metallic mineral products n.e.c."
+  },
+  "24100": {
+    "count": 819,
+    "description": "Manufacture of basic iron and steel and of ferro-alloys"
+  },
+  "24200": {
+    "count": 734,
+    "description": "Manufacture of tubes, pipes, hollow profiles and related fittings, of steel"
+  },
+  "24310": {
+    "count": 17,
+    "description": "Cold drawing of bars"
+  },
+  "24320": {
+    "count": 20,
+    "description": "Cold rolling of narrow strip"
+  },
+  "24330": {
+    "count": 128,
+    "description": "Cold forming or folding"
+  },
+  "24340": {
+    "count": 27,
+    "description": "Cold drawing of wire"
+  },
+  "24410": {
+    "count": 283,
+    "description": "Precious metals production"
+  },
+  "24420": {
+    "count": 223,
+    "description": "Aluminium production"
+  },
+  "24430": {
+    "count": 23,
+    "description": "Lead, zinc and tin production"
+  },
+  "24440": {
+    "count": 43,
+    "description": "Copper production"
+  },
+  "24450": {
+    "count": 247,
+    "description": "Other non-ferrous metal production"
+  },
+  "24460": {
+    "count": 14,
+    "description": "Processing of nuclear fuel"
+  },
+  "24510": {
+    "count": 119,
+    "description": "Casting of iron"
+  },
+  "24520": {
+    "count": 140,
+    "description": "Casting of steel"
+  },
+  "24530": {
+    "count": 122,
+    "description": "Casting of light metals"
+  },
+  "24540": {
+    "count": 134,
+    "description": "Casting of other non-ferrous metals"
+  },
+  "25110": {
+    "count": 5161,
+    "description": "Manufacture of metal structures and parts of structures"
+  },
+  "25120": {
+    "count": 1732,
+    "description": "Manufacture of doors and windows of metal"
+  },
+  "25210": {
+    "count": 236,
+    "description": "Manufacture of central heating radiators and boilers"
+  },
+  "25290": {
+    "count": 215,
+    "description": "Manufacture of other tanks, reservoirs and containers of metal"
+  },
+  "25300": {
+    "count": 30,
+    "description": "Manufacture of steam generators, except central heating hot water boilers"
+  },
+  "25400": {
+    "count": 104,
+    "description": "Manufacture of weapons and ammunition"
+  },
+  "25500": {
+    "count": 408,
+    "description": "Forging, pressing, stamping and roll-forming of metal; powder metallurgy"
+  },
+  "25610": {
+    "count": 1189,
+    "description": "Treatment and coating of metals"
+  },
+  "25620": {
+    "count": 2865,
+    "description": "Machining"
+  },
+  "25710": {
+    "count": 126,
+    "description": "Manufacture of cutlery"
+  },
+  "25720": {
+    "count": 352,
+    "description": "Manufacture of locks and hinges"
+  },
+  "25730": {
+    "count": 935,
+    "description": "Manufacture of tools"
+  },
+  "25910": {
+    "count": 57,
+    "description": "Manufacture of steel drums and similar containers"
+  },
+  "25920": {
+    "count": 102,
+    "description": "Manufacture of light metal packaging"
+  },
+  "25930": {
+    "count": 314,
+    "description": "Manufacture of wire products, chain and springs"
+  },
+  "25940": {
+    "count": 295,
+    "description": "Manufacture of fasteners and screw machine products"
+  },
+  "25990": {
+    "count": 8269,
+    "description": "Manufacture of other fabricated metal products n.e.c."
+  },
+  "26110": {
+    "count": 1749,
+    "description": "Manufacture of electronic components"
+  },
+  "26120": {
+    "count": 449,
+    "description": "Manufacture of loaded electronic boards"
+  },
+  "26200": {
+    "count": 1116,
+    "description": "Manufacture of computers and peripheral equipment"
+  },
+  "26301": {
+    "count": 182,
+    "description": "Manufacture of telegraph and telephone apparatus and equipment"
+  },
+  "26309": {
+    "count": 407,
+    "description": "Manufacture of communication equipment other than telegraph, and telephone apparatus and equipment"
+  },
+  "26400": {
+    "count": 1588,
+    "description": "Manufacture of consumer electronics"
+  },
+  "26511": {
+    "count": 1354,
+    "description": "Manufacture of electronic measuring, testing etc. equipment, not for industrial process control"
+  },
+  "26512": {
+    "count": 917,
+    "description": "Manufacture of electronic industrial process control equipment"
+  },
+  "26513": {
+    "count": 79,
+    "description": "Manufacture of non-electronic measuring, testing etc. equipment, not for industrial process control"
+  },
+  "26514": {
+    "count": 64,
+    "description": "Manufacture of non-electronic industrial process control equipment"
+  },
+  "26520": {
+    "count": 258,
+    "description": "Manufacture of watches and clocks"
+  },
+  "26600": {
+    "count": 222,
+    "description": "Manufacture of irradiation, electromedical and electrotherapeutic equipment"
+  },
+  "26701": {
+    "count": 303,
+    "description": "Manufacture of optical precision instruments"
+  },
+  "26702": {
+    "count": 178,
+    "description": "Manufacture of photographic and cinematographic equipment"
+  },
+  "26800": {
+    "count": 28,
+    "description": "Manufacture of magnetic and optical media"
+  },
+  "27110": {
+    "count": 571,
+    "description": "Manufacture of electric motors, generators and transformers"
+  },
+  "27120": {
+    "count": 673,
+    "description": "Manufacture of electricity distribution and control apparatus"
+  },
+  "27200": {
+    "count": 296,
+    "description": "Manufacture of batteries and accumulators"
+  },
+  "27310": {
+    "count": 66,
+    "description": "Manufacture of fibre optic cables"
+  },
+  "27320": {
+    "count": 420,
+    "description": "Manufacture of other electronic and electric wires and cables"
+  },
+  "27330": {
+    "count": 83,
+    "description": "Manufacture of wiring devices"
+  },
+  "27400": {
+    "count": 1132,
+    "description": "Manufacture of electric lighting equipment"
+  },
+  "27510": {
+    "count": 469,
+    "description": "Manufacture of electric domestic appliances"
+  },
+  "27520": {
+    "count": 70,
+    "description": "Manufacture of non-electric domestic appliances"
+  },
+  "27900": {
+    "count": 2555,
+    "description": "Manufacture of other electrical equipment"
+  },
+  "28110": {
+    "count": 387,
+    "description": "Manufacture of engines and turbines, except aircraft, vehicle and cycle engines"
+  },
+  "28120": {
+    "count": 212,
+    "description": "Manufacture of fluid power equipment"
+  },
+  "28131": {
+    "count": 405,
+    "description": "Manufacture of pumps"
+  },
+  "28132": {
+    "count": 55,
+    "description": "Manufacture of compressors"
+  },
+  "28140": {
+    "count": 256,
+    "description": "Manufacture of taps and valves"
+  },
+  "28150": {
+    "count": 247,
+    "description": "Manufacture of bearings, gears, gearing and driving elements"
+  },
+  "28210": {
+    "count": 145,
+    "description": "Manufacture of ovens, furnaces and furnace burners"
+  },
+  "28220": {
+    "count": 845,
+    "description": "Manufacture of lifting and handling equipment"
+  },
+  "28230": {
+    "count": 65,
+    "description": "Manufacture of office machinery and equipment (except computers and peripheral equipment)"
+  },
+  "28240": {
+    "count": 56,
+    "description": "Manufacture of power-driven hand tools"
+  },
+  "28250": {
+    "count": 523,
+    "description": "Manufacture of non-domestic cooling and ventilation equipment"
+  },
+  "28290": {
+    "count": 1068,
+    "description": "Manufacture of other general-purpose machinery n.e.c."
+  },
+  "28301": {
+    "count": 34,
+    "description": "Manufacture of agricultural tractors"
+  },
+  "28302": {
+    "count": 392,
+    "description": "Manufacture of agricultural and forestry machinery other than tractors"
+  },
+  "28410": {
+    "count": 157,
+    "description": "Manufacture of metal forming machinery"
+  },
+  "28490": {
+    "count": 531,
+    "description": "Manufacture of other machine tools"
+  },
+  "28910": {
+    "count": 29,
+    "description": "Manufacture of machinery for metallurgy"
+  },
+  "28921": {
+    "count": 95,
+    "description": "Manufacture of machinery for mining"
+  },
+  "28922": {
+    "count": 56,
+    "description": "Manufacture of earthmoving equipment"
+  },
+  "28923": {
+    "count": 77,
+    "description": "Manufacture of equipment for concrete crushing and screening and roadworks"
+  },
+  "28930": {
+    "count": 391,
+    "description": "Manufacture of machinery for food, beverage and tobacco processing"
+  },
+  "28940": {
+    "count": 124,
+    "description": "Manufacture of machinery for textile, apparel and leather production"
+  },
+  "28950": {
+    "count": 72,
+    "description": "Manufacture of machinery for paper and paperboard production"
+  },
+  "28960": {
+    "count": 150,
+    "description": "Manufacture of plastics and rubber machinery"
+  },
+  "28990": {
+    "count": 3016,
+    "description": "Manufacture of other special-purpose machinery n.e.c."
+  },
+  "29100": {
+    "count": 1266,
+    "description": "Manufacture of motor vehicles"
+  },
+  "29201": {
+    "count": 943,
+    "description": "Manufacture of bodies (coachwork) for motor vehicles (except caravans)"
+  },
+  "29202": {
+    "count": 271,
+    "description": "Manufacture of trailers and semi-trailers"
+  },
+  "29203": {
+    "count": 300,
+    "description": "Manufacture of caravans"
+  },
+  "29310": {
+    "count": 487,
+    "description": "Manufacture of electrical and electronic equipment for motor vehicles and their engines"
+  },
+  "29320": {
+    "count": 2360,
+    "description": "Manufacture of other parts and accessories for motor vehicles"
+  },
+  "30110": {
+    "count": 486,
+    "description": "Building of ships and floating structures"
+  },
+  "30120": {
+    "count": 773,
+    "description": "Building of pleasure and sporting boats"
+  },
+  "30200": {
+    "count": 293,
+    "description": "Manufacture of railway locomotives and rolling stock"
+  },
+  "30300": {
+    "count": 1026,
+    "description": "Manufacture of air and spacecraft and related machinery"
+  },
+  "30400": {
+    "count": 16,
+    "description": "Manufacture of military fighting vehicles"
+  },
+  "30910": {
+    "count": 141,
+    "description": "Manufacture of motorcycles"
+  },
+  "30920": {
+    "count": 340,
+    "description": "Manufacture of bicycles and invalid carriages"
+  },
+  "30990": {
+    "count": 906,
+    "description": "Manufacture of other transport equipment n.e.c."
+  },
+  "31010": {
+    "count": 1271,
+    "description": "Manufacture of office and shop furniture"
+  },
+  "31020": {
+    "count": 2675,
+    "description": "Manufacture of kitchen furniture"
+  },
+  "31030": {
+    "count": 467,
+    "description": "Manufacture of mattresses"
+  },
+  "31090": {
+    "count": 5812,
+    "description": "Manufacture of other furniture"
+  },
+  "32110": {
+    "count": 34,
+    "description": "Striking of coins"
+  },
+  "32120": {
+    "count": 3856,
+    "description": "Manufacture of jewellery and related articles"
+  },
+  "32130": {
+    "count": 283,
+    "description": "Manufacture of imitation jewellery and related articles"
+  },
+  "32200": {
+    "count": 507,
+    "description": "Manufacture of musical instruments"
+  },
+  "32300": {
+    "count": 2108,
+    "description": "Manufacture of sports goods"
+  },
+  "32401": {
+    "count": 352,
+    "description": "Manufacture of professional and arcade games and toys"
+  },
+  "32409": {
+    "count": 1808,
+    "description": "Manufacture of other games and toys, n.e.c."
+  },
+  "32500": {
+    "count": 2973,
+    "description": "Manufacture of medical and dental instruments and supplies"
+  },
+  "32910": {
+    "count": 51,
+    "description": "Manufacture of brooms and brushes"
+  },
+  "32990": {
+    "count": 18577,
+    "description": "Other manufacturing n.e.c."
+  },
+  "33110": {
+    "count": 1352,
+    "description": "Repair of fabricated metal products"
+  },
+  "33120": {
+    "count": 5433,
+    "description": "Repair of machinery"
+  },
+  "33130": {
+    "count": 905,
+    "description": "Repair of electronic and optical equipment"
+  },
+  "33140": {
+    "count": 5500,
+    "description": "Repair of electrical equipment"
+  },
+  "33150": {
+    "count": 2128,
+    "description": "Repair and maintenance of ships and boats"
+  },
+  "33160": {
+    "count": 2779,
+    "description": "Repair and maintenance of aircraft and spacecraft"
+  },
+  "33170": {
+    "count": 4165,
+    "description": "Repair and maintenance of other transport equipment n.e.c."
+  },
+  "33190": {
+    "count": 6646,
+    "description": "Repair of other equipment"
+  },
+  "33200": {
+    "count": 4073,
+    "description": "Installation of industrial machinery and equipment"
+  },
+  "35110": {
+    "count": 11168,
+    "description": "Production of electricity"
+  },
+  "35120": {
+    "count": 464,
+    "description": "Transmission of electricity"
+  },
+  "35130": {
+    "count": 1019,
+    "description": "Distribution of electricity"
+  },
+  "35140": {
+    "count": 2550,
+    "description": "Trade of electricity"
+  },
+  "35210": {
+    "count": 331,
+    "description": "Manufacture of gas"
+  },
+  "35220": {
+    "count": 339,
+    "description": "Distribution of gaseous fuels through mains"
+  },
+  "35230": {
+    "count": 401,
+    "description": "Trade of gas through mains"
+  },
+  "35300": {
+    "count": 1659,
+    "description": "Steam and air conditioning supply"
+  },
+  "36000": {
+    "count": 1667,
+    "description": "Water collection, treatment and supply"
+  },
+  "37000": {
+    "count": 1442,
+    "description": "Sewerage"
+  },
+  "38110": {
+    "count": 7022,
+    "description": "Collection of non-hazardous waste"
+  },
+  "38120": {
+    "count": 319,
+    "description": "Collection of hazardous waste"
+  },
+  "38210": {
+    "count": 1675,
+    "description": "Treatment and disposal of non-hazardous waste"
+  },
+  "38220": {
+    "count": 337,
+    "description": "Treatment and disposal of hazardous waste"
+  },
+  "38310": {
+    "count": 171,
+    "description": "Dismantling of wrecks"
+  },
+  "38320": {
+    "count": 2158,
+    "description": "Recovery of sorted materials"
+  },
+  "39000": {
+    "count": 3198,
+    "description": "Remediation activities and other waste management services"
+  },
+  "41100": {
+    "count": 120089,
+    "description": "Development of building projects"
+  },
+  "41201": {
+    "count": 38410,
+    "description": "Construction of commercial buildings"
+  },
+  "41202": {
+    "count": 70444,
+    "description": "Construction of domestic buildings"
+  },
+  "42110": {
+    "count": 4545,
+    "description": "Construction of roads and motorways"
+  },
+  "42120": {
+    "count": 3735,
+    "description": "Construction of railways and underground railways"
+  },
+  "42130": {
+    "count": 216,
+    "description": "Construction of bridges and tunnels"
+  },
+  "42210": {
+    "count": 881,
+    "description": "Construction of utility projects for fluids"
+  },
+  "42220": {
+    "count": 4105,
+    "description": "Construction of utility projects for electricity and telecommunications"
+  },
+  "42910": {
+    "count": 1053,
+    "description": "Construction of water projects"
+  },
+  "42990": {
+    "count": 16621,
+    "description": "Construction of other civil engineering projects n.e.c."
+  },
+  "43110": {
+    "count": 1572,
+    "description": "Demolition"
+  },
+  "43120": {
+    "count": 4258,
+    "description": "Site preparation"
+  },
+  "43130": {
+    "count": 515,
+    "description": "Test drilling and boring"
+  },
+  "43210": {
+    "count": 54475,
+    "description": "Electrical installation"
+  },
+  "43220": {
+    "count": 45382,
+    "description": "Plumbing, heat and air-conditioning installation"
+  },
+  "43290": {
+    "count": 31379,
+    "description": "Other construction installation"
+  },
+  "43310": {
+    "count": 7754,
+    "description": "Plastering"
+  },
+  "43320": {
+    "count": 17573,
+    "description": "Joinery installation"
+  },
+  "43330": {
+    "count": 9720,
+    "description": "Floor and wall covering"
+  },
+  "43341": {
+    "count": 12559,
+    "description": "Painting"
+  },
+  "43342": {
+    "count": 6533,
+    "description": "Glazing"
+  },
+  "43390": {
+    "count": 40618,
+    "description": "Other building completion and finishing"
+  },
+  "43910": {
+    "count": 15135,
+    "description": "Roofing activities"
+  },
+  "43991": {
+    "count": 6881,
+    "description": "Scaffold erection"
+  },
+  "43999": {
+    "count": 54097,
+    "description": "Other specialised construction activities n.e.c."
+  },
+  "45111": {
+    "count": 4944,
+    "description": "Sale of new cars and light motor vehicles"
+  },
+  "45112": {
+    "count": 37208,
+    "description": "Sale of used cars and light motor vehicles"
+  },
+  "45190": {
+    "count": 4559,
+    "description": "Sale of other motor vehicles"
+  },
+  "45200": {
+    "count": 50882,
+    "description": "Maintenance and repair of motor vehicles"
+  },
+  "45310": {
+    "count": 4983,
+    "description": "Wholesale trade of motor vehicle parts and accessories"
+  },
+  "45320": {
+    "count": 8676,
+    "description": "Retail trade of motor vehicle parts and accessories"
+  },
+  "45400": {
+    "count": 2828,
+    "description": "Sale, maintenance and repair of motorcycles and related parts and accessories"
+  },
+  "46110": {
+    "count": 1505,
+    "description": "Agents selling agricultural raw materials, livestock, textile raw materials and semi-finished goods"
+  },
+  "46120": {
+    "count": 1935,
+    "description": "Agents involved in the sale of fuels, ores, metals and industrial chemicals"
+  },
+  "46130": {
+    "count": 3677,
+    "description": "Agents involved in the sale of timber and building materials"
+  },
+  "46140": {
+    "count": 3769,
+    "description": "Agents involved in the sale of machinery, industrial equipment, ships and aircraft"
+  },
+  "46150": {
+    "count": 4713,
+    "description": "Agents involved in the sale of furniture, household goods, hardware and ironmongery"
+  },
+  "46160": {
+    "count": 10044,
+    "description": "Agents involved in the sale of textiles, clothing, fur, footwear and leather goods"
+  },
+  "46170": {
+    "count": 3877,
+    "description": "Agents involved in the sale of food, beverages and tobacco"
+  },
+  "46180": {
+    "count": 8837,
+    "description": "Agents specialized in the sale of other particular products"
+  },
+  "46190": {
+    "count": 18666,
+    "description": "Agents involved in the sale of a variety of goods"
+  },
+  "46210": {
+    "count": 986,
+    "description": "Wholesale of grain, unmanufactured tobacco, seeds and animal feeds"
+  },
+  "46220": {
+    "count": 1430,
+    "description": "Wholesale of flowers and plants"
+  },
+  "46230": {
+    "count": 225,
+    "description": "Wholesale of live animals"
+  },
+  "46240": {
+    "count": 236,
+    "description": "Wholesale of hides, skins and leather"
+  },
+  "46310": {
+    "count": 4428,
+    "description": "Wholesale of fruit and vegetables"
+  },
+  "46320": {
+    "count": 3002,
+    "description": "Wholesale of meat and meat products"
+  },
+  "46330": {
+    "count": 1395,
+    "description": "Wholesale of dairy products, eggs and edible oils and fats"
+  },
+  "46341": {
+    "count": 1985,
+    "description": "Wholesale of fruit and vegetable juices, mineral water and soft drinks"
+  },
+  "46342": {
+    "count": 5775,
+    "description": "Wholesale of wine, beer, spirits and other alcoholic beverages"
+  },
+  "46350": {
+    "count": 400,
+    "description": "Wholesale of tobacco products"
+  },
+  "46360": {
+    "count": 1090,
+    "description": "Wholesale of sugar and chocolate and sugar confectionery"
+  },
+  "46370": {
+    "count": 2838,
+    "description": "Wholesale of coffee, tea, cocoa and spices"
+  },
+  "46380": {
+    "count": 2758,
+    "description": "Wholesale of other food, including fish, crustaceans and molluscs"
+  },
+  "46390": {
+    "count": 4413,
+    "description": "Non-specialised wholesale of food, beverages and tobacco"
+  },
+  "46410": {
+    "count": 4041,
+    "description": "Wholesale of textiles"
+  },
+  "46420": {
+    "count": 13272,
+    "description": "Wholesale of clothing and footwear"
+  },
+  "46431": {
+    "count": 350,
+    "description": "Wholesale of audio tapes, records, CDs and video tapes and the equipment on which these are played"
+  },
+  "46439": {
+    "count": 1276,
+    "description": "Wholesale of radio, television goods & electrical household appliances (other than records, tapes, CD's & video tapes and the equipment used for playing them)"
+  },
+  "46440": {
+    "count": 565,
+    "description": "Wholesale of china and glassware and cleaning materials"
+  },
+  "46450": {
+    "count": 7114,
+    "description": "Wholesale of perfume and cosmetics"
+  },
+  "46460": {
+    "count": 3411,
+    "description": "Wholesale of pharmaceutical goods"
+  },
+  "46470": {
+    "count": 2810,
+    "description": "Wholesale of furniture, carpets and lighting equipment"
+  },
+  "46480": {
+    "count": 2425,
+    "description": "Wholesale of watches and jewellery"
+  },
+  "46491": {
+    "count": 211,
+    "description": "Wholesale of musical instruments"
+  },
+  "46499": {
+    "count": 5128,
+    "description": "Wholesale of household goods (other than musical instruments) n.e.c."
+  },
+  "46510": {
+    "count": 4284,
+    "description": "Wholesale of computers, computer peripheral equipment and software"
+  },
+  "46520": {
+    "count": 4870,
+    "description": "Wholesale of electronic and telecommunications equipment and parts"
+  },
+  "46610": {
+    "count": 1314,
+    "description": "Wholesale of agricultural machinery, equipment and supplies"
+  },
+  "46620": {
+    "count": 923,
+    "description": "Wholesale of machine tools"
+  },
+  "46630": {
+    "count": 530,
+    "description": "Wholesale of mining, construction and civil engineering machinery"
+  },
+  "46640": {
+    "count": 105,
+    "description": "Wholesale of machinery for the textile industry and of sewing and knitting machines"
+  },
+  "46650": {
+    "count": 697,
+    "description": "Wholesale of office furniture"
+  },
+  "46660": {
+    "count": 601,
+    "description": "Wholesale of other office machinery and equipment"
+  },
+  "46690": {
+    "count": 4090,
+    "description": "Wholesale of other machinery and equipment"
+  },
+  "46711": {
+    "count": 640,
+    "description": "Wholesale of petroleum and petroleum products"
+  },
+  "46719": {
+    "count": 818,
+    "description": "Wholesale of other fuels and related products"
+  },
+  "46720": {
+    "count": 1655,
+    "description": "Wholesale of metals and metal ores"
+  },
+  "46730": {
+    "count": 2798,
+    "description": "Wholesale of wood, construction materials and sanitary equipment"
+  },
+  "46740": {
+    "count": 2969,
+    "description": "Wholesale of hardware, plumbing and heating equipment and supplies"
+  },
+  "46750": {
+    "count": 1576,
+    "description": "Wholesale of chemical products"
+  },
+  "46760": {
+    "count": 3094,
+    "description": "Wholesale of other intermediate products"
+  },
+  "46770": {
+    "count": 1281,
+    "description": "Wholesale of waste and scrap"
+  },
+  "46900": {
+    "count": 33548,
+    "description": "Non-specialised wholesale trade"
+  },
+  "47110": {
+    "count": 35178,
+    "description": "Retail sale in non-specialised stores with food, beverages or tobacco predominating"
+  },
+  "47190": {
+    "count": 33909,
+    "description": "Other retail sale in non-specialised stores"
+  },
+  "47210": {
+    "count": 2943,
+    "description": "Retail sale of fruit and vegetables in specialised stores"
+  },
+  "47220": {
+    "count": 3714,
+    "description": "Retail sale of meat and meat products in specialised stores"
+  },
+  "47230": {
+    "count": 1081,
+    "description": "Retail sale of fish, crustaceans and molluscs in specialised stores"
+  },
+  "47240": {
+    "count": 5205,
+    "description": "Retail sale of bread, cakes, flour confectionery and sugar confectionery in specialised stores"
+  },
+  "47250": {
+    "count": 3774,
+    "description": "Retail sale of beverages in specialised stores"
+  },
+  "47260": {
+    "count": 1811,
+    "description": "Retail sale of tobacco products in specialised stores"
+  },
+  "47290": {
+    "count": 8525,
+    "description": "Other retail sale of food in specialised stores"
+  },
+  "47300": {
+    "count": 1427,
+    "description": "Retail sale of automotive fuel in specialised stores"
+  },
+  "47410": {
+    "count": 3574,
+    "description": "Retail sale of computers, peripheral units and software in specialised stores"
+  },
+  "47421": {
+    "count": 4227,
+    "description": "Retail sale of mobile telephones"
+  },
+  "47429": {
+    "count": 1490,
+    "description": "Retail sale of telecommunications equipment other than mobile telephones"
+  },
+  "47430": {
+    "count": 1034,
+    "description": "Retail sale of audio and video equipment in specialised stores"
+  },
+  "47510": {
+    "count": 3499,
+    "description": "Retail sale of textiles in specialised stores"
+  },
+  "47520": {
+    "count": 2774,
+    "description": "Retail sale of hardware, paints and glass in specialised stores"
+  },
+  "47530": {
+    "count": 4921,
+    "description": "Retail sale of carpets, rugs, wall and floor coverings in specialised stores"
+  },
+  "47540": {
+    "count": 2506,
+    "description": "Retail sale of electrical household appliances in specialised stores"
+  },
+  "47591": {
+    "count": 862,
+    "description": "Retail sale of musical instruments and scores"
+  },
+  "47599": {
+    "count": 8856,
+    "description": "Retail of furniture, lighting, and similar (not musical instruments or scores) in specialised store"
+  },
+  "47610": {
+    "count": 2253,
+    "description": "Retail sale of books in specialised stores"
+  },
+  "47620": {
+    "count": 1530,
+    "description": "Retail sale of newspapers and stationery in specialised stores"
+  },
+  "47630": {
+    "count": 1001,
+    "description": "Retail sale of music and video recordings in specialised stores"
+  },
+  "47640": {
+    "count": 8672,
+    "description": "Retail sale of sports goods, fishing gear, camping goods, boats and bicycles"
+  },
+  "47650": {
+    "count": 3679,
+    "description": "Retail sale of games and toys in specialised stores"
+  },
+  "47710": {
+    "count": 25201,
+    "description": "Retail sale of clothing in specialised stores"
+  },
+  "47721": {
+    "count": 1459,
+    "description": "Retail sale of footwear in specialised stores"
+  },
+  "47722": {
+    "count": 717,
+    "description": "Retail sale of leather goods in specialised stores"
+  },
+  "47730": {
+    "count": 7688,
+    "description": "Dispensing chemist in specialised stores"
+  },
+  "47741": {
+    "count": 881,
+    "description": "Retail sale of hearing aids"
+  },
+  "47749": {
+    "count": 2337,
+    "description": "Retail sale of medical and orthopaedic goods in specialised stores (not incl. hearing aids) n.e.c."
+  },
+  "47750": {
+    "count": 5938,
+    "description": "Retail sale of cosmetic and toilet articles in specialised stores"
+  },
+  "47760": {
+    "count": 6525,
+    "description": "Retail sale of flowers, plants, seeds, fertilizers, pet animals and pet food in specialised stores"
+  },
+  "47770": {
+    "count": 6306,
+    "description": "Retail sale of watches and jewellery in specialised stores"
+  },
+  "47781": {
+    "count": 2583,
+    "description": "Retail sale in commercial art galleries"
+  },
+  "47782": {
+    "count": 3872,
+    "description": "Retail sale by opticians"
+  },
+  "47789": {
+    "count": 11219,
+    "description": "Other retail sale of new goods in specialised stores (not commercial art galleries and opticians)"
+  },
+  "47791": {
+    "count": 2087,
+    "description": "Retail sale of antiques including antique books in stores"
+  },
+  "47799": {
+    "count": 2322,
+    "description": "Retail sale of other second-hand goods in stores (not incl. antiques)"
+  },
+  "47810": {
+    "count": 2283,
+    "description": "Retail sale via stalls and markets of food, beverages and tobacco products"
+  },
+  "47820": {
+    "count": 3400,
+    "description": "Retail sale via stalls and markets of textiles, clothing and footwear"
+  },
+  "47890": {
+    "count": 4994,
+    "description": "Retail sale via stalls and markets of other goods"
+  },
+  "47910": {
+    "count": 160770,
+    "description": "Retail sale via mail order houses or via Internet"
+  },
+  "47990": {
+    "count": 38914,
+    "description": "Other retail sale not in stores, stalls or markets"
+  },
+  "49100": {
+    "count": 616,
+    "description": "Passenger rail transport, interurban"
+  },
+  "49200": {
+    "count": 593,
+    "description": "Freight rail transport"
+  },
+  "49311": {
+    "count": 156,
+    "description": "Urban and suburban passenger railway transportation by underground, metro and similar systems"
+  },
+  "49319": {
+    "count": 1250,
+    "description": "Other urban, suburban or metropolitan passenger land transport (not underground, metro or similar)"
+  },
+  "49320": {
+    "count": 18858,
+    "description": "Taxi operation"
+  },
+  "49390": {
+    "count": 8173,
+    "description": "Other passenger land transport"
+  },
+  "49410": {
+    "count": 68513,
+    "description": "Freight transport by road"
+  },
+  "49420": {
+    "count": 5409,
+    "description": "Removal services"
+  },
+  "49500": {
+    "count": 65,
+    "description": "Transport via pipeline"
+  },
+  "50100": {
+    "count": 1025,
+    "description": "Sea and coastal passenger water transport"
+  },
+  "50200": {
+    "count": 2371,
+    "description": "Sea and coastal freight water transport"
+  },
+  "50300": {
+    "count": 376,
+    "description": "Inland passenger water transport"
+  },
+  "50400": {
+    "count": 83,
+    "description": "Inland freight water transport"
+  },
+  "51101": {
+    "count": 663,
+    "description": "Scheduled passenger air transport"
+  },
+  "51102": {
+    "count": 1585,
+    "description": "Non-scheduled passenger air transport"
+  },
+  "51210": {
+    "count": 984,
+    "description": "Freight air transport"
+  },
+  "51220": {
+    "count": 96,
+    "description": "Space transport"
+  },
+  "52101": {
+    "count": 418,
+    "description": "Operation of warehousing and storage facilities for water transport activities"
+  },
+  "52102": {
+    "count": 253,
+    "description": "Operation of warehousing and storage facilities for air transport activities"
+  },
+  "52103": {
+    "count": 6889,
+    "description": "Operation of warehousing and storage facilities for land transport activities"
+  },
+  "52211": {
+    "count": 24,
+    "description": "Operation of rail freight terminals"
+  },
+  "52212": {
+    "count": 66,
+    "description": "Operation of rail passenger facilities at railway stations"
+  },
+  "52213": {
+    "count": 249,
+    "description": "Operation of bus and coach passenger facilities at bus and coach stations"
+  },
+  "52219": {
+    "count": 2817,
+    "description": "Other service activities incidental to land transportation, n.e.c."
+  },
+  "52220": {
+    "count": 895,
+    "description": "Service activities incidental to water transportation"
+  },
+  "52230": {
+    "count": 1269,
+    "description": "Service activities incidental to air transportation"
+  },
+  "52241": {
+    "count": 620,
+    "description": "Cargo handling for water transport activities"
+  },
+  "52242": {
+    "count": 550,
+    "description": "Cargo handling for air transport activities"
+  },
+  "52243": {
+    "count": 1351,
+    "description": "Cargo handling for land transport activities"
+  },
+  "52290": {
+    "count": 15113,
+    "description": "Other transportation support activities"
+  },
+  "53100": {
+    "count": 1720,
+    "description": "Postal activities under universal service obligation"
+  },
+  "53201": {
+    "count": 3226,
+    "description": "Licensed carriers"
+  },
+  "53202": {
+    "count": 8030,
+    "description": "Unlicensed carrier"
+  },
+  "55100": {
+    "count": 19977,
+    "description": "Hotels and similar accommodation"
+  },
+  "55201": {
+    "count": 998,
+    "description": "Holiday centres and villages"
+  },
+  "55202": {
+    "count": 347,
+    "description": "Youth hostels"
+  },
+  "55209": {
+    "count": 13008,
+    "description": "Other holiday and other collective accommodation"
+  },
+  "55300": {
+    "count": 2850,
+    "description": "Recreational vehicle parks, trailer parks and camping grounds"
+  },
+  "55900": {
+    "count": 12311,
+    "description": "Other accommodation"
+  },
+  "56101": {
+    "count": 53893,
+    "description": "Licensed restaurants"
+  },
+  "56102": {
+    "count": 43187,
+    "description": "Unlicensed restaurants and cafes"
+  },
+  "56103": {
+    "count": 72285,
+    "description": "Take-away food shops and mobile food stands"
+  },
+  "56210": {
+    "count": 21481,
+    "description": "Event catering activities"
+  },
+  "56290": {
+    "count": 19677,
+    "description": "Other food services"
+  },
+  "56301": {
+    "count": 2202,
+    "description": "Licensed clubs"
+  },
+  "56302": {
+    "count": 33981,
+    "description": "Public houses and bars"
+  },
+  "58110": {
+    "count": 9908,
+    "description": "Book publishing"
+  },
+  "58120": {
+    "count": 588,
+    "description": "Publishing of directories and mailing lists"
+  },
+  "58130": {
+    "count": 853,
+    "description": "Publishing of newspapers"
+  },
+  "58141": {
+    "count": 650,
+    "description": "Publishing of learned journals"
+  },
+  "58142": {
+    "count": 2726,
+    "description": "Publishing of  consumer and business journals and periodicals"
+  },
+  "58190": {
+    "count": 13328,
+    "description": "Other publishing activities"
+  },
+  "58210": {
+    "count": 3958,
+    "description": "Publishing of computer games"
+  },
+  "58290": {
+    "count": 13497,
+    "description": "Other software publishing"
+  },
+  "59111": {
+    "count": 20972,
+    "description": "Motion picture production activities"
+  },
+  "59112": {
+    "count": 20994,
+    "description": "Video production activities"
+  },
+  "59113": {
+    "count": 11394,
+    "description": "Television programme production activities"
+  },
+  "59120": {
+    "count": 4348,
+    "description": "Motion picture, video and television programme post-production activities"
+  },
+  "59131": {
+    "count": 690,
+    "description": "Motion picture distribution activities"
+  },
+  "59132": {
+    "count": 706,
+    "description": "Video distribution activities"
+  },
+  "59133": {
+    "count": 372,
+    "description": "Television programme distribution activities"
+  },
+  "59140": {
+    "count": 450,
+    "description": "Motion picture projection activities"
+  },
+  "59200": {
+    "count": 16262,
+    "description": "Sound recording and music publishing activities"
+  },
+  "60100": {
+    "count": 2070,
+    "description": "Radio broadcasting"
+  },
+  "60200": {
+    "count": 2817,
+    "description": "Television programming and broadcasting activities"
+  },
+  "61100": {
+    "count": 3867,
+    "description": "Wired telecommunications activities"
+  },
+  "61200": {
+    "count": 2753,
+    "description": "Wireless telecommunications activities"
+  },
+  "61300": {
+    "count": 639,
+    "description": "Satellite telecommunications activities"
+  },
+  "61900": {
+    "count": 10127,
+    "description": "Other telecommunications activities"
+  },
+  "62011": {
+    "count": 7317,
+    "description": "Ready-made interactive leisure and entertainment software development"
+  },
+  "62012": {
+    "count": 83486,
+    "description": "Business and domestic software development"
+  },
+  "62020": {
+    "count": 131958,
+    "description": "Information technology consultancy activities"
+  },
+  "62030": {
+    "count": 3062,
+    "description": "Computer facilities management activities"
+  },
+  "62090": {
+    "count": 56289,
+    "description": "Other information technology service activities"
+  },
+  "63110": {
+    "count": 7339,
+    "description": "Data processing, hosting and related activities"
+  },
+  "63120": {
+    "count": 8357,
+    "description": "Web portals"
+  },
+  "63910": {
+    "count": 757,
+    "description": "News agency activities"
+  },
+  "63990": {
+    "count": 17072,
+    "description": "Other information service activities n.e.c."
+  },
+  "64110": {
+    "count": 84,
+    "description": "Central banking"
+  },
+  "64191": {
+    "count": 765,
+    "description": "Banks"
+  },
+  "64192": {
+    "count": 71,
+    "description": "Building societies"
+  },
+  "64201": {
+    "count": 968,
+    "description": "Activities of agricultural holding companies"
+  },
+  "64202": {
+    "count": 2268,
+    "description": "Activities of production holding companies"
+  },
+  "64203": {
+    "count": 4505,
+    "description": "Activities of construction holding companies"
+  },
+  "64204": {
+    "count": 1403,
+    "description": "Activities of distribution holding companies"
+  },
+  "64205": {
+    "count": 8791,
+    "description": "Activities of financial services holding companies"
+  },
+  "64209": {
+    "count": 108129,
+    "description": "Activities of other holding companies n.e.c."
+  },
+  "64301": {
+    "count": 2723,
+    "description": "Activities of investment trusts"
+  },
+  "64302": {
+    "count": 133,
+    "description": "Activities of unit trusts"
+  },
+  "64303": {
+    "count": 3576,
+    "description": "Activities of venture and development capital companies"
+  },
+  "64304": {
+    "count": 5395,
+    "description": "Activities of open-ended investment companies"
+  },
+  "64305": {
+    "count": 857,
+    "description": "Activities of property unit trusts"
+  },
+  "64306": {
+    "count": 2426,
+    "description": "Activities of real estate investment trusts"
+  },
+  "64910": {
+    "count": 1169,
+    "description": "Financial leasing"
+  },
+  "64921": {
+    "count": 1234,
+    "description": "Credit granting by non-deposit taking finance houses and other specialist consumer credit grantors"
+  },
+  "64922": {
+    "count": 5240,
+    "description": "Activities of mortgage finance companies"
+  },
+  "64929": {
+    "count": 1860,
+    "description": "Other credit granting n.e.c."
+  },
+  "64991": {
+    "count": 4702,
+    "description": "Security dealing on own account"
+  },
+  "64992": {
+    "count": 291,
+    "description": "Factoring"
+  },
+  "64999": {
+    "count": 31783,
+    "description": "Financial intermediation not elsewhere classified"
+  },
+  "65110": {
+    "count": 1889,
+    "description": "Life insurance"
+  },
+  "65120": {
+    "count": 3522,
+    "description": "Non-life insurance"
+  },
+  "65201": {
+    "count": 30,
+    "description": "Life reinsurance"
+  },
+  "65202": {
+    "count": 148,
+    "description": "Non-life reinsurance"
+  },
+  "65300": {
+    "count": 868,
+    "description": "Pension funding"
+  },
+  "66110": {
+    "count": 1447,
+    "description": "Administration of financial markets"
+  },
+  "66120": {
+    "count": 1810,
+    "description": "Security and commodity contracts dealing activities"
+  },
+  "66190": {
+    "count": 7685,
+    "description": "Activities auxiliary to financial intermediation n.e.c."
+  },
+  "66210": {
+    "count": 911,
+    "description": "Risk and damage evaluation"
+  },
+  "66220": {
+    "count": 6386,
+    "description": "Activities of insurance agents and brokers"
+  },
+  "66290": {
+    "count": 3129,
+    "description": "Other activities auxiliary to insurance and pension funding"
+  },
+  "66300": {
+    "count": 4491,
+    "description": "Fund management activities"
+  },
+  "68100": {
+    "count": 248298,
+    "description": "Buying and selling of own real estate"
+  },
+  "68201": {
+    "count": 8095,
+    "description": "Renting and operating of Housing Association real estate"
+  },
+  "68202": {
+    "count": 706,
+    "description": "Letting and operating of conference and exhibition centres"
+  },
+  "68209": {
+    "count": 273535,
+    "description": "Other letting and operating of own or leased real estate"
+  },
+  "68310": {
+    "count": 27970,
+    "description": "Real estate agencies"
+  },
+  "68320": {
+    "count": 52114,
+    "description": "Management of real estate on a fee or contract basis"
+  },
+  "69101": {
+    "count": 840,
+    "description": "Barristers at law"
+  },
+  "69102": {
+    "count": 12166,
+    "description": "Solicitors"
+  },
+  "69109": {
+    "count": 8631,
+    "description": "Activities of patent and copyright agents; other legal activities n.e.c."
+  },
+  "69201": {
+    "count": 43030,
+    "description": "Accounting and auditing activities"
+  },
+  "69202": {
+    "count": 12433,
+    "description": "Bookkeeping activities"
+  },
+  "69203": {
+    "count": 3588,
+    "description": "Tax consultancy"
+  },
+  "70100": {
+    "count": 27966,
+    "description": "Activities of head offices"
+  },
+  "70210": {
+    "count": 13268,
+    "description": "Public relations and communications activities"
+  },
+  "70221": {
+    "count": 16610,
+    "description": "Financial management"
+  },
+  "70229": {
+    "count": 219351,
+    "description": "Management consultancy activities other than financial management"
+  },
+  "71111": {
+    "count": 18419,
+    "description": "Architectural activities"
+  },
+  "71112": {
+    "count": 3119,
+    "description": "Urban planning and landscape architectural activities"
+  },
+  "71121": {
+    "count": 9264,
+    "description": "Engineering design activities for industrial process and production"
+  },
+  "71122": {
+    "count": 22825,
+    "description": "Engineering related scientific and technical consulting activities"
+  },
+  "71129": {
+    "count": 29679,
+    "description": "Other engineering activities"
+  },
+  "71200": {
+    "count": 4900,
+    "description": "Technical testing and analysis"
+  },
+  "72110": {
+    "count": 4229,
+    "description": "Research and experimental development on biotechnology"
+  },
+  "72190": {
+    "count": 5910,
+    "description": "Other research and experimental development on natural sciences and engineering"
+  },
+  "72200": {
+    "count": 2186,
+    "description": "Research and experimental development on social sciences and humanities"
+  },
+  "73110": {
+    "count": 32883,
+    "description": "Advertising agencies"
+  },
+  "73120": {
+    "count": 8286,
+    "description": "Media representation services"
+  },
+  "73200": {
+    "count": 3143,
+    "description": "Market research and public opinion polling"
+  },
+  "74100": {
+    "count": 32626,
+    "description": "specialised design activities"
+  },
+  "74201": {
+    "count": 2637,
+    "description": "Portrait photographic activities"
+  },
+  "74202": {
+    "count": 4711,
+    "description": "Other specialist photography"
+  },
+  "74203": {
+    "count": 744,
+    "description": "Film processing"
+  },
+  "74209": {
+    "count": 3877,
+    "description": "Photographic activities not elsewhere classified"
+  },
+  "74300": {
+    "count": 2603,
+    "description": "Translation and interpretation activities"
+  },
+  "74901": {
+    "count": 8601,
+    "description": "Environmental consulting activities"
+  },
+  "74902": {
+    "count": 6899,
+    "description": "Quantity surveying activities"
+  },
+  "74909": {
+    "count": 64858,
+    "description": "Other professional, scientific and technical activities n.e.c."
+  },
+  "74990": {
+    "count": 42739,
+    "description": "Non-trading company"
+  },
+  "75000": {
+    "count": 5282,
+    "description": "Veterinary activities"
+  },
+  "77110": {
+    "count": 7315,
+    "description": "Renting and leasing of cars and light motor vehicles"
+  },
+  "77120": {
+    "count": 909,
+    "description": "Renting and leasing of trucks and other heavy vehicles"
+  },
+  "77210": {
+    "count": 1346,
+    "description": "Renting and leasing of recreational and sports goods"
+  },
+  "77220": {
+    "count": 16,
+    "description": "Renting of video tapes and disks"
+  },
+  "77291": {
+    "count": 1637,
+    "description": "Renting and leasing of media entertainment equipment"
+  },
+  "77299": {
+    "count": 660,
+    "description": "Renting and leasing of other personal and household goods"
+  },
+  "77310": {
+    "count": 444,
+    "description": "Renting and leasing of agricultural machinery and equipment"
+  },
+  "77320": {
+    "count": 3824,
+    "description": "Renting and leasing of construction and civil engineering machinery and equipment"
+  },
+  "77330": {
+    "count": 434,
+    "description": "Renting and leasing of office machinery and equipment (including computers)"
+  },
+  "77341": {
+    "count": 261,
+    "description": "Renting and leasing of passenger water transport equipment"
+  },
+  "77342": {
+    "count": 92,
+    "description": "Renting and leasing of freight water transport equipment"
+  },
+  "77351": {
+    "count": 329,
+    "description": "Renting and leasing of air passenger transport equipment"
+  },
+  "77352": {
+    "count": 26,
+    "description": "Renting and leasing of freight air transport equipment"
+  },
+  "77390": {
+    "count": 5559,
+    "description": "Renting and leasing of other machinery, equipment and tangible goods n.e.c."
+  },
+  "77400": {
+    "count": 1747,
+    "description": "Leasing of intellectual property and similar products, except copyright works"
+  },
+  "78101": {
+    "count": 1277,
+    "description": "Motion picture, television and other theatrical casting activities"
+  },
+  "78109": {
+    "count": 28092,
+    "description": "Other activities of employment placement agencies"
+  },
+  "78200": {
+    "count": 14728,
+    "description": "Temporary employment agency activities"
+  },
+  "78300": {
+    "count": 9964,
+    "description": "Human resources provision and management of human resources functions"
+  },
+  "79110": {
+    "count": 12890,
+    "description": "Travel agency activities"
+  },
+  "79120": {
+    "count": 4691,
+    "description": "Tour operator activities"
+  },
+  "79901": {
+    "count": 1211,
+    "description": "Activities of tourist guides"
+  },
+  "79909": {
+    "count": 2620,
+    "description": "Other reservation service activities n.e.c."
+  },
+  "80100": {
+    "count": 13708,
+    "description": "Private security activities"
+  },
+  "80200": {
+    "count": 7001,
+    "description": "Security systems service activities"
+  },
+  "80300": {
+    "count": 1147,
+    "description": "Investigation activities"
+  },
+  "81100": {
+    "count": 7105,
+    "description": "Combined facilities support activities"
+  },
+  "81210": {
+    "count": 19219,
+    "description": "General cleaning of buildings"
+  },
+  "81221": {
+    "count": 2991,
+    "description": "Window cleaning services"
+  },
+  "81222": {
+    "count": 8153,
+    "description": "Specialised cleaning services"
+  },
+  "81223": {
+    "count": 354,
+    "description": "Furnace and chimney cleaning services"
+  },
+  "81229": {
+    "count": 2283,
+    "description": "Other building and industrial cleaning activities"
+  },
+  "81291": {
+    "count": 1075,
+    "description": "Disinfecting and exterminating services"
+  },
+  "81299": {
+    "count": 11328,
+    "description": "Other cleaning services"
+  },
+  "81300": {
+    "count": 18275,
+    "description": "Landscape service activities"
+  },
+  "82110": {
+    "count": 9970,
+    "description": "Combined office administrative service activities"
+  },
+  "82190": {
+    "count": 1157,
+    "description": "Photocopying, document preparation and other specialised office support activities"
+  },
+  "82200": {
+    "count": 1171,
+    "description": "Activities of call centres"
+  },
+  "82301": {
+    "count": 4174,
+    "description": "Activities of exhibition and fair organisers"
+  },
+  "82302": {
+    "count": 2613,
+    "description": "Activities of conference organisers"
+  },
+  "82911": {
+    "count": 589,
+    "description": "Activities of collection agencies"
+  },
+  "82912": {
+    "count": 46,
+    "description": "Activities of credit bureaus"
+  },
+  "82920": {
+    "count": 3119,
+    "description": "Packaging activities"
+  },
+  "82990": {
+    "count": 188878,
+    "description": "Other business support service activities n.e.c."
+  },
+  "84110": {
+    "count": 1157,
+    "description": "General public administration activities"
+  },
+  "84120": {
+    "count": 5528,
+    "description": "Regulation of health care, education, cultural and other social services, not incl. social security"
+  },
+  "84130": {
+    "count": 430,
+    "description": "Regulation of and contribution to more efficient operation of businesses"
+  },
+  "84210": {
+    "count": 89,
+    "description": "Foreign affairs"
+  },
+  "84220": {
+    "count": 468,
+    "description": "Defence activities"
+  },
+  "84230": {
+    "count": 213,
+    "description": "Justice and judicial activities"
+  },
+  "84240": {
+    "count": 981,
+    "description": "Public order and safety activities"
+  },
+  "84250": {
+    "count": 1831,
+    "description": "Fire service activities"
+  },
+  "84300": {
+    "count": 29,
+    "description": "Compulsory social security activities"
+  },
+  "85100": {
+    "count": 8831,
+    "description": "Pre-primary education"
+  },
+  "85200": {
+    "count": 5379,
+    "description": "Primary education"
+  },
+  "85310": {
+    "count": 3233,
+    "description": "General secondary education"
+  },
+  "85320": {
+    "count": 4055,
+    "description": "Technical and vocational secondary education"
+  },
+  "85410": {
+    "count": 1326,
+    "description": "Post-secondary non-tertiary education"
+  },
+  "85421": {
+    "count": 1330,
+    "description": "First-degree level higher education"
+  },
+  "85422": {
+    "count": 1064,
+    "description": "Post-graduate level higher education"
+  },
+  "85510": {
+    "count": 13427,
+    "description": "Sports and recreation education"
+  },
+  "85520": {
+    "count": 7098,
+    "description": "Cultural education"
+  },
+  "85530": {
+    "count": 3618,
+    "description": "Driving school activities"
+  },
+  "85590": {
+    "count": 39190,
+    "description": "Other education n.e.c."
+  },
+  "85600": {
+    "count": 21639,
+    "description": "Educational support services"
+  },
+  "86101": {
+    "count": 12641,
+    "description": "Hospital activities"
+  },
+  "86102": {
+    "count": 5272,
+    "description": "Medical nursing home activities"
+  },
+  "86210": {
+    "count": 23663,
+    "description": "General medical practice activities"
+  },
+  "86220": {
+    "count": 28341,
+    "description": "Specialists medical practice activities"
+  },
+  "86230": {
+    "count": 18370,
+    "description": "Dental practice activities"
+  },
+  "86900": {
+    "count": 82842,
+    "description": "Other human health activities"
+  },
+  "87100": {
+    "count": 6298,
+    "description": "Residential nursing care facilities"
+  },
+  "87200": {
+    "count": 8776,
+    "description": "Residential care activities for learning difficulties, mental health and substance abuse"
+  },
+  "87300": {
+    "count": 7258,
+    "description": "Residential care activities for the elderly and disabled"
+  },
+  "87900": {
+    "count": 9232,
+    "description": "Other residential care activities n.e.c."
+  },
+  "88100": {
+    "count": 6432,
+    "description": "Social work activities without accommodation for the elderly and disabled"
+  },
+  "88910": {
+    "count": 8103,
+    "description": "Child day-care activities"
+  },
+  "88990": {
+    "count": 14146,
+    "description": "Other social work activities without accommodation n.e.c."
+  },
+  "90010": {
+    "count": 18764,
+    "description": "Performing arts"
+  },
+  "90020": {
+    "count": 10805,
+    "description": "Support activities to performing arts"
+  },
+  "90030": {
+    "count": 23421,
+    "description": "Artistic creation"
+  },
+  "90040": {
+    "count": 2881,
+    "description": "Operation of arts facilities"
+  },
+  "91011": {
+    "count": 266,
+    "description": "Library activities"
+  },
+  "91012": {
+    "count": 332,
+    "description": "Archives activities"
+  },
+  "91020": {
+    "count": 905,
+    "description": "Museums activities"
+  },
+  "91030": {
+    "count": 781,
+    "description": "Operation of historical sites and buildings and similar visitor attractions"
+  },
+  "91040": {
+    "count": 556,
+    "description": "Botanical and zoological gardens and nature reserves activities"
+  },
+  "92000": {
+    "count": 1490,
+    "description": "Gambling and betting activities"
+  },
+  "93110": {
+    "count": 7142,
+    "description": "Operation of sports facilities"
+  },
+  "93120": {
+    "count": 8934,
+    "description": "Activities of sport clubs"
+  },
+  "93130": {
+    "count": 14017,
+    "description": "Fitness facilities"
+  },
+  "93191": {
+    "count": 515,
+    "description": "Activities of racehorse owners"
+  },
+  "93199": {
+    "count": 22207,
+    "description": "Other sports activities"
+  },
+  "93210": {
+    "count": 707,
+    "description": "Activities of amusement parks and theme parks"
+  },
+  "93290": {
+    "count": 17131,
+    "description": "Other amusement and recreation activities n.e.c."
+  },
+  "94110": {
+    "count": 2746,
+    "description": "Activities of business and employers membership organizations"
+  },
+  "94120": {
+    "count": 3048,
+    "description": "Activities of professional membership organizations"
+  },
+  "94200": {
+    "count": 219,
+    "description": "Activities of trade unions"
+  },
+  "94910": {
+    "count": 5392,
+    "description": "Activities of religious organizations"
+  },
+  "94920": {
+    "count": 378,
+    "description": "Activities of political organizations"
+  },
+  "94990": {
+    "count": 10148,
+    "description": "Activities of other membership organizations n.e.c."
+  },
+  "95110": {
+    "count": 2120,
+    "description": "Repair of computers and peripheral equipment"
+  },
+  "95120": {
+    "count": 519,
+    "description": "Repair of communication equipment"
+  },
+  "95210": {
+    "count": 690,
+    "description": "Repair of consumer electronics"
+  },
+  "95220": {
+    "count": 1492,
+    "description": "Repair of household appliances and home and garden equipment"
+  },
+  "95230": {
+    "count": 297,
+    "description": "Repair of footwear and leather goods"
+  },
+  "95240": {
+    "count": 1132,
+    "description": "Repair of furniture and home furnishings"
+  },
+  "95250": {
+    "count": 463,
+    "description": "Repair of watches, clocks and jewellery"
+  },
+  "95290": {
+    "count": 765,
+    "description": "Repair of personal and household goods n.e.c."
+  },
+  "96010": {
+    "count": 4187,
+    "description": "Washing and (dry-)cleaning of textile and fur products"
+  },
+  "96020": {
+    "count": 69117,
+    "description": "Hairdressing and other beauty treatment"
+  },
+  "96030": {
+    "count": 3191,
+    "description": "Funeral and related activities"
+  },
+  "96040": {
+    "count": 9897,
+    "description": "Physical well-being activities"
+  },
+  "96090": {
+    "count": 124885,
+    "description": "Other service activities n.e.c."
+  },
+  "97000": {
+    "count": 793,
+    "description": "Activities of households as employers of domestic personnel"
+  },
+  "98000": {
+    "count": 125437,
+    "description": "Residents property management"
+  },
+  "98100": {
+    "count": 525,
+    "description": "Undifferentiated goods-producing activities of private households for own use"
+  },
+  "98200": {
+    "count": 626,
+    "description": "Undifferentiated service-producing activities of private households for own use"
+  },
+  "99000": {
+    "count": 707,
+    "description": "Activities of extraterritorial organizations and bodies"
+  },
+  "99999": {
+    "count": 115794,
+    "description": "Dormant Company"
+  }
+}
