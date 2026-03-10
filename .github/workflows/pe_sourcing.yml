@@ -46,9 +46,12 @@ jobs:
           pip install --upgrade pip
           pip install requests openpyxl python-dateutil PyMuPDF
 
-      # ── 3. Write CH API key ───────────────────────────────────────────────────
-      - name: Write API key
-        run: echo "COMPANIES_HOUSE_API_KEY=${{ secrets.CH_API_KEY }}" > .ch_api_key
+      # ── 3. Write API keys ────────────────────────────────────────────────────
+      - name: Write API keys
+        run: |
+          echo "COMPANIES_HOUSE_API_KEY=${{ secrets.CH_API_KEY }}" > .ch_api_key
+          echo "FCA_SUBSCRIPTION_KEY=${{ secrets.FCA_SUBSCRIPTION_KEY }}" >> .ch_api_key
+          echo "FCA_EMAIL=${{ secrets.FCA_EMAIL }}" >> .ch_api_key
 
       # ── 4. Build output directory ─────────────────────────────────────────────
       - name: Prepare output directory

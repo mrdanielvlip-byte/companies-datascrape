@@ -854,53 +854,78 @@ def _cqc_format_address(p: dict) -> str:
 #  FCA REST API
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _fca_headers(api_key: str) -> dict:
+    """Build the correct auth headers for the FCA Register API.
+    Requires X-Auth-Email (signup email) + X-Auth-Key (subscription key).
+    Email is loaded from FCA_EMAIL in .ch_api_key / env.
+    """
+    email = load_reg_key("FCA_EMAIL") or ""
+    return {
+        "Accept":       "application/json",
+        "X-Auth-Email": email,
+        "X-Auth-Key":   api_key,
+    }
+
+
 def discover_fca(keyword: str, api_key: str, max_results: int = 500) -> list[dict]:
     """
     Discover FCA-authorised firms matching a keyword.
-    Requires a free FCA API subscription key from https://register.fca.org.uk/Developer/s/
+    Requires FCA_SUBSCRIPTION_KEY + FCA_EMAIL in .ch_api_key.
+    Register: https://register.fca.org.uk/Developer/s/
 
     Returns list of normalised registration dicts.
     """
     if not api_key:
-        print("  FCA: no API key — skipping (set FCA_SUBSCRIPTION_KEY in .ch_api_key)")
+        print("  FCA: no API key — skipping (set FCA_SUBSCRIPTION_KEY + FCA_EMAIL in .ch_api_key)")
         return []
 
-    headers = {
-        "Accept":                    "application/json",
-        "Ocp-Apim-Subscription-Key": api_key,
-        "User-Agent":                "PE-Research-Pipeline/1.0",
-    }
-
+    headers = _fca_headers(api_key)
     results = []
+    page    = 1
     print(f"  FCA Register — querying '{keyword}' ...")
 
     try:
-        r = requests.get(
-            f"{FCA_BASE}/Firms",
-            params={"q": keyword},
-            headers=headers,
-            timeout=20,
-        )
-        if r.status_code == 403:
-            print(f"  FCA: 403 — check your Subscription Key")
-            return []
-        if r.status_code != 200:
-            print(f"  FCA: HTTP {r.status_code}")
-            return []
+        while len(results) < max_results:
+            r = requests.get(
+                f"{FCA_BASE}/Search",
+                params={"q": keyword, "type": "firm", "page": page},
+                headers=headers,
+                timeout=20,
+            )
+            if r.status_code == 403:
+                print(f"  FCA: 403 — check FCA_SUBSCRIPTION_KEY and FCA_EMAIL in .ch_api_key")
+                break
+            if r.status_code != 200:
+                print(f"  FCA: HTTP {r.status_code} — {r.text[:120]}")
+                break
 
-        data  = r.json()
-        firms = data.get("Data", [])
+            data  = r.json()
+            firms = data.get("Data") or []
+            if not firms:
+                break
 
-        for f in firms[:max_results]:
-            results.append({
-                "company_name":  (f.get("Name", "") or "").upper().strip(),
-                "fca_ref":       f.get("FirmReference", f.get("Reference", "")),
-                "fca_status":    f.get("Status", ""),
-                "fca_type":      f.get("Type", ""),
-                "address":       f.get("Address", ""),
-                "register":      "FCA",
-                "source":        "FCA Authorised Firms Register",
-            })
+            for f in firms:
+                # Extract company name (strip postcode suffix if present)
+                raw_name = (f.get("Name", "") or "").strip()
+                name     = re.sub(r"\s*\(Postcode:[^)]*\)", "", raw_name).upper().strip()
+                results.append({
+                    "company_name":  name,
+                    "fca_ref":       f.get("Reference Number", f.get("FirmReference", "")),
+                    "fca_status":    f.get("Status", ""),
+                    "fca_type":      f.get("Type of business or Individual", f.get("Type", "")),
+                    "fca_url":       f.get("URL", ""),
+                    "register":      "FCA",
+                    "source":        "FCA Authorised Firms Register",
+                })
+                if len(results) >= max_results:
+                    break
+
+            # Check if there's a next page
+            result_info = data.get("ResultInfo") or {}
+            if not result_info.get("Next"):
+                break
+            page += 1
+            time.sleep(0.2)   # FCA rate limit: 50 req / 10s
 
     except Exception as e:
         print(f"  FCA error: {e}")
@@ -914,35 +939,33 @@ def verify_fca(company_name: str, api_key: str) -> dict:
     if not api_key:
         return {"found": False, "register": "FCA", "note": "No API key"}
 
-    clean = re.sub(r"\b(LIMITED|LTD|LLP|PLC|CIC)\b", "", company_name,
-                   flags=re.IGNORECASE).strip()
-
-    headers = {
-        "Accept":                    "application/json",
-        "Ocp-Apim-Subscription-Key": api_key,
-    }
+    clean   = re.sub(r"\b(LIMITED|LTD|LLP|PLC|CIC)\b", "", company_name,
+                     flags=re.IGNORECASE).strip()
+    headers = _fca_headers(api_key)
 
     try:
         r = requests.get(
-            f"{FCA_BASE}/Firms",
-            params={"q": clean},
+            f"{FCA_BASE}/Search",
+            params={"q": clean, "type": "firm", "page": 1},
             headers=headers,
             timeout=15,
         )
         if r.status_code != 200:
             return {"found": False, "register": "FCA"}
 
-        firms = r.json().get("Data", [])
+        firms = r.json().get("Data") or []
         for f in firms:
-            if _name_match(clean, f.get("Name", "")):
+            raw_name = re.sub(r"\s*\(Postcode:[^)]*\)", "", f.get("Name", "") or "").strip()
+            if _name_match(clean, raw_name):
                 return {
                     "found":         True,
                     "register":      "FCA",
                     "register_name": "FCA Authorised Firm",
-                    "company_name":  f.get("Name", ""),
-                    "fca_ref":       f.get("FirmReference", ""),
+                    "company_name":  raw_name.upper(),
+                    "fca_ref":       f.get("Reference Number", f.get("FirmReference", "")),
                     "fca_status":    f.get("Status", ""),
-                    "fca_type":      f.get("Type", ""),
+                    "fca_type":      f.get("Type of business or Individual", f.get("Type", "")),
+                    "fca_url":       f.get("URL", ""),
                     "data_tier":     "Tier 1 — FCA Public Register",
                 }
     except Exception:

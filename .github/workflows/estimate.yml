@@ -24,8 +24,11 @@ jobs:
           pip install --upgrade pip
           pip install requests
 
-      - name: Write CH API key
-        run: echo "COMPANIES_HOUSE_API_KEY=${{ secrets.CH_API_KEY }}" > .ch_api_key
+      - name: Write API keys
+        run: |
+          echo "COMPANIES_HOUSE_API_KEY=${{ secrets.CH_API_KEY }}" > .ch_api_key
+          echo "FCA_SUBSCRIPTION_KEY=${{ secrets.FCA_SUBSCRIPTION_KEY }}" >> .ch_api_key
+          echo "FCA_EMAIL=${{ secrets.FCA_EMAIL }}" >> .ch_api_key
 
       - name: Run estimate
         env:
