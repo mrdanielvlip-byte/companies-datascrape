@@ -555,8 +555,10 @@ Examples:
     parser.add_argument(
         "--local-db",
         action="store_true",
-        help="Use local SQLite database for Step 1 search instead of Companies House API. "
-             "Dramatically faster (~1s vs 10+ min). Requires: python build_local_db.py",
+        help="Force local SQLite DB for Step 1 (auto-detected by default when DB exists). "
+             "DB is built automatically on first run from datasets/uk_companies_full/ — "
+             "covers all 5.6M UK companies, no API rate limits. "
+             "Manually build/refresh: python build_local_db.py",
     )
     parser.add_argument(
         "--smart",
@@ -615,6 +617,11 @@ Examples:
     # ── Individual step flags ─────────────────────────────────────────────────
 
     if args.search_only:
+        # Auto-detect local DB for --search-only path too
+        if not args.local_db:
+            _db_path = os.path.join(os.path.dirname(__file__), "data", "companies_house.db")
+            if os.path.exists(_db_path):
+                args.local_db = True
         if args.local_db:
             local = reload("local_search")
             local.run()
@@ -709,8 +716,31 @@ Examples:
         else:
             # ── SIC discovery (when source is 'sic' or 'both') ────────────────
             if search_src in ("sic", "both"):
+                # Auto-detect local DB; auto-build from datasets/uk_companies_full/ on first run
+                if not args.local_db:
+                    _db_path     = os.path.join(os.path.dirname(__file__), "data", "companies_house.db")
+                    _parts_dir   = os.path.join(os.path.dirname(__file__), "datasets", "uk_companies_full")
+                    if os.path.exists(_db_path):
+                        args.local_db = True
+                        print("  ⚡ Local DB detected — using SQLite (5.6M companies, no API rate limits)")
+                    elif os.path.isdir(_parts_dir):
+                        import glob as _glob
+                        _parts = sorted(_glob.glob(os.path.join(_parts_dir, "BasicCompanyData-*.zip")))
+                        if _parts:
+                            print(f"  ⚡ Local bulk data found ({len(_parts)} parts) — building SQLite DB")
+                            print(f"     This is a one-time build (~10 min). Future runs will be instant.")
+                            _builder = importlib.import_module("build_local_db")
+                            _builder.DATA_DIR.mkdir(parents=True, exist_ok=True)
+                            from pathlib import Path as _Path
+                            _builder.build_from_parts(
+                                [_Path(p) for p in _parts],
+                                _builder.DB_PATH,
+                            )
+                            args.local_db = True
+                            print("  ✅ DB built — continuing pipeline with local search\n")
+
                 if args.local_db:
-                    print("Step 1/13 — Local DB Search  ⚡ (SQLite, no API)")
+                    print("Step 1/13 — Local DB Search  ⚡ (SQLite, 5.6M companies, no API)")
                     local = reload("local_search")
                     local.run()
                     print("\nStep 2/13 — Filter (applied during local search)")

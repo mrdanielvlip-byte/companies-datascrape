@@ -42,14 +42,26 @@ from pathlib import Path
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-DATA_DIR  = Path(__file__).parent / "data"
-DB_PATH   = DATA_DIR / "companies_house.db"
-ZIP_PATH  = DATA_DIR / "BasicCompanyData.zip"
-SIC_PATH  = DATA_DIR / "sic_codes.json"
+DATA_DIR     = Path(__file__).parent / "data"
+DB_PATH      = DATA_DIR / "companies_house.db"
+ZIP_PATH     = DATA_DIR / "BasicCompanyData.zip"
+SIC_PATH     = DATA_DIR / "sic_codes.json"
+DATASETS_DIR = Path(__file__).parent / "datasets" / "uk_companies_full"
 
 # CH bulk data URL — monthly snapshot, released 1st of each month
 # Format: https://download.companieshouse.gov.uk/BasicCompanyDataAsOneFile-YYYY-MM-01.zip
 CH_BULK_BASE = "https://download.companieshouse.gov.uk"
+
+
+def find_local_parts() -> list[Path]:
+    """
+    Return sorted list of ZIP parts already present in datasets/uk_companies_full/.
+    These are the files committed to the repo — no download needed.
+    """
+    if not DATASETS_DIR.exists():
+        return []
+    parts = sorted(DATASETS_DIR.glob("BasicCompanyData-*.zip"))
+    return parts
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -462,6 +474,170 @@ def build_database(zip_path: Path, db_path: Path, active_only: bool = False) -> 
     return stats
 
 
+def build_from_parts(parts: list[Path], db_path: Path, active_only: bool = False) -> dict:
+    """
+    Build the SQLite database from the 7-part ZIP files already in datasets/uk_companies_full/.
+    Processes each part sequentially, appending into the same DB.
+    Much faster than downloading — data is already local.
+    """
+    print(f"\nBuilding SQLite database from {len(parts)} local ZIP parts...")
+    for p in parts:
+        print(f"  {p.name}  ({p.stat().st_size / 1024 / 1024:.0f} MB)")
+
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    con = sqlite3.connect(str(db_path))
+    con.execute("PRAGMA journal_mode=WAL")
+    con.execute("PRAGMA synchronous=NORMAL")
+    con.execute("PRAGMA cache_size=-256000")
+    con.executescript(SCHEMA)
+    con.execute("DROP TABLE IF EXISTS companies_fts")
+    con.executescript(FTS_SCHEMA)
+    con.commit()
+
+    sic_counts: dict[str, dict] = {}
+    stats = {"total_rows": 0, "loaded": 0, "skipped": 0,
+             "active": 0, "dissolved": 0, "other_status": 0, "errors": 0}
+    t0 = time.time()
+
+    for part_idx, zip_path in enumerate(parts, 1):
+        print(f"\n  Part {part_idx}/{len(parts)}: {zip_path.name}")
+        with zipfile.ZipFile(str(zip_path)) as zf:
+            csv_files = [n for n in zf.namelist() if n.endswith(".csv")]
+            if not csv_files:
+                print(f"    WARNING: no CSV in {zip_path.name}, skipping")
+                continue
+            csv_name = csv_files[0]
+
+            with zf.open(csv_name) as raw:
+                import io
+                reader = csv.DictReader(io.TextIOWrapper(raw, encoding="utf-8", errors="replace"))
+                reader.fieldnames = [name.strip() for name in (reader.fieldnames or [])]
+
+                batch, fts_batch = [], []
+                BATCH_SIZE = 5000
+
+                for row in reader:
+                    stats["total_rows"] += 1
+
+                    def g(col):
+                        return _clean(row.get(col, ""))
+
+                    status = g("CompanyStatus")
+                    if active_only and status.lower() not in ("active", ""):
+                        stats["skipped"] += 1
+                        continue
+
+                    sl = status.lower()
+                    if "active" in sl:      stats["active"] += 1
+                    elif "dissolved" in sl: stats["dissolved"] += 1
+                    else:                   stats["other_status"] += 1
+
+                    name   = g("CompanyName")
+                    number = g("CompanyNumber")
+                    if not name or not number:
+                        stats["errors"] += 1
+                        continue
+
+                    inc_date  = _parse_date(g("IncorporationDate"))
+                    diss_date = _parse_date(g("DissolutionDate"))
+
+                    sic1_raw = g("SICCode.SicText_1")
+                    sic1_code, sic1_desc = _extract_sic_code(sic1_raw)
+                    sic2_code, _         = _extract_sic_code(g("SICCode.SicText_2"))
+                    sic3_code, _         = _extract_sic_code(g("SICCode.SicText_3"))
+                    sic4_code, _         = _extract_sic_code(g("SICCode.SicText_4"))
+
+                    if sic1_code:
+                        if sic1_code not in sic_counts:
+                            sic_counts[sic1_code] = {"description": sic1_desc, "count": 0}
+                        sic_counts[sic1_code]["count"] += 1
+
+                    try:
+                        mort = int(g("Mortgages.NumMortOutstanding") or 0)
+                    except ValueError:
+                        mort = 0
+
+                    record = (
+                        number, name, name.upper(), status,
+                        g("CompanyCategory"), g("CountryOfOrigin"),
+                        inc_date, diss_date,
+                        g("RegAddress.PostCode"), g("RegAddress.AddressLine1"),
+                        g("RegAddress.PostTown"), g("RegAddress.County"),
+                        g("RegAddress.Country"),
+                        sic1_code, sic2_code, sic3_code, sic4_code,
+                        g("Accounts.AccountCategory"),
+                        _parse_date(g("Accounts.LastMadeUpDate")),
+                        _parse_date(g("Accounts.NextDueDate")),
+                        mort, g("URI"), _company_age(inc_date),
+                    )
+                    batch.append(record)
+                    fts_batch.append((number, name))
+                    stats["loaded"] += 1
+
+                    if len(batch) >= BATCH_SIZE:
+                        con.executemany(
+                            "INSERT OR REPLACE INTO companies VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                            batch,
+                        )
+                        con.executemany(
+                            "INSERT INTO companies_fts(company_number, company_name) VALUES (?,?)",
+                            fts_batch,
+                        )
+                        con.commit()
+                        batch, fts_batch = [], []
+                        elapsed = time.time() - t0
+                        rate    = stats["loaded"] / elapsed
+                        print(f"\r    [{stats['loaded']:>7,}] {rate:.0f} rows/s  "
+                              f"active: {stats['active']:,}  ", end="", flush=True)
+
+                if batch:
+                    con.executemany(
+                        "INSERT OR REPLACE INTO companies VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        batch,
+                    )
+                    con.executemany(
+                        "INSERT INTO companies_fts(company_number, company_name) VALUES (?,?)",
+                        fts_batch,
+                    )
+                    con.commit()
+
+    print(f"\n\n  All parts loaded: {stats['loaded']:,} companies in {time.time()-t0:.0f}s")
+
+    print("  Building indexes...")
+    t1 = time.time()
+    for idx_sql in INDEXES:
+        con.execute(idx_sql)
+    con.commit()
+    print(f"  Indexes built in {time.time()-t1:.0f}s")
+
+    con.executemany(
+        "INSERT OR REPLACE INTO sic_codes VALUES (?,?,?)",
+        [(code, d["description"], d["count"]) for code, d in sic_counts.items()],
+    )
+    con.execute("DELETE FROM db_meta")
+    con.executemany("INSERT INTO db_meta VALUES (?,?)", [
+        ("build_date",   datetime.now().isoformat()),
+        ("total_loaded", str(stats["loaded"])),
+        ("active_count", str(stats["active"])),
+        ("source_file",  f"{len(parts)} local parts from datasets/uk_companies_full/"),
+    ])
+    con.commit()
+    con.close()
+
+    sic_for_json = {code: d for code, d in sic_counts.items()}
+    with open(str(SIC_PATH), "w") as f:
+        json.dump(sic_for_json, f, indent=2, sort_keys=True)
+
+    total_time = time.time() - t0
+    print(f"\n  ✅ Database ready: {db_path}")
+    print(f"     Size:    {db_path.stat().st_size / 1024 / 1024:.0f} MB")
+    print(f"     Rows:    {stats['loaded']:,} companies")
+    print(f"     Active:  {stats['active']:,}")
+    print(f"     Time:    {total_time/60:.1f} minutes")
+    return stats
+
+
 def print_stats(db_path: Path = DB_PATH) -> None:
     """Print statistics about the local database."""
     if not db_path.exists():
@@ -505,16 +681,19 @@ def print_stats(db_path: Path = DB_PATH) -> None:
 def main():
     import argparse
     parser = argparse.ArgumentParser(
-        description="Download Companies House bulk data and build local SQLite DB",
+        description="Build local Companies House SQLite DB from datasets/uk_companies_full/ "
+                    "or by downloading the CH bulk snapshot.",
     )
     parser.add_argument("--build-only",   action="store_true",
-                        help="Skip download, rebuild DB from existing zip")
+                        help="Skip download, rebuild DB from existing zip at data/BasicCompanyData.zip")
     parser.add_argument("--active-only",  action="store_true",
                         help="Only load Active companies (faster, smaller DB)")
     parser.add_argument("--stats",        action="store_true",
                         help="Show database statistics and exit")
     parser.add_argument("--update",       action="store_true",
-                        help="Check for newer snapshot, download if available, rebuild")
+                        help="Force re-download of latest CH snapshot and rebuild (ignores local parts)")
+    parser.add_argument("--download-only", action="store_true",
+                        help="Force download from CH website even if local parts exist")
     args = parser.parse_args()
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -523,7 +702,18 @@ def main():
         print_stats()
         return
 
-    # Determine download URL
+    # ── Prefer local parts from datasets/uk_companies_full/ ──────────────────
+    # If the repo already has the 7-part ZIPs, use them — no download needed.
+    local_parts = find_local_parts()
+
+    if local_parts and not args.update and not args.download_only and not args.build_only:
+        print(f"\n  ⚡ Found {len(local_parts)} local ZIP parts in datasets/uk_companies_full/")
+        print(f"     (skip with --download-only to force fresh download from CH)")
+        stats = build_from_parts(local_parts, DB_PATH, active_only=args.active_only)
+        print_stats()
+        return
+
+    # ── Fallback: download the single-file zip from CH website ───────────────
     if not args.build_only:
         try:
             url, date_str = find_latest_url()
@@ -531,10 +721,9 @@ def main():
             print(f"Error: {e}")
             sys.exit(1)
 
-        # Check if we already have it
         if ZIP_PATH.exists() and not args.update:
             print(f"  Zip already exists: {ZIP_PATH} ({ZIP_PATH.stat().st_size/1024/1024:.0f} MB)")
-            print(f"  Skipping download (use --update to force)")
+            print(f"  Skipping download (use --update to force re-download)")
         else:
             download_with_progress(url, ZIP_PATH)
     else:
@@ -546,7 +735,6 @@ def main():
         print(f"Error: Download failed or zip not found at {ZIP_PATH}")
         sys.exit(1)
 
-    # Build (or rebuild) the database
     stats = build_database(ZIP_PATH, DB_PATH, active_only=args.active_only)
     print_stats()
 
