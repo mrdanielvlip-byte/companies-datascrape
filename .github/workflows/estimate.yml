@@ -1,0 +1,43 @@
+name: Sector Estimate
+run-name: "Estimate — ${{ inputs.sector }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      sector:
+        description: 'Sector description to estimate'
+        required: true
+        default: 'lift maintenance'
+
+jobs:
+  estimate:
+    name: Quick Estimate — ${{ inputs.sector }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Python packages
+        run: |
+          pip install --upgrade pip
+          pip install requests
+
+      - name: Write CH API key
+        run: echo "COMPANIES_HOUSE_API_KEY=${{ secrets.CH_API_KEY }}" > .ch_api_key
+
+      - name: Run estimate
+        env:
+          COMPANIES_HOUSE_API_KEY: ${{ secrets.CH_API_KEY }}
+        run: |
+          mkdir -p output
+          python3 estimate.py "${{ inputs.sector }}"
+
+      - name: Upload estimate JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: sector-estimate
+          path: output/estimate.json
+          retention-days: 1
+          overwrite: true

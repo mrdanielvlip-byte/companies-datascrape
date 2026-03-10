@@ -28,9 +28,10 @@ GITHUB_TOKEN   = st.secrets.get("GITHUB_TOKEN", "")
 GITHUB_REPO    = st.secrets.get("GITHUB_REPO", "mrdanielvlip-byte/companies-datascrape")
 API_BASE       = "https://api.github.com"
 HEADERS        = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github+json"}
-WORKFLOW_QUICK = "pe_sourcing.yml"
-WORKFLOW_DEEP  = "lift_maintenance_ocr.yml"
-DEFAULT_EMAIL  = "daniellipinski@mac.com"
+WORKFLOW_QUICK    = "pe_sourcing.yml"
+WORKFLOW_DEEP     = "lift_maintenance_ocr.yml"
+WORKFLOW_ESTIMATE = "estimate.yml"
+DEFAULT_EMAIL     = "daniellipinski@mac.com"
 
 # ── Session state ──────────────────────────────────────────────────────────────
 if "pinned_runs" not in st.session_state:
@@ -45,6 +46,15 @@ if "run_inputs_store" not in st.session_state:
     st.session_state.run_inputs_store = {}  # run_id → inputs dict (sector, mode, region…)
 if "pending_trigger" not in st.session_state:
     st.session_state.pending_trigger = None # inputs saved just before workflow dispatch
+# Estimate state
+if "estimate_run_id" not in st.session_state:
+    st.session_state.estimate_run_id = None     # run_id of in-flight estimate job
+if "estimate_sector" not in st.session_state:
+    st.session_state.estimate_sector = ""       # sector the estimate was triggered for
+if "estimate_result" not in st.session_state:
+    st.session_state.estimate_result = None     # parsed estimate.json once complete
+if "estimate_confirmed" not in st.session_state:
+    st.session_state.estimate_confirmed = False # user pressed "Yes, run full search"
 
 
 # ── GitHub API helpers ─────────────────────────────────────────────────────────
@@ -111,6 +121,24 @@ def download_artifact(artifact_id):
 
 def cancel_run(run_id):
     gh(f"/repos/{GITHUB_REPO}/actions/runs/{run_id}/cancel", method="POST")
+
+
+def fetch_estimate_result(run_id) -> dict | None:
+    """Download and parse estimate.json from a completed estimate workflow run."""
+    import zipfile, io
+    artifacts = get_artifacts(run_id)
+    art = next((a for a in artifacts if a["name"] == "sector-estimate"), None)
+    if not art:
+        return None
+    raw = download_artifact(art["id"])
+    if not raw:
+        return None
+    try:
+        with zipfile.ZipFile(io.BytesIO(raw)) as z:
+            with z.open("estimate.json") as f:
+                return json.loads(f.read())
+    except Exception:
+        return None
 
 
 # ── Formatting helpers ─────────────────────────────────────────────────────────
@@ -230,93 +258,244 @@ with tabs[0]:
     st.subheader("New Sector Search")
     st.caption("Each search runs independently on GitHub — you can start multiple and close this window at any time.")
 
-    with st.form("new_search", clear_on_submit=True):
-        col1, col2 = st.columns([2, 1])
+    # ── PHASE 1: Search form ───────────────────────────────────────────────────
+    # Hidden once an estimate is in-flight or confirmed
+    estimate_active = (
+        st.session_state.estimate_run_id is not None
+        or st.session_state.estimate_result is not None
+    )
 
-        with col1:
-            sector = st.text_input(
-                "Sector description *",
-                placeholder='e.g. "fire safety systems", "HVAC contractors", "pest control"',
-                help="Free text — the pipeline auto-discovers SIC codes from your description.",
-            )
-        with col2:
-            notify_email = st.text_input(
-                "Send results to",
-                value=DEFAULT_EMAIL,
-                help="Email address to notify when this specific search finishes.",
-            )
+    if not estimate_active:
+        with st.form("new_search", clear_on_submit=False):
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                sector = st.text_input(
+                    "Sector description *",
+                    placeholder='e.g. "fire safety systems", "HVAC contractors", "pest control"',
+                    help="Free text — the pipeline auto-discovers SIC codes using curated maps and fuzzy matching.",
+                )
+            with col2:
+                notify_email = st.text_input(
+                    "Send results to",
+                    value=DEFAULT_EMAIL,
+                    help="Email address to notify when this specific search finishes.",
+                )
 
-        col3, col4 = st.columns([1, 2])
-        with col3:
-            mode = st.radio(
-                "Report depth",
-                ["quick", "full"],
-                captions=["~10 min · search + enrich + financials", "~60 min · adds sell signals, contracts, digital health"],
-                index=0,
-            )
+            col3, _ = st.columns([1, 2])
+            with col3:
+                mode = st.radio(
+                    "Report depth",
+                    ["quick", "full"],
+                    captions=["~10 min · search + enrich + financials", "~60 min · adds sell signals, contracts, digital health"],
+                    index=0,
+                )
 
-        with st.expander("Advanced filters (optional)"):
-            fc1, fc2 = st.columns(2)
-            with fc1:
-                region = st.selectbox("Region", [
-                    "", "London", "South East", "South West", "East of England",
-                    "East Midlands", "West Midlands", "Yorkshire and The Humber",
-                    "North West", "North East", "Wales", "Scotland", "Northern Ireland",
-                ], index=0, help="Leave blank for all UK.")
-            with fc2:
-                min_revenue = st.selectbox("Minimum revenue",
-                    ["", "250000", "500000", "1000000", "2000000", "5000000"],
-                    format_func=lambda x: "No minimum" if x == "" else f"£{int(x):,}",
-                    index=0)
+            with st.expander("Advanced filters (optional)"):
+                fc1, fc2 = st.columns(2)
+                with fc1:
+                    region = st.selectbox("Region", [
+                        "", "London", "South East", "South West", "East of England",
+                        "East Midlands", "West Midlands", "Yorkshire and The Humber",
+                        "North West", "North East", "Wales", "Scotland", "Northern Ireland",
+                    ], index=0, help="Leave blank for all UK.")
+                with fc2:
+                    min_revenue = st.selectbox("Minimum revenue",
+                        ["", "250000", "500000", "1000000", "2000000", "5000000"],
+                        format_func=lambda x: "No minimum" if x == "" else f"£{int(x):,}",
+                        index=0)
 
-        st.divider()
-        deep_col, run_col = st.columns([1, 2])
-        with deep_col:
-            run_deep = st.checkbox("Deep OCR run (~5.5 hrs, most thorough)")
-        with run_col:
-            submitted = st.form_submit_button("🚀 Run Pipeline", type="primary", use_container_width=True)
+            st.divider()
+            deep_col, preview_col, _ = st.columns([1, 1, 1])
+            with deep_col:
+                run_deep = st.checkbox("Deep OCR run (~5.5 hrs, most thorough)")
+            with preview_col:
+                preview_clicked = st.form_submit_button(
+                    "🔍 Preview Companies", use_container_width=True,
+                    help="Run a quick ~2 min estimate to see company count and SIC accuracy before committing to a full search."
+                )
 
-    if submitted:
-        if not sector.strip():
-            st.error("Please enter a sector description.")
-        else:
-            with st.spinner("Triggering pipeline on GitHub…"):
-                if run_deep:
-                    ok = trigger_workflow(WORKFLOW_DEEP, {
-                        "sector":       sector.strip(),
-                        "notify_email": notify_email,
-                    })
-                    label = f"{sector.strip()} (Deep OCR)"
-                    st.session_state.pending_trigger = {
-                        "sector": sector.strip(), "mode": "Deep OCR",
-                        "region": "", "min_revenue": "",
-                        "notify_email": notify_email, "is_deep": True,
-                        "triggered_at": datetime.now(timezone.utc).isoformat(),
-                    }
+        if preview_clicked:
+            if not sector.strip():
+                st.error("Please enter a sector description.")
+            else:
+                with st.spinner("Launching quick estimate on GitHub (~2 min)…"):
+                    ok = trigger_workflow(WORKFLOW_ESTIMATE, {"sector": sector.strip()})
+                if ok:
+                    # stash form values so we can re-use them after confirmation
+                    st.session_state.estimate_sector  = sector.strip()
+                    st.session_state._estimate_email  = notify_email
+                    st.session_state._estimate_mode   = mode
+                    st.session_state._estimate_region = region
+                    st.session_state._estimate_rev    = min_revenue
+                    st.session_state._estimate_deep   = run_deep
+                    # find the new run id on next load
+                    time.sleep(4)
+                    st.cache_data.clear()
+                    # grab the newest estimate run
+                    wf_runs = gh(f"/repos/{GITHUB_REPO}/actions/workflows/{WORKFLOW_ESTIMATE}/runs?per_page=1")
+                    runs = wf_runs.get("workflow_runs", [])
+                    if runs:
+                        st.session_state.estimate_run_id = runs[0]["id"]
+                    st.rerun()
                 else:
-                    ok = trigger_workflow(WORKFLOW_QUICK, {
-                        "sector":       sector.strip(),
-                        "mode":         mode,
-                        "region":       region,
-                        "min_revenue":  min_revenue,
-                        "notify_email": notify_email,
-                    })
-                    label = sector.strip()
-                    st.session_state.pending_trigger = {
-                        "sector": sector.strip(), "mode": mode,
-                        "region": region, "min_revenue": min_revenue,
-                        "notify_email": notify_email, "is_deep": False,
-                        "triggered_at": datetime.now(timezone.utc).isoformat(),
-                    }
+                    st.error("Failed to trigger estimate. Check your GitHub token in secrets.")
 
-            if ok:
-                st.success(f"✅ Pipeline triggered for **{label}**. A new tab will appear shortly — refresh the page.")
-                st.info("📧 You'll get an email at **" + notify_email + "** when it's done. You can safely close this window.")
-                time.sleep(4)
-                st.cache_data.clear()
+    # ── PHASE 2: Estimate in progress ─────────────────────────────────────────
+    elif st.session_state.estimate_run_id and st.session_state.estimate_result is None:
+        run_id  = st.session_state.estimate_run_id
+        run     = get_run(run_id)
+        status  = run.get("status", "unknown")
+        conc    = run.get("conclusion")
+
+        st.info(f"🔍 Estimating company universe for **{st.session_state.estimate_sector}** …")
+
+        if status in ("queued", "in_progress"):
+            # time-based progress for estimate (target 2 min)
+            started_str = run.get("run_started_at") or run.get("created_at", "")
+            try:
+                started_dt  = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
+                elapsed_sec = (datetime.now(timezone.utc) - started_dt).total_seconds()
+                pct = min(elapsed_sec / 120, 0.95)
+                remain = max(0, int((120 - elapsed_sec) // 60))
+                bar_txt = f"~{int(elapsed_sec//60)}m {int(elapsed_sec%60)}s elapsed · ~{remain} min remaining"
+            except Exception:
+                pct, bar_txt = 0.05, "Starting up…"
+
+            st.progress(pct, text=bar_txt)
+            st.caption("Page auto-refreshes every 10 s")
+            if st.button("✕ Cancel estimate", key="cancel_est"):
+                cancel_run(run_id)
+                st.session_state.estimate_run_id = None
+                st.rerun()
+            time.sleep(10)
+            st.rerun()
+
+        elif status == "completed" and conc == "success":
+            result = fetch_estimate_result(run_id)
+            if result:
+                st.session_state.estimate_result = result
                 st.rerun()
             else:
-                st.error("Failed to trigger. Check your GitHub token in secrets.")
+                st.error("Estimate finished but could not download results.")
+                if st.button("Start over"):
+                    st.session_state.estimate_run_id = None
+                    st.rerun()
+        else:
+            st.error(f"Estimate run ended with status: {conc or status}")
+            if st.button("Start over"):
+                st.session_state.estimate_run_id = None
+                st.rerun()
+
+    # ── PHASE 3: Show estimate results and ask to confirm ─────────────────────
+    elif st.session_state.estimate_result is not None and not st.session_state.estimate_confirmed:
+        r       = st.session_state.estimate_result
+        sector  = r.get("sector", st.session_state.estimate_sector)
+        total   = r.get("total_companies", 0)
+        acc_pct = r.get("accuracy_pct", 0)
+        acc_lbl = r.get("accuracy_label", "")
+        source  = r.get("match_source", "fuzzy")
+        sic_bkd = r.get("sic_breakdown", [])
+        samples = r.get("sample_companies", [])
+
+        # Accuracy colour
+        if acc_pct >= 80:
+            acc_colour = "🟢"
+        elif acc_pct >= 60:
+            acc_colour = "🟡"
+        else:
+            acc_colour = "🔴"
+
+        st.success(f"**Estimate complete for: {sector}**")
+
+        # ── Top metrics ────────────────────────────────────────────────────────
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Estimated companies", f"{total:,}")
+        m2.metric("Sector accuracy", f"{acc_pct}%")
+        m3.metric("SIC match method", "Curated map" if source == "curated" else "Fuzzy match")
+
+        st.caption(f"{acc_colour} {acc_lbl}")
+        st.divider()
+
+        # ── SIC code breakdown ─────────────────────────────────────────────────
+        st.markdown("**Matched SIC codes**")
+        for s in sic_bkd:
+            pct_of_total = (s["count"] / total * 100) if total else 0
+            bar = "█" * int(pct_of_total / 5)   # rough bar, max 20 chars at 100%
+            st.markdown(
+                f"`{s['code']}` &nbsp; {s['description']} &nbsp; "
+                f"— **{s['count']:,}** companies &nbsp; `{bar}` {pct_of_total:.0f}%"
+            )
+
+        # ── Sample companies ───────────────────────────────────────────────────
+        if samples:
+            st.divider()
+            st.markdown("**Sample companies found**")
+            st.caption("  ·  ".join(samples[:10]))
+
+        st.divider()
+
+        # ── Confirm / restart ─────────────────────────────────────────────────
+        st.markdown("**Would you like to run a full search on this sector?**")
+        yes_col, no_col = st.columns([1, 1])
+        with yes_col:
+            if st.button("✅ Yes — Run Full Search", type="primary", use_container_width=True):
+                st.session_state.estimate_confirmed = True
+                st.rerun()
+        with no_col:
+            if st.button("✏️ No — Change Sector", use_container_width=True):
+                # reset everything so the form reappears
+                st.session_state.estimate_run_id    = None
+                st.session_state.estimate_result    = None
+                st.session_state.estimate_sector    = ""
+                st.session_state.estimate_confirmed = False
+                st.rerun()
+
+    # ── PHASE 4: Confirmed — trigger the real pipeline ─────────────────────────
+    elif st.session_state.estimate_confirmed:
+        sector       = st.session_state.estimate_sector
+        notify_email = st.session_state.get("_estimate_email", DEFAULT_EMAIL)
+        mode         = st.session_state.get("_estimate_mode", "quick")
+        region       = st.session_state.get("_estimate_region", "")
+        min_revenue  = st.session_state.get("_estimate_rev", "")
+        run_deep     = st.session_state.get("_estimate_deep", False)
+
+        with st.spinner(f"Launching full pipeline for '{sector}'…"):
+            if run_deep:
+                ok = trigger_workflow(WORKFLOW_DEEP, {
+                    "sector": sector, "notify_email": notify_email,
+                })
+                label = f"{sector} (Deep OCR)"
+                st.session_state.pending_trigger = {
+                    "sector": sector, "mode": "Deep OCR", "region": "",
+                    "min_revenue": "", "notify_email": notify_email, "is_deep": True,
+                    "triggered_at": datetime.now(timezone.utc).isoformat(),
+                }
+            else:
+                ok = trigger_workflow(WORKFLOW_QUICK, {
+                    "sector": sector, "mode": mode, "region": region,
+                    "min_revenue": min_revenue, "notify_email": notify_email,
+                })
+                label = sector
+                st.session_state.pending_trigger = {
+                    "sector": sector, "mode": mode, "region": region,
+                    "min_revenue": min_revenue, "notify_email": notify_email, "is_deep": False,
+                    "triggered_at": datetime.now(timezone.utc).isoformat(),
+                }
+
+        if ok:
+            st.success(f"✅ Full pipeline triggered for **{label}**.")
+            st.info(f"📧 You'll get an email at **{notify_email}** when it's done.")
+            # Reset estimate state for next search
+            st.session_state.estimate_run_id    = None
+            st.session_state.estimate_result    = None
+            st.session_state.estimate_sector    = ""
+            st.session_state.estimate_confirmed = False
+            time.sleep(4)
+            st.cache_data.clear()
+            st.rerun()
+        else:
+            st.error("Failed to trigger pipeline. Check your GitHub token in secrets.")
+            st.session_state.estimate_confirmed = False
 
     # ── Recent runs summary table ──────────────────────────────────────────────
     st.divider()
