@@ -34,14 +34,17 @@ DEFAULT_EMAIL  = "daniellipinski@mac.com"
 
 # ── Session state ──────────────────────────────────────────────────────────────
 if "pinned_runs" not in st.session_state:
-    # List of run_ids the user has explicitly pinned as tabs
     st.session_state.pinned_runs = []
 if "active_tab" not in st.session_state:
     st.session_state.active_tab = 0
 if "cached_runs" not in st.session_state:
-    st.session_state.cached_runs = {}   # run_id → run dict, avoids re-fetching
+    st.session_state.cached_runs = {}       # run_id → run dict
 if "last_fetch" not in st.session_state:
     st.session_state.last_fetch = 0
+if "run_inputs_store" not in st.session_state:
+    st.session_state.run_inputs_store = {}  # run_id → inputs dict (sector, mode, region…)
+if "pending_trigger" not in st.session_state:
+    st.session_state.pending_trigger = None # inputs saved just before workflow dispatch
 
 
 # ── GitHub API helpers ─────────────────────────────────────────────────────────
@@ -151,6 +154,24 @@ def load_all_runs():
 
 all_runs = load_all_runs()
 
+# Match a pending trigger to the newest run we haven't catalogued yet
+if st.session_state.pending_trigger:
+    pt = st.session_state.pending_trigger
+    triggered_at = pt.get("triggered_at", "")
+    for r in all_runs[:5]:   # check the 5 most recent runs
+        rid = r["id"]
+        if rid not in st.session_state.run_inputs_store:
+            # Only associate if run was created after (or within 10s before) trigger
+            try:
+                run_created = datetime.fromisoformat(r["created_at"].replace("Z", "+00:00"))
+                trig_time   = datetime.fromisoformat(triggered_at.replace("Z", "+00:00"))
+                if (run_created - trig_time).total_seconds() > -10:
+                    st.session_state.run_inputs_store[rid] = pt
+                    st.session_state.pending_trigger = None
+                    break
+            except Exception:
+                pass
+
 # Auto-pin any runs that are currently active (queued/in_progress)
 for r in all_runs:
     if r["status"] in ("queued", "in_progress") and r["id"] not in st.session_state.pinned_runs:
@@ -183,12 +204,20 @@ st.divider()
 
 pinned = st.session_state.pinned_runs  # ordered list of run_ids
 
+def tab_name_for_run(rid):
+    """Use stored sector name if available, else display_title (set by run-name: in YAML)."""
+    inputs = st.session_state.run_inputs_store.get(rid, {})
+    if inputs.get("sector"):
+        return inputs["sector"]
+    run = run_lookup.get(rid, {})
+    return run_display_name(run) if run else f"Run {rid}"
+
 tab_labels = ["➕ New Search"]
 for rid in pinned:
-    run = run_lookup.get(rid, {})
+    run  = run_lookup.get(rid, {})
     icon = status_icon(run.get("status", ""), run.get("conclusion"))
-    name = run_display_name(run) if run else f"Run {rid}"
-    tab_labels.append(f"{icon} {name[:30]}")
+    name = tab_name_for_run(rid)
+    tab_labels.append(f"{icon} {name[:28]}")
 
 tabs = st.tabs(tab_labels)
 
@@ -258,6 +287,12 @@ with tabs[0]:
                         "notify_email": notify_email,
                     })
                     label = f"{sector.strip()} (Deep OCR)"
+                    st.session_state.pending_trigger = {
+                        "sector": sector.strip(), "mode": "Deep OCR",
+                        "region": "", "min_revenue": "",
+                        "notify_email": notify_email, "is_deep": True,
+                        "triggered_at": datetime.now(timezone.utc).isoformat(),
+                    }
                 else:
                     ok = trigger_workflow(WORKFLOW_QUICK, {
                         "sector":       sector.strip(),
@@ -267,6 +302,12 @@ with tabs[0]:
                         "notify_email": notify_email,
                     })
                     label = sector.strip()
+                    st.session_state.pending_trigger = {
+                        "sector": sector.strip(), "mode": mode,
+                        "region": region, "min_revenue": min_revenue,
+                        "notify_email": notify_email, "is_deep": False,
+                        "triggered_at": datetime.now(timezone.utc).isoformat(),
+                    }
 
             if ok:
                 st.success(f"✅ Pipeline triggered for **{label}**. A new tab will appear shortly — refresh the page.")
@@ -337,8 +378,18 @@ for tab_idx, run_id in enumerate(pinned):
         # ── Run header ─────────────────────────────────────────────────────────
         hcol1, hcol2, hcol3 = st.columns([5, 1, 1])
         with hcol1:
-            st.subheader(f"{icon} {name}")
-            st.caption(f"{label} · {run['created_at'][:10]} · {dur} · {conc or status}")
+            st.subheader(f"{icon} {tab_name_for_run(run_id)}")
+            # Show search criteria as inline tags
+            inputs = st.session_state.run_inputs_store.get(run_id, {})
+            tags = []
+            if inputs.get("mode"):        tags.append(f"📋 {inputs['mode']}")
+            if inputs.get("region"):      tags.append(f"📍 {inputs['region']}")
+            if inputs.get("min_revenue"): tags.append(f"💰 £{int(inputs['min_revenue']):,}+ revenue")
+            if inputs.get("notify_email"):tags.append(f"📧 {inputs['notify_email']}")
+            if tags:
+                st.caption("  ·  ".join(tags))
+            else:
+                st.caption(f"{label} · {run['created_at'][:10]} · {dur} · {conc or status}")
         with hcol2:
             st.link_button("View on GitHub", run_url, use_container_width=True)
         with hcol3:

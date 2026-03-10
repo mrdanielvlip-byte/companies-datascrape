@@ -1,4 +1,5 @@
 name: PE Deal Sourcing — Sector Search
+run-name: "${{ inputs.sector }}"
 
 on:
   workflow_dispatch:

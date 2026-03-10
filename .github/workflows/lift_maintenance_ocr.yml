@@ -1,4 +1,5 @@
 name: Deep OCR Batch + Intelligence Rebuild
+run-name: "${{ inputs.sector }} (Deep OCR)"
 
 # Trigger manually from the GitHub Actions tab
 on:
