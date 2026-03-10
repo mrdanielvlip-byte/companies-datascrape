@@ -69,15 +69,16 @@ def _ensure_cache_table():
         pass
 
 
-def _cache_get(company_number: str) -> Optional[str]:
+def _cache_get(company_number: str) -> Optional[tuple[str, str]]:
+    """Return (description, website_url) from cache, or None if not cached."""
     try:
         con = sqlite3.connect(str(CACHE_DB))
         row = con.execute(
-            "SELECT services_description FROM competitor_services_cache WHERE company_number=?",
+            "SELECT services_description, website_url FROM competitor_services_cache WHERE company_number=?",
             (company_number,),
         ).fetchone()
         con.close()
-        return row[0] if row else None
+        return (row[0] or "", row[1] or "") if row else None
     except Exception:
         return None
 
@@ -222,15 +223,15 @@ def enrich_competitor_services(
     competitor: dict,
     enriched_index: dict[str, dict],
     delay: float = 0.5,
-) -> str:
+) -> tuple[str, str]:
     """
-    Return a plain-English description of what this competitor offers.
+    Return (description, website_url) for what this competitor offers.
 
     Lookup order:
       1. Cache
       2. Stored digital_health.website_description from enriched dataset
       3. Known website URL from enriched data
-      4. Bing search: "{company_number} {company_name}" (reg number is unique,
+      4. Bing search: "{company_number} {company_name}" (reg number is unique —
          companies are legally required to print it on their website)
       5. Bing search: "{company_name} {postcode_prefix} services"
       6. URL guessing from company name
@@ -244,21 +245,23 @@ def enrich_competitor_services(
     if comp_num:
         cached = _cache_get(comp_num)
         if cached is not None:
-            return cached
+            return cached  # (desc, url) tuple
 
     # ── 2. Already enriched — use stored description ─────────────────────────
     enriched = enriched_index.get(comp_num, {})
     dh = enriched.get("digital_health", {})
     stored_desc = dh.get("website_description", "")
+    domain = dh.get("domain", "")
+    stored_url = (f"https://{domain}" if domain and not domain.startswith("http") else domain)
     if stored_desc and len(stored_desc) >= 20:
-        _cache_set(comp_num, stored_desc, dh.get("domain", ""))
-        return stored_desc
+        _cache_set(comp_num, stored_desc, stored_url)
+        return (stored_desc, stored_url)
 
     # ── 3. Known website URL ──────────────────────────────────────────────────
     known_website = (
         enriched.get("contacts", {}).get("website")
         or enriched.get("website")
-        or (dh.get("domain") and f"https://{dh['domain']}")
+        or stored_url
         or ""
     )
     if known_website:
@@ -266,33 +269,40 @@ def enrich_competitor_services(
         desc = _fetch_description_from_url(known_website)
         if desc and len(desc) >= 20:
             _cache_set(comp_num, desc, known_website)
-            return desc
+            return (desc, known_website)
 
     # ── 4. Bing: registration number + company name ───────────────────────────
     # UK companies must print their reg number on their website (Companies Act 2006).
-    # Searching for the number directly finds their official site reliably.
+    # Searching for the number finds their official site reliably.
     if comp_num and comp_name:
         query = f'"{comp_num}" "{comp_name}"'
         time.sleep(delay)
-        url = _bing_first_url(query)
-        if url:
+        found_url = _bing_first_url(query)
+        if found_url:
             time.sleep(delay * 0.5)
-            desc = _fetch_description_from_url(url)
+            desc = _fetch_description_from_url(found_url)
             if desc and len(desc) >= 20:
-                _cache_set(comp_num, desc, url)
-                return desc
+                _cache_set(comp_num, desc, found_url)
+                return (desc, found_url)
+            # URL found but description empty — still save the URL
+            if found_url:
+                _cache_set(comp_num, "", found_url)
+                return ("", found_url)
 
     # ── 5. Bing: name + postcode prefix + "services" ─────────────────────────
     if comp_name:
         query2 = f'"{comp_name}" {pc_prefix} services site:.co.uk OR site:.com'
         time.sleep(delay)
-        url2 = _bing_first_url(query2)
-        if url2:
+        found_url2 = _bing_first_url(query2)
+        if found_url2:
             time.sleep(delay * 0.5)
-            desc = _fetch_description_from_url(url2)
+            desc = _fetch_description_from_url(found_url2)
             if desc and len(desc) >= 20:
-                _cache_set(comp_num, desc, url2)
-                return desc
+                _cache_set(comp_num, desc, found_url2)
+                return (desc, found_url2)
+            if found_url2:
+                _cache_set(comp_num, "", found_url2)
+                return ("", found_url2)
 
     # ── 6. URL guessing from company name ─────────────────────────────────────
     for candidate_url in _candidate_urls(comp_name):
@@ -300,11 +310,11 @@ def enrich_competitor_services(
         desc = _fetch_description_from_url(candidate_url)
         if desc and len(desc) >= 20:
             _cache_set(comp_num, desc, candidate_url)
-            return desc
+            return (desc, candidate_url)
 
     # ── 7. Nothing found ──────────────────────────────────────────────────────
     _cache_set(comp_num, "", "")
-    return ""
+    return ("", "")
 
 
 # ── Batch run ─────────────────────────────────────────────────────────────────
@@ -346,22 +356,26 @@ def enrich_all_competitor_services(
             if comp_num:
                 cached = _cache_get(comp_num)
                 if cached is not None:
-                    comp["services_description"] = cached
-                    if cached:
+                    desc, url = cached
+                    comp["services_description"] = desc
+                    comp["website_url"] = url
+                    if desc:
                         enriched_count += 1
                     continue
 
             if fetch_attempts >= max_per_run:
                 comp["services_description"] = ""
+                comp["website_url"] = ""
                 continue
 
             fetch_attempts += 1
-            desc = enrich_competitor_services(
+            desc, url = enrich_competitor_services(
                 competitor     = comp,
                 enriched_index = enriched_index,
                 delay          = 0.4,
             )
             comp["services_description"] = desc
+            comp["website_url"] = url
             if desc:
                 enriched_count += 1
 
