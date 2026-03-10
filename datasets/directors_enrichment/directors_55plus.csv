@@ -1,0 +1,555 @@
+sector,company_number,company_name,town,postcode,revenue,net_assets,acq_score,acq_tier,sell_band,family_co,name,role,age,dob_year,dob_month,tenure_yrs,nationality
+Lift Maintenance,04934390,NNT LIFT COMPANY (FUNDCO 1) LIMITED,,LS1 5AB,£6.7m,£1.0m,71,Tier 2 — Strong Acquisiti,,No,"FITCH, Jane Angela, Dr",director,57,1968,5,2.3,British
+Lift Maintenance,04934390,NNT LIFT COMPANY (FUNDCO 1) LIMITED,,LS1 5AB,£6.7m,£1.0m,71,Tier 2 — Strong Acquisiti,,No,"JOHNSTONE, Peter Kenneth",director,60,1965,9,2.2,British
+Lift Maintenance,04934390,NNT LIFT COMPANY (FUNDCO 1) LIMITED,,LS1 5AB,£6.7m,£1.0m,71,Tier 2 — Strong Acquisiti,,No,"NICHOLSON, Mark",director,56,1969,12,0.6,British
+Lift Maintenance,02388497,TEMPLE LIFTS LIMITED,,SE1 2LR,£16.3m,£589k,67,Tier 2 — Strong Acquisiti,,No,"DUBERLEY, Keith",director,60,1965,9,2.7,British
+Lift Maintenance,00727417,4B ELEVATOR COMPONENTS LIMITED,,LS10 1JZ,£23.6m,£11.7m,66,Tier 2 — Strong Acquisiti,,Yes,"BRAIME, Oliver Nicholas Anderson",director,76,1950,1,,British
+Lift Maintenance,00727417,4B ELEVATOR COMPONENTS LIMITED,,LS10 1JZ,£23.6m,£11.7m,66,Tier 2 — Strong Acquisiti,,Yes,"CARTWRIGHT, Cielo Bicol",director,63,1963,1,7.8,British
+Lift Maintenance,00727417,4B ELEVATOR COMPONENTS LIMITED,,LS10 1JZ,£23.6m,£11.7m,66,Tier 2 — Strong Acquisiti,,Yes,"WHEAT, Jonathan Norman",director,61,1965,2,18.2,British
+Lift Maintenance,07056310,CREST LIFTS HOLDINGS LIMITED,,GU14 6UU,£1.0m,£5k,66,Tier 2 — Strong Acquisiti,,Yes,"DUBERLEY, Keith",director,60,1965,9,16.4,British
+Lift Maintenance,03213600,PRECISION LIFT SERVICES LIMITED,,SS14 3BZ,£11.7m,—,65,Tier 2 — Strong Acquisiti,,Yes,"CHENG, Wai Keung Peter",director,62,1963,9,2.5,British
+Lift Maintenance,03213600,PRECISION LIFT SERVICES LIMITED,,SS14 3BZ,£11.7m,—,65,Tier 2 — Strong Acquisiti,,Yes,"POON, Lok To Otto",director,85,1940,9,2.5,Chinese
+Lift Maintenance,05286889,SHERIDAN LIFTS LIMITED,,M40 8FY,£17.5m,£356k,64,Tier 3 — Quality Bolt-on,,Yes,"SHERIDAN, Anthony",director,61,1964,5,18.5,British
+Lift Maintenance,11063099,NORTHERN ESCALATOR INSTALLATIONS HOLDINGS LIMITED,,BD21 4AF,£9.4m,£-417724,64,Tier 3 — Quality Bolt-on,,No,"JOHNSON, Kevin Michael",director,59,1966,12,8.3,British
+Lift Maintenance,04183338,LIFT & ESCALATOR TECHNICAL SERVICES LIMITED,,KT16 0DN,—,—,63,Tier 3 — Quality Bolt-on,,No,"BAKER, Paula Jane",director,60,1966,2,25.0,British
+Lift Maintenance,04183338,LIFT & ESCALATOR TECHNICAL SERVICES LIMITED,,KT16 0DN,—,—,63,Tier 3 — Quality Bolt-on,,No,"BARNES, Philip Peter",director,73,1952,9,24.5,British
+Lift Maintenance,07652736,NNT LIFT COMPANY (FUNDCO 2) LIMITED,,LS1 5AB,£1.1m,£-1410506,63,Tier 3 — Quality Bolt-on,,No,"FITCH, Jane Angela, Dr",director,57,1968,5,2.3,British
+Lift Maintenance,07652736,NNT LIFT COMPANY (FUNDCO 2) LIMITED,,LS1 5AB,£1.1m,£-1410506,63,Tier 3 — Quality Bolt-on,,No,"JOHNSTONE, Peter Kenneth",director,60,1965,9,2.2,British
+Lift Maintenance,07652736,NNT LIFT COMPANY (FUNDCO 2) LIMITED,,LS1 5AB,£1.1m,£-1410506,63,Tier 3 — Quality Bolt-on,,No,"NICHOLSON, Mark",director,56,1969,12,0.6,British
+Lift Maintenance,15145702,PROVIDENT LIFTS LTD,,DY8 1LU,£6.0m,£237k,63,Tier 3 — Quality Bolt-on,,Yes,"DUBERLEY, Keith",director,60,1965,9,2.5,British
+Lift Maintenance,01509899,RUBAX LIFTS LIMITED,,WA2 0XP,£10.1m,£11.7m,62,Tier 3 — Quality Bolt-on,,No,"CROSS, Stuart Royce",director,56,1970,2,0.9,Australian
+Lift Maintenance,03785224,ANSA ELEVATORS LIMITED,,OL9 9XA,£16.0m,£3.2m,62,Tier 3 — Quality Bolt-on,,No,"DUNNING, Mark Steven",director,59,1966,5,18.6,British
+Lift Maintenance,03785224,ANSA ELEVATORS LIMITED,,OL9 9XA,£16.0m,£3.2m,62,Tier 3 — Quality Bolt-on,,No,"KENNEDY, Gary",director,56,1969,6,21.2,British
+Lift Maintenance,03878524,NORTHERN ESCALATOR INSTALLATIONS LIMITED,,BD21 4AF,—,—,62,Tier 3 — Quality Bolt-on,,No,"JOHNSON, Kevin Michael",director,59,1966,12,26.0,British
+Lift Maintenance,04391901,ACADEMY LIFTS LIMITED,,WA5 1QQ,—,—,62,Tier 3 — Quality Bolt-on,,No,"JOHNSON, Philip Mark",director,63,1963,1,24.0,British
+Lift Maintenance,05683362,ESSEX LIFT SERVICES LTD,,E18 1AN,—,—,62,Tier 3 — Quality Bolt-on,,No,"BEADLE, David Nigel",director,62,1964,1,11.5,British
+Lift Maintenance,05683362,ESSEX LIFT SERVICES LTD,,E18 1AN,—,—,62,Tier 3 — Quality Bolt-on,,No,"SEACOLE, Dawn Lesley",director,65,1960,10,17.2,British
+Lift Maintenance,01129631,APEX LIFT & ESCALATOR ENGINEERS LIMITED,,DA6 7BH,£24.9m,£7.7m,61,Tier 3 — Quality Bolt-on,,No,"BRANDHAMMAR, Lars Mathias",director,56,1969,11,3.9,Swedish
+Lift Maintenance,03563387,ARROW LIFT ENGINEERS LIMITED,,SL5 9FE,—,—,61,Tier 3 — Quality Bolt-on,,Yes,"PHILLIPS, Iain James",director,60,1965,11,27.8,British
+Lift Maintenance,04127274,PJM LIFT SERVICES LIMITED,,RM1 1DA,—,£3k,61,Tier 3 — Quality Bolt-on,,Yes,"MCLOUGHLIN, Peter Joseph",director,57,1968,10,25.2,British
+Lift Maintenance,04127274,PJM LIFT SERVICES LIMITED,,RM1 1DA,—,£3k,61,Tier 3 — Quality Bolt-on,,Yes,"MCLOUGHLIN, Tracy Anne",director,59,1966,6,25.2,British
+Lift Maintenance,05688067,CHELMER LIFT SERVICES LTD,,CM9 5AL,—,£222,61,Tier 3 — Quality Bolt-on,,Yes,"CONNOLLY, Mark, Mr.",director,59,1966,4,20.2,British
+Lift Maintenance,05688067,CHELMER LIFT SERVICES LTD,,CM9 5AL,—,£222,61,Tier 3 — Quality Bolt-on,,Yes,"CONNOLLY, Tania, Mrs.",director,58,1967,12,20.2,British
+Lift Maintenance,06001357,NORTHERN ELEVATOR LIMITED,,NE3 2EN,—,—,61,Tier 3 — Quality Bolt-on,,No,"BAUL, Michael",director,57,1968,5,3.6,British
+Lift Maintenance,02262324,SESSIONS LIFTS LIMITED,,HA4 7PG,—,—,60,Tier 3 — Quality Bolt-on,,Yes,"SESSIONS, Christopher John",director,65,1961,3,,British
+Lift Maintenance,02262324,SESSIONS LIFTS LIMITED,,HA4 7PG,—,—,60,Tier 3 — Quality Bolt-on,,Yes,"SESSIONS, Stephen Leonard",director,69,1956,5,,British
+Lift Maintenance,02331780,JACKSON LIFT INSTALLATIONS LIMITED,,SE7 7RX,£16.3m,£2.1m,60,Tier 3 — Quality Bolt-on,,Yes,"BUTTERFIELD, Anthony",director,62,1963,12,5.2,British
+Lift Maintenance,02331780,JACKSON LIFT INSTALLATIONS LIMITED,,SE7 7RX,£16.3m,£2.1m,60,Tier 3 — Quality Bolt-on,,Yes,"JACKSON, George Anthony",director,79,1946,4,,British
+Lift Maintenance,02331780,JACKSON LIFT INSTALLATIONS LIMITED,,SE7 7RX,£16.3m,£2.1m,60,Tier 3 — Quality Bolt-on,,Yes,"JACKSON, Mary",director,79,1946,7,,British
+Lift Maintenance,02510691,COTSWOLD LIFTS LIMITED,,KT2 6PT,—,£847k,60,Tier 3 — Quality Bolt-on,,Yes,"CROSS, Anthony John",director,80,1945,8,13.0,British
+Lift Maintenance,04405789,MAJOR LIFT INSTALLATIONS LIMITED,,S12 3XW,—,—,60,Tier 3 — Quality Bolt-on,,No,"YATES, Mitchel",director,64,1962,3,24.0,British
+Lift Maintenance,04570983,ALLIED LIFT SERVICES DIVISION (UK) LTD,,WA11 8PU,—,—,60,Tier 3 — Quality Bolt-on,,No,"NEWMAN, Ian",director,55,1970,8,3.4,English
+Lift Maintenance,05044135,HYDRAULIC ELEVATOR SERVICES LIMITED,,TN15 6EL,—,—,60,Tier 3 — Quality Bolt-on,,No,"GREENER, Stuart Richard",director,59,1967,3,22.1,British
+Lift Maintenance,05044135,HYDRAULIC ELEVATOR SERVICES LIMITED,,TN15 6EL,—,—,60,Tier 3 — Quality Bolt-on,,No,"MILLS, Peter",director,62,1963,8,22.1,British
+Lift Maintenance,05544427,SKYLINK LIFTS LTD,,WF14 8NA,—,—,60,Tier 3 — Quality Bolt-on,,No,"WALKER, Paul Anthony",director,60,1965,11,20.4,British
+Lift Maintenance,11692053,TAURUS CRANES & HOISTS LTD,,WA10 3BZ,—,—,60,Tier 3 — Quality Bolt-on,,Yes,"PURVES, Anthony Edward",director,75,1951,3,7.3,British
+Lift Maintenance,02487116,CLASSIC LIFTS LTD,,S60 1DX,£41.0m,£1.2m,59,Tier 3 — Quality Bolt-on,,No,"HARVEY, Lindsay Eric",director,72,1953,6,2.2,British
+Lift Maintenance,02487116,CLASSIC LIFTS LTD,,S60 1DX,£41.0m,£1.2m,59,Tier 3 — Quality Bolt-on,,No,"SHEEHAN, Kerry",director,57,1969,2,0.5,"British,Irish"
+Lift Maintenance,02746163,P.I.P. LIFT SERVICE LIMITED,,RM3 8SB,—,—,59,Tier 3 — Quality Bolt-on,,No,"MASTERSON, Paul",director,69,1957,2,33.5,British
+Lift Maintenance,03493530,ASCENDIT LIFTS LIMITED,,RH2 7ED,—,—,59,Tier 3 — Quality Bolt-on,,Yes,"BARRATT, Andrew John",director,64,1961,4,28.2,British
+Lift Maintenance,03493530,ASCENDIT LIFTS LIMITED,,RH2 7ED,—,—,59,Tier 3 — Quality Bolt-on,,Yes,"BARRATT, Linda Jane",director,63,1963,2,28.2,British
+Lift Maintenance,03570472,DAINTON LIFT SERVICES LIMITED,,BR6 0JE,—,£3.2m,59,Tier 3 — Quality Bolt-on,,No,"CASEY, Damien",director,63,1962,5,18.8,British
+Lift Maintenance,03570472,DAINTON LIFT SERVICES LIMITED,,BR6 0JE,—,£3.2m,59,Tier 3 — Quality Bolt-on,,No,"LEARMOUTH, David",director,64,1962,2,18.8,British
+Lift Maintenance,04514126,COUNTY LIFTS LIMITED,,NG4 4PN,—,—,59,Tier 3 — Quality Bolt-on,,Yes,"TAYLOR, Collette Mary",director,68,1957,4,23.6,British
+Lift Maintenance,04514126,COUNTY LIFTS LIMITED,,NG4 4PN,—,—,59,Tier 3 — Quality Bolt-on,,Yes,"TAYLOR, Kelvin Edward",director,70,1955,4,23.6,British
+Lift Maintenance,05465588,M K M ELEVATORS LIMITED,,EC1R 0AT,—,£164k,59,Tier 3 — Quality Bolt-on,,No,"CLIFTON, Martin Edward",director,55,1970,7,13.8,British
+Lift Maintenance,05465588,M K M ELEVATORS LIMITED,,EC1R 0AT,—,£164k,59,Tier 3 — Quality Bolt-on,,No,"LIMA, John Leonard",director,59,1966,8,4.4,British
+Lift Maintenance,05652986,UBS HOISTS AND ACCESS LIMITED,,CM5 9PJ,—,—,59,Tier 3 — Quality Bolt-on,,No,"PARKER, Brian",director,55,1971,3,3.4,British
+Lift Maintenance,05652986,UBS HOISTS AND ACCESS LIMITED,,CM5 9PJ,—,—,59,Tier 3 — Quality Bolt-on,,No,"VONCK, Willem Frederik",director,70,1956,1,20.2,Dutch
+Lift Maintenance,06585325,RELIABLE ELEVATOR SERVICES LIMITED,,DA1 4BZ,—,—,59,Tier 3 — Quality Bolt-on,,No,"MARTIN, Dean",director,56,1969,6,17.8,British
+Lift Maintenance,06715811,TRIPLE S LIFT SERVICES LIMITED,,TN23 8AJ,—,—,59,Tier 3 — Quality Bolt-on,,Yes,"O'CONNELL, Stephen Anthony",director,65,1960,5,17.2,British
+Lift Maintenance,06715811,TRIPLE S LIFT SERVICES LIMITED,,TN23 8AJ,—,—,59,Tier 3 — Quality Bolt-on,,Yes,"O'CONNELL, Wendy",director,64,1961,8,13.5,British
+Lift Maintenance,08518654,CHAPAL LIFT SERVICES LIMITED,,BR6 0JE,—,—,59,Tier 3 — Quality Bolt-on,,No,"CHANDLER, Daren William",director,63,1963,1,12.8,English
+Lift Maintenance,09542602,JCW LIFTS LTD,,SS14 3BZ,—,—,59,Tier 3 — Quality Bolt-on,,Yes,"CHENG, Wai Keung Peter",director,62,1963,9,2.7,British
+Lift Maintenance,09542602,JCW LIFTS LTD,,SS14 3BZ,—,—,59,Tier 3 — Quality Bolt-on,,Yes,"POON, Lok To Otto",director,85,1940,9,2.7,Chinese
+Lift Maintenance,02220215,CREST LIFTS LIMITED,,GU14 6UU,—,—,58,Tier 3 — Quality Bolt-on,,Yes,"DUBERLEY, Keith",director,60,1965,9,16.3,British
+Lift Maintenance,02220215,CREST LIFTS LIMITED,,GU14 6UU,—,—,58,Tier 3 — Quality Bolt-on,,Yes,"GARVEY, John Robert",director,61,1965,3,16.2,British
+Lift Maintenance,SC109290,G.E.M. LIFT SERVICES LIMITED,,G33 6LT,—,—,58,Tier 3 — Quality Bolt-on,,Yes,"WALLACE, Alice",director,73,1952,9,9.2,Scottish
+Lift Maintenance,SC109290,G.E.M. LIFT SERVICES LIMITED,,G33 6LT,—,—,58,Tier 3 — Quality Bolt-on,,Yes,"WALLACE, Gerald Andrew",director,75,1950,11,,British
+Lift Maintenance,02223633,ADEPT LIFT TECHNICAL SERVICES LIMITED,,DA1 1JG,—,—,58,Tier 3 — Quality Bolt-on,,No,"BUCKINGHAM, Ishmael Stephen",director,72,1953,8,,British
+Lift Maintenance,03047321,GLADIATOR LIFT SYSTEMS LTD,,CH4 0DF,—,—,58,Tier 3 — Quality Bolt-on,,No,"KOLLMORGEN, Björn Karl",director,59,1966,8,7.9,German
+Lift Maintenance,03232135,SWALLOW LIFTS INSTALLATIONS LIMITED,,DA14 5DA,—,—,58,Tier 3 — Quality Bolt-on,,No,"ELLIOTT, Sally Jane",director,74,1951,4,0.6,British
+Lift Maintenance,03232135,SWALLOW LIFTS INSTALLATIONS LIMITED,,DA14 5DA,—,—,58,Tier 3 — Quality Bolt-on,,No,"PONS, Michael Nicholas",director,67,1958,4,27.5,British
+Lift Maintenance,03537368,SWALLOW LIFTS LIMITED,,DA14 5DA,—,—,58,Tier 3 — Quality Bolt-on,,No,"ELLIOTT, Sally Jane",director,74,1951,4,0.6,British
+Lift Maintenance,03537368,SWALLOW LIFTS LIMITED,,DA14 5DA,—,—,58,Tier 3 — Quality Bolt-on,,No,"PONS, Michael Nicholas",director,67,1958,4,27.6,British
+Lift Maintenance,03846367,J H ELEVATORS LIMITED,,DA1 2AG,—,£243k,58,Tier 3 — Quality Bolt-on,,Yes,"HARVEY, Jason Henry",director,58,1967,12,26.5,British
+Lift Maintenance,03846367,J H ELEVATORS LIMITED,,DA1 2AG,—,£243k,58,Tier 3 — Quality Bolt-on,,Yes,"HARVEY, Marion Evelyn",director,78,1947,8,14.9,British
+Lift Maintenance,04001679,ELAN LIFTS LIMITED,,DA1 4BF,—,£1.2m,58,Tier 3 — Quality Bolt-on,,No,"FERNANDEZ, Michael Luis",director,65,1960,5,25.8,British
+Lift Maintenance,04001679,ELAN LIFTS LIMITED,,DA1 4BF,—,£1.2m,58,Tier 3 — Quality Bolt-on,,No,"FILLERY, Anthony Robert",director,67,1958,7,24.4,British
+Lift Maintenance,04330839,PSG LIFT SERVICES LIMITED,,RM15 6RX,—,£170k,58,Tier 3 — Quality Bolt-on,,No,"HEGARTY, Peter",director,62,1964,1,20.9,British
+Lift Maintenance,04416778,CHERTSEY ELEVATORS LIMITED,,KT1 4AS,—,—,58,Tier 3 — Quality Bolt-on,,Yes,"SELBY, Marie",director,56,1969,9,23.9,British
+Lift Maintenance,04416778,CHERTSEY ELEVATORS LIMITED,,KT1 4AS,—,—,58,Tier 3 — Quality Bolt-on,,Yes,"SELBY, Peter",director,60,1965,12,23.9,British
+Lift Maintenance,04934392,NNT LIFT COMPANY LIMITED,,LS1 5AB,£541k,£218k,58,Tier 3 — Quality Bolt-on,,No,"FITCH, Jane Angela, Dr",director,57,1968,5,2.3,British
+Lift Maintenance,04934392,NNT LIFT COMPANY LIMITED,,LS1 5AB,£541k,£218k,58,Tier 3 — Quality Bolt-on,,No,"HOLT, Robert Duncan",director,59,1966,5,5.1,British
+Lift Maintenance,04934392,NNT LIFT COMPANY LIMITED,,LS1 5AB,£541k,£218k,58,Tier 3 — Quality Bolt-on,,No,"HYDE, Kirstine Jane",director,56,1969,6,1.3,British
+Lift Maintenance,04934392,NNT LIFT COMPANY LIMITED,,LS1 5AB,£541k,£218k,58,Tier 3 — Quality Bolt-on,,No,"JOHNSTONE, Peter Kenneth",director,60,1965,9,2.2,British
+Lift Maintenance,04934392,NNT LIFT COMPANY LIMITED,,LS1 5AB,£541k,£218k,58,Tier 3 — Quality Bolt-on,,No,"NICHOLSON, Mark",director,56,1969,12,0.6,British
+Lift Maintenance,04934604,BARKING & HAVERING LIFT COMPANY (NO.1) LIMITED,,B16 8QG,£5k,£12k,58,Tier 3 — Quality Bolt-on,,No,"HARPER, Siobhan Mary",director,57,1968,8,0.8,Irish
+Lift Maintenance,04938214,ELAN LIFT SERVICES LIMITED,,DA1 4BF,—,£700k,58,Tier 3 — Quality Bolt-on,,No,"FERNANDEZ, Michael Luis",director,65,1960,5,22.4,British
+Lift Maintenance,04938214,ELAN LIFT SERVICES LIMITED,,DA1 4BF,—,£700k,58,Tier 3 — Quality Bolt-on,,No,"FILLERY, Anthony Robert",director,67,1958,7,22.4,British
+Lift Maintenance,05040197,SLS LIFTS LTD,,RH1 5DZ,—,£-226126,58,Tier 3 — Quality Bolt-on,,No,"MAGEE, Matthew Conleth",director,60,1965,10,5.5,Irish
+Lift Maintenance,05139186,PRINCIPLE LIFTS LIMITED,,RM16 2RL,—,£206k,58,Tier 3 — Quality Bolt-on,,Yes,"SPRING, Kevin",director,69,1957,2,12.9,British
+Lift Maintenance,05139186,PRINCIPLE LIFTS LIMITED,,RM16 2RL,—,£206k,58,Tier 3 — Quality Bolt-on,,Yes,"SPRING, Lesley",director,69,1956,10,17.9,British
+Lift Maintenance,05247563,WHITE LIFT SERVICES LIMITED,,LS28 9EN,—,—,58,Tier 3 — Quality Bolt-on,,Yes,"WHITE, Carole",director,66,1959,8,21.4,British
+Lift Maintenance,05247563,WHITE LIFT SERVICES LIMITED,,LS28 9EN,—,—,58,Tier 3 — Quality Bolt-on,,Yes,"WHITE, Philip",director,66,1959,7,21.4,British
+Lift Maintenance,SC275853,M & M LIFT SERVICES LTD.,,G32 8HE,—,—,58,Tier 3 — Quality Bolt-on,,No,"MELLY, Michael David",director,55,1970,11,21.3,British
+Lift Maintenance,05308537,OPAL ELEVATORS LIMITED,,BD21 4LN,—,—,58,Tier 3 — Quality Bolt-on,,No,"GAUNT, Alan James",director,56,1969,8,21.2,British
+Lift Maintenance,05445709,CITY LIFT SERVICES (NORTH WEST) LIMITED,,WA7 1PU,—,—,58,Tier 3 — Quality Bolt-on,,No,"OMAHONEY, John",director,60,1965,7,20.8,British
+Lift Maintenance,05445709,CITY LIFT SERVICES (NORTH WEST) LIMITED,,WA7 1PU,—,—,58,Tier 3 — Quality Bolt-on,,No,"ROBERTS, Martyn",director,58,1968,3,5.6,English
+Lift Maintenance,05473366,MARPLE ELEVATORS LIMITED,,DA1 3QD,—,—,58,Tier 3 — Quality Bolt-on,,No,"LOVE, Paul",director,59,1966,5,20.8,British
+Lift Maintenance,05588409,SELECT LIFT SERVICES LIMITED,,RM11 1JS,—,£33k,58,Tier 3 — Quality Bolt-on,,No,"HORTON, Mark John",director,56,1970,3,20.4,British
+Lift Maintenance,05588409,SELECT LIFT SERVICES LIMITED,,RM11 1JS,—,£33k,58,Tier 3 — Quality Bolt-on,,No,"NUGENT, Michelle Donna",director,55,1970,7,18.0,British
+Lift Maintenance,07141108,VIP LIFT & ESCALATOR SERVICES LTD,,SS17 0JU,—,£-35588,58,Tier 3 — Quality Bolt-on,,No,"PERCIVAL, Ian Robert",director,61,1964,7,16.2,British
+Lift Maintenance,07193068,AMBASSADOR LIFT COMPANY LIMITED,,WD3 7NL,—,—,58,Tier 3 — Quality Bolt-on,,No,"BARDAWIL, Michael Frank",director,67,1958,5,16.0,British
+Lift Maintenance,08312300,UK ELEVATOR SERVICES (MIDLANDS) LIMITED,,NG4 3AA,—,£125k,58,Tier 3 — Quality Bolt-on,,No,"LUDLOW, John",director,67,1958,10,7.9,British
+Lift Maintenance,08464392,KEVIN ELLIOTT LIFT SERVICES LIMITED,,ME7 5UJ,—,£22k,58,Tier 3 — Quality Bolt-on,,Yes,"ELLIOTT, Kevin",director,62,1964,1,13.0,British
+Lift Maintenance,08484068,LW LIFT ENGINEERING LIMITED,,DA14 4DT,—,£30k,58,Tier 3 — Quality Bolt-on,,No,"WHYBROW, Leigh",director,67,1958,6,12.9,British
+Lift Maintenance,08806916,JB LIFT SERVICES LIMITED,,BR6 6LA,—,—,58,Tier 3 — Quality Bolt-on,,No,"BRETT, Derren James",director,55,1970,11,12.2,English
+Lift Maintenance,09223670,HALLIGAN LIFT SERVICES LIMITED,,BD21 4DT,—,—,58,Tier 3 — Quality Bolt-on,,Yes,"HALLIGAN, Timothy John",director,58,1967,7,11.5,British
+Lift Maintenance,09689818,PHD HOISTS & MASTS LIMITED,,UB9 4DN,—,—,58,Tier 3 — Quality Bolt-on,,Yes,"DWYER, Jane Teresa",director,65,1961,3,10.7,British
+Lift Maintenance,09715090,WEALD LIFT SERVICES LIMITED,,ME16 0JD,—,£19k,58,Tier 3 — Quality Bolt-on,,Yes,"GILBERTSON, Gary",director,59,1967,3,10.6,British
+Lift Maintenance,09715090,WEALD LIFT SERVICES LIMITED,,ME16 0JD,—,£19k,58,Tier 3 — Quality Bolt-on,,Yes,"GILBERTSON, Julie",director,60,1965,12,10.6,British
+Lift Maintenance,09875737,NOTUS HEAVY LIFT SOLUTIONS LIMITED,,WA3 6BA,—,—,58,Tier 3 — Quality Bolt-on,,No,"CRANMER, Andrew Graham",director,66,1959,11,0.4,British
+Lift Maintenance,09875737,NOTUS HEAVY LIFT SOLUTIONS LIMITED,,WA3 6BA,—,—,58,Tier 3 — Quality Bolt-on,,No,"KAY, Stewart Thomas",director,63,1962,5,0.3,British
+Lift Maintenance,09886232,CAPITAL LIFTS LTD,,CR3 5UA,—,—,58,Tier 3 — Quality Bolt-on,,No,"BURTON, Paul Gordon",director,63,1963,3,4.8,British
+Lift Maintenance,09886232,CAPITAL LIFTS LTD,,CR3 5UA,—,—,58,Tier 3 — Quality Bolt-on,,No,"RUTHERFORD, Ian Gordon",director,61,1965,1,4.8,British
+Lift Maintenance,09986263,INNOVATE LIFTS LTD,,TN4 9PH,—,—,58,Tier 3 — Quality Bolt-on,,No,"MARRINER, Stephen",director,60,1965,12,10.1,British
+Lift Maintenance,10071027,GEORGE LEE ELEVATOR SERVICES LIMITED,,ME5 9FD,—,—,58,Tier 3 — Quality Bolt-on,,No,"LEE, George John",director,65,1960,10,10.0,British
+Lift Maintenance,12437636,GRAVITAS ELEVATOR SERVICES LTD,,BR1 5DS,—,—,58,Tier 3 — Quality Bolt-on,,No,"SUCHECKI, Maciej Ryszard",director,55,1971,2,6.1,Polish
+Lift Maintenance,15469791,ALL 4 LIFTS LTD,,LS28 6ER,—,£1k,58,Tier 3 — Quality Bolt-on,,No,"HOLLINGSWORTH, Martin",director,60,1965,6,2.1,British
+Lift Maintenance,00826815,LIFTS(BIRMINGHAM)LIMITED,,B33 0HU,£1,£20k,57,Tier 3 — Quality Bolt-on,,No,"COOPER, Mick Roy",director,88,1937,8,,British
+Lift Maintenance,01090333,THE CHILTERN LIFT COMPANY LIMITED,,SL8 5DG,—,—,57,Tier 3 — Quality Bolt-on,,Yes,"FESTORAZZI, Ronald",director,88,1937,10,,British
+Lift Maintenance,01090333,THE CHILTERN LIFT COMPANY LIMITED,,SL8 5DG,—,—,57,Tier 3 — Quality Bolt-on,,Yes,"FESTORAZZI, Stephen Robert",director,60,1965,7,19.7,British
+Lift Maintenance,03306900,SUMMIT ELEVATORS LIMITED,,CR0 9UG,—,—,57,Tier 3 — Quality Bolt-on,,No,"COELHO, Carl John",director,59,1966,9,24.0,British
+Lift Maintenance,03306900,SUMMIT ELEVATORS LIMITED,,CR0 9UG,—,—,57,Tier 3 — Quality Bolt-on,,No,"DOSWELL, Roger John",director,58,1967,7,29.1,British
+Lift Maintenance,03398412,TITAN ELEVATORS LIMITED,,DA6 7BH,—,—,57,Tier 3 — Quality Bolt-on,,No,"BRANDHAMMAR, Lars Mathias",director,56,1969,11,5.2,Swedish
+Lift Maintenance,03537103,AUSTIN LIFTS LIMITED,,NE2 2NJ,—,—,57,Tier 3 — Quality Bolt-on,,No,"NAVIN, Malcolm",director,74,1952,3,19.3,British
+Lift Maintenance,03719819,GRIFFIN ELEVATORS LIMITED,,RM7 0AU,—,£2.8m,57,Tier 3 — Quality Bolt-on,,Yes,"GRIFFIN, Ian",director,70,1955,5,27.1,British
+Lift Maintenance,04023440,D & S LIFT SERVICES LTD,,SS17 0EH,—,£1.2m,57,Tier 3 — Quality Bolt-on,,No,"DRISCOLL, Darren Ashley",director,60,1965,11,25.8,British
+Lift Maintenance,04560402,TOTAL LIFTS LTD,,BH14 8UF,—,—,57,Tier 3 — Quality Bolt-on,,No,"KEIR, Jamie Roscoe",director,64,1962,1,23.4,British
+Lift Maintenance,04603684,R.J. LIFTS & ESCALATORS LTD,,CR0 7NG,—,—,57,Tier 3 — Quality Bolt-on,,Yes,"JARMAN, Ellen Jeanette",director,70,1955,9,23.2,British
+Lift Maintenance,04603684,R.J. LIFTS & ESCALATORS LTD,,CR0 7NG,—,—,57,Tier 3 — Quality Bolt-on,,Yes,"JARMAN, Roger Edward",director,72,1953,5,23.2,British
+Lift Maintenance,04754384,ENGINEERING & LIFT SERVICES LIMITED,,MK44 2JE,—,—,57,Tier 3 — Quality Bolt-on,,Yes,"PRIESTLEY, Robert John",director,66,1959,9,22.8,British
+Lift Maintenance,04754384,ENGINEERING & LIFT SERVICES LIMITED,,MK44 2JE,—,—,57,Tier 3 — Quality Bolt-on,,Yes,"PRIESTLEY, Sandra Elizabeth",director,63,1962,4,22.8,British
+Lift Maintenance,04891803,LEE HUDSON LIFT SERVICES LTD,,BN25 2DT,—,—,57,Tier 3 — Quality Bolt-on,,Yes,"HUDSON, Lee",director,56,1969,4,22.5,British
+Lift Maintenance,04967758,ASCENDANT LIFTS LIMITED,,NE11 9NE,—,—,57,Tier 3 — Quality Bolt-on,,No,"LISLE, Suzanne",director,55,1970,11,3.5,British
+Lift Maintenance,05309173,CIBES LIFT UK LIMITED,,LE12 7XF,£32.3m,£1.4m,57,Tier 3 — Quality Bolt-on,,No,"BRANDHAMMAR, Lars Mathias",director,56,1969,11,12.0,Swedish
+Lift Maintenance,05678236,LEVEL ACCESS LIFTS LTD,,SO51 0NB,—,—,57,Tier 3 — Quality Bolt-on,,No,"DADE, Nicholas James",director,59,1967,3,20.2,British
+Lift Maintenance,06203141,PREMIER LIFT SERVICES (YORKSHIRE) LIMITED,,BD22 8RD,—,—,57,Tier 3 — Quality Bolt-on,,No,"MCGEE, Ian",director,58,1968,2,18.6,British
+Lift Maintenance,06575578,MILLBANK LIFTS LIMITED,,BR6 7EQ,—,—,57,Tier 3 — Quality Bolt-on,,No,"WOODS, Joseph Samuel",director,59,1966,7,17.9,British
+Lift Maintenance,06975626,ANGLOSAX LIFTS LTD,,LE18 4UA,—,—,57,Tier 3 — Quality Bolt-on,,Yes,"SIMPSON, Mark Richard",director,56,1969,8,6.9,British
+Lift Maintenance,07542408,ASB LIFTS LTD,,RM11 2NS,—,—,57,Tier 3 — Quality Bolt-on,,No,"BENZIES, Alastair Stewart",director,66,1959,4,15.1,British
+Lift Maintenance,08966142,RISE LIFT SERVICES LTD,,SO14 6RG,—,—,57,Tier 3 — Quality Bolt-on,,No,"LAWMON, Keith",director,59,1966,10,12.0,British
+Lift Maintenance,09276282,ABI LIFTS LIMITED,,RM12 4HA,—,£19k,57,Tier 3 — Quality Bolt-on,,No,"HYUSEIN, Bektash",director,68,1958,2,11.4,Bulgarian
+Lift Maintenance,10420323,MLD LIFT SERVICES LTD,,DA15 8SS,—,£59k,57,Tier 3 — Quality Bolt-on,,No,"DAVIS, Mark Lionel",director,56,1969,4,9.4,British
+Lift Maintenance,11239961,SUMMIT ELEVATORS REPAIRS LTD,,CR0 9UG,—,£368k,57,Tier 3 — Quality Bolt-on,,No,"COELHO, Carl John",director,59,1966,9,8.0,British
+Lift Maintenance,11239961,SUMMIT ELEVATORS REPAIRS LTD,,CR0 9UG,—,£368k,57,Tier 3 — Quality Bolt-on,,No,"DOSWELL, Roger John",director,58,1967,7,8.0,British
+Lift Maintenance,13907583,ANSA ELEVATORS AB LTD,,OL9 9XA,£16.0m,£2.0m,57,Tier 3 — Quality Bolt-on,,No,"DUNNING, Mark Steven",director,59,1966,5,4.1,British
+Lift Maintenance,13907583,ANSA ELEVATORS AB LTD,,OL9 9XA,£16.0m,£2.0m,57,Tier 3 — Quality Bolt-on,,No,"KENNEDY, Gary Thomas",director,56,1969,6,4.1,British
+Lift Maintenance,14382786,PURE LIFT GROUP LIMITED,,WC2H 9JQ,—,—,57,Tier 3 — Quality Bolt-on,,No,"NEWMAN, Ian",director,55,1970,8,3.5,English
+Lift Maintenance,01189836,STANNAH LIFTS LIMITED,,SP10 3SD,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"COVENEY, Deborah Lee",director,58,1968,3,19.2,British
+Lift Maintenance,01189836,STANNAH LIFTS LIMITED,,SP10 3SD,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"STANNAH, Alan Neil Russell",director,86,1939,10,,British
+Lift Maintenance,01189836,STANNAH LIFTS LIMITED,,SP10 3SD,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"STANNAH, Brian Leslie Russell",director,90,1935,8,,British
+Lift Maintenance,01189836,STANNAH LIFTS LIMITED,,SP10 3SD,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"STANNAH, Jonathan Neil",director,60,1965,11,19.2,British
+Lift Maintenance,01189836,STANNAH LIFTS LIMITED,,SP10 3SD,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"STANNAH, Patrick Gordon",director,56,1969,9,19.2,British
+Lift Maintenance,01443826,BLICKGLEN LIFTS LTD,,TW8 9AG,—,—,56,Tier 3 — Quality Bolt-on,,No,"SADLER, Robert William",director,58,1967,5,3.2,British
+Lift Maintenance,02016081,GENERAL LIFT COMPANY LIMITED(THE),,BR8 7PA,—,—,56,Tier 3 — Quality Bolt-on,,No,"POWIS, Derek Arthur",director,73,1953,1,,British
+Lift Maintenance,02630521,INDUSTRIAL & MARINE LIFT SERVICES LIMITED,,M24 2UH,—,—,56,Tier 3 — Quality Bolt-on,,No,"BREWER, John Andrew",director,59,1966,12,11.9,British
+Lift Maintenance,02630521,INDUSTRIAL & MARINE LIFT SERVICES LIMITED,,M24 2UH,—,—,56,Tier 3 — Quality Bolt-on,,No,"MILLEN, Michael Douglas",director,75,1950,11,33.5,British
+Lift Maintenance,03047331,INTEC LIFT SERVICES LIMITED,,RM1 3JT,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"RICHARDS, Eric",director,66,1960,3,30.9,British
+Lift Maintenance,03047331,INTEC LIFT SERVICES LIMITED,,RM1 3JT,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"RICHARDS, Marjorie Kathleen",director,65,1960,9,30.9,British
+Lift Maintenance,03056715,ELEVATED LIFTS LIMITED,,DY2 9QG,—,—,56,Tier 3 — Quality Bolt-on,,No,"YOUNG, Clive",director,64,1961,11,18.3,British
+Lift Maintenance,03219912,NIGHTINGALE LIFTS LIMITED,,RM1 3JT,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"BRIGGS, David John",director,68,1958,3,29.7,British
+Lift Maintenance,03219912,NIGHTINGALE LIFTS LIMITED,,RM1 3JT,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"BRIGGS, Deborah Jean",director,62,1963,12,8.9,British
+Lift Maintenance,03325250,FACADE HOISTS INTERNATIONAL LIMITED,,BA3 2ET,—,£2.9m,56,Tier 3 — Quality Bolt-on,,Yes,"MILTON, Geoffrey",director,65,1960,11,16.3,British
+Lift Maintenance,03325250,FACADE HOISTS INTERNATIONAL LIMITED,,BA3 2ET,—,£2.9m,56,Tier 3 — Quality Bolt-on,,Yes,"WHERRY, Stephen John",director,60,1965,4,27.8,British
+Lift Maintenance,03325250,FACADE HOISTS INTERNATIONAL LIMITED,,BA3 2ET,—,£2.9m,56,Tier 3 — Quality Bolt-on,,Yes,"WILSON, Laurence Andrew",director,82,1944,2,29.1,British
+Lift Maintenance,03523466,LIFT SERVICES DIRECT LIMITED,,DA5 1LU,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"HILLS, Eric John",director,81,1945,1,27.9,British
+Lift Maintenance,03523466,LIFT SERVICES DIRECT LIMITED,,DA5 1LU,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"HILLS, Pamela",director,75,1950,6,28.0,British
+Lift Maintenance,03747767,DOLPHIN MOBILITY HOISTS LTD,,GU24 8PD,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"DUNNAGE, Craig Robert",director,64,1962,3,21.5,British
+Lift Maintenance,03826649,A W PARRY LIFTS LIMITED,,BS31 1SX,—,—,56,Tier 3 — Quality Bolt-on,,No,"UPTON, David Ian",director,60,1965,10,10.3,British
+Lift Maintenance,03948038,KNOWSLEY LIFT SERVICES LIMITED,,L7 9NG,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"FITZGERALD, Joseph",director,76,1949,8,26.0,British
+Lift Maintenance,03948038,KNOWSLEY LIFT SERVICES LIMITED,,L7 9NG,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"MURPHY, Thomas",director,60,1966,2,26.0,British
+Lift Maintenance,04109393,SAVARIA LIFTS (UK) LTD.,,DY6 7FJ,—,£9k,56,Tier 3 — Quality Bolt-on,,No,"DOCHERTY, Ian Joseph",director,63,1962,11,8.8,British
+Lift Maintenance,04109393,SAVARIA LIFTS (UK) LTD.,,DY6 7FJ,—,£9k,56,Tier 3 — Quality Bolt-on,,No,"TEMPLE, David John",director,63,1962,11,2.7,British
+Lift Maintenance,04176710,THE PLATFORM LIFT COMPANY LIMITED,,SP10 2RW,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"O'SULLIVAN, Elsa",director,59,1966,7,3.3,British
+Lift Maintenance,04176710,THE PLATFORM LIFT COMPANY LIMITED,,SP10 2RW,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"O'SULLIVAN, Sean",director,61,1965,2,25.0,British
+Lift Maintenance,04380308,INVICTA LIFTS LIMITED,,SG6 1PT,—,—,56,Tier 3 — Quality Bolt-on,,No,"EVELEIGH, Mark John",director,60,1965,7,24.1,British
+Lift Maintenance,04380308,INVICTA LIFTS LIMITED,,SG6 1PT,—,—,56,Tier 3 — Quality Bolt-on,,No,"PADROS, Marta Laborda",director,56,1969,8,24.1,Spanish
+Lift Maintenance,04725408,PINNACLE LIFT ENGINEERING LTD,,TN15 7DA,—,—,56,Tier 3 — Quality Bolt-on,,No,"CLARK, Tim",director,63,1962,8,22.8,British
+Lift Maintenance,04730076,JAVA LIFT SERVICES LTD,,SM2 7AJ,—,—,56,Tier 3 — Quality Bolt-on,,No,"JONES, Van",director,67,1958,11,22.9,British
+Lift Maintenance,04925163,GRT NOTTINGHAM LIFT COMPANY LIMITED,,NG8 6PY,—,—,56,Tier 3 — Quality Bolt-on,,No,"TIPPING, Simon Patrick",director,76,1949,10,18.0,British
+Lift Maintenance,04925179,SOUTHERN DERBYSHIRE LIFT COMPANY LIMITED,,NG8 6PY,—,—,56,Tier 3 — Quality Bolt-on,,No,"TIPPING, Simon Patrick",director,76,1949,10,9.2,British
+Lift Maintenance,04931103,BAILEY LIFTS  LIMITED,,BR8 7PA,—,£105k,56,Tier 3 — Quality Bolt-on,,Yes,"BAILEY, Alan Peter",director,72,1953,10,22.4,English
+Lift Maintenance,05168182,MARK STEVENS LIFT SERVICES LIMITED,,B92 0DR,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"STEVENS, Mark Alan",director,64,1962,3,21.7,English
+Lift Maintenance,05168182,MARK STEVENS LIFT SERVICES LIMITED,,B92 0DR,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"STEVENS, Michelle",director,57,1968,9,15.4,British
+Lift Maintenance,05198068,ELITE LIFT INSTALLATIONS LIMITED,,NG1 6GR,—,—,56,Tier 3 — Quality Bolt-on,,No,"CLARKE, Kevin Neil",director,58,1967,10,21.6,British
+Lift Maintenance,05198068,ELITE LIFT INSTALLATIONS LIMITED,,NG1 6GR,—,—,56,Tier 3 — Quality Bolt-on,,No,"HARPER, Ian John",director,58,1967,5,21.6,British
+Lift Maintenance,05210808,LUTZ LIFTS LIMITED,,N14 4RX,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"DOYLE, David Martin",director,61,1965,1,21.6,Irish
+Lift Maintenance,05210808,LUTZ LIFTS LIMITED,,N14 4RX,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"LUTZ, Hans Martin",director,59,1966,8,21.6,German
+Lift Maintenance,05547118,TALKING ELEVATORS LIMITED,,DA13 0AZ,—,—,56,Tier 3 — Quality Bolt-on,,No,"BADO, Anthony",director,62,1964,2,20.6,British
+Lift Maintenance,05673874,GLEAVE LIFT SERVICES LIMITED,,CH42 2DS,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"GLEAVE, Stephen",director,62,1963,11,20.2,British
+Lift Maintenance,05748485,URBAN ELEVATORS LIMITED,,MK45 2NW,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"MILES, Elaine Mary",director,56,1969,8,20.0,British
+Lift Maintenance,05748485,URBAN ELEVATORS LIMITED,,MK45 2NW,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"MILES, Ivan James",director,55,1970,4,20.0,British
+Lift Maintenance,05959382,KEIGHLEY LIFTS UK LTD,,BD21 4PF,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"BOOCOCK, Isabel Ann",director,66,1959,4,19.4,British
+Lift Maintenance,05959382,KEIGHLEY LIFTS UK LTD,,BD21 4PF,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"BOOCOCK, Stuart",director,66,1959,8,19.4,British
+Lift Maintenance,06055391,EMERALD ELEVATORS LIMITED,,ME8 7RG,—,—,56,Tier 3 — Quality Bolt-on,,No,"BRENNAN, Giles Edward",director,55,1971,3,16.2,British
+Lift Maintenance,06261139,LAWRENCE LIFT & ESCALATOR CONSULTANTS LIMITED,,HD6 2JB,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"LAWRENCE, Janet Margaret",director,69,1956,11,18.8,British
+Lift Maintenance,06261139,LAWRENCE LIFT & ESCALATOR CONSULTANTS LIMITED,,HD6 2JB,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"LAWRENCE, Nicholas",director,72,1953,5,18.8,British
+Lift Maintenance,06657220,EZE LIFTS LIMITED,,GU51 3RU,—,£674k,56,Tier 3 — Quality Bolt-on,,Yes,"STILL, Martin George",director,58,1967,12,17.7,British
+Lift Maintenance,07158461,PALACE LIFTS LTD,,DA14 6NE,—,—,56,Tier 3 — Quality Bolt-on,,No,"HARRIS, Karl Lee",director,58,1967,11,16.1,British
+Lift Maintenance,07225419,SUMMIT ELEVATORS INSTALLATIONS LTD,,CR0 9UG,—,£257k,56,Tier 3 — Quality Bolt-on,,No,"COELHO, Carl John",director,59,1966,9,15.9,British
+Lift Maintenance,07225419,SUMMIT ELEVATORS INSTALLATIONS LTD,,CR0 9UG,—,£257k,56,Tier 3 — Quality Bolt-on,,No,"DOSWELL, Roger John",director,58,1967,7,15.9,British
+Lift Maintenance,07474438,INNOVATION LIFTS LIMITED,,W1W 5PF,—,£257k,56,Tier 3 — Quality Bolt-on,,Yes,"FIELDER, Peter Nicholas Charles",director,71,1954,12,15.2,British
+Lift Maintenance,07511005,ALLIANCE PLATFORM LIFTS LIMITED,,TN11 9BH,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"MOORE, Gary",director,66,1959,10,15.2,British
+Lift Maintenance,07511005,ALLIANCE PLATFORM LIFTS LIMITED,,TN11 9BH,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"SMITH, Simon Richard",director,64,1961,9,15.2,British
+Lift Maintenance,08117726,SKY ELEVATORS LTD,,B90 4TE,—,—,56,Tier 3 — Quality Bolt-on,,No,"FOWLER, Ronald",director,56,1969,9,13.8,British
+Lift Maintenance,08181734,UK LIFT AND ESCALATOR COMPANY LTD,,NE11 0TF,—,—,56,Tier 3 — Quality Bolt-on,,No,"HAY, Paul",director,61,1964,5,12.7,British
+Lift Maintenance,08621456,CRAYDON LIFTS & ELECTRICAL LIMITED,,LU4 0LS,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"CRAYDON, Mark David",director,59,1967,3,12.7,British
+Lift Maintenance,09542868,SOUTH EAST ELEVATORS LIMITED,,BR1 3FE,—,£452k,56,Tier 3 — Quality Bolt-on,,No,"NEWTON, Mark Terrence",director,61,1964,12,10.9,British
+Lift Maintenance,09754663,NEXT GEN ELEVATORS LTD,,SE2 0XU,—,—,56,Tier 3 — Quality Bolt-on,,No,"CLARK, Gary Philip Edward",director,65,1960,7,10.6,British
+Lift Maintenance,SC515268,CAMERON LIFT SERVICES LIMITED,,G74 3BJ,—,—,56,Tier 3 — Quality Bolt-on,,Yes,"CAMERON, Alistair",director,63,1963,3,10.5,British
+Lift Maintenance,09866578,KINETIC LIFT SERVICES LIMITED,,DA11 8HJ,—,£269k,56,Tier 3 — Quality Bolt-on,,No,"PETTMAN, Ian John",director,60,1965,9,2.9,English
+Lift Maintenance,13224397,A & M ELEVATOR CONSULTANTS LIMITED,,CM23 4BD,—,—,56,Tier 3 — Quality Bolt-on,,No,"BURKE, Michael Anthony",director,65,1960,7,5.1,British
+Lift Maintenance,01125944,LESTER LIFT SERVICES LIMITED,,CR7 7QX,—,—,55,Tier 3 — Quality Bolt-on,,No,"ATKINSON, Justin",director,62,1963,10,16.6,British
+Lift Maintenance,01960580,ACE LIFTS LTD,,CH5 2QS,—,—,55,Tier 3 — Quality Bolt-on,,Yes,"SALTER, Charles Arthur",director,67,1958,12,,British
+Lift Maintenance,01960580,ACE LIFTS LTD,,CH5 2QS,—,—,55,Tier 3 — Quality Bolt-on,,Yes,"SALTER, Vivien",director,63,1962,5,10.0,British
+Lift Maintenance,01960580,ACE LIFTS LTD,,CH5 2QS,—,—,55,Tier 3 — Quality Bolt-on,,Yes,"TANER, Deniz",director,76,1949,4,6.7,Turkish
+Lift Maintenance,02316623,AMALGAMATED LIFTS LIMITED,,DA1 4BF,—,—,55,Tier 3 — Quality Bolt-on,,No,"TOKUAMI, Hiroki",director,63,1962,8,6.1,Japanese
+Lift Maintenance,02922568,SWIFT LIFT SERVICES LIMITED,,DA1 5ED,—,—,55,Tier 3 — Quality Bolt-on,,No,"PAVLOU, Paul",director,70,1955,4,25.1,British
+Lift Maintenance,03851206,LIFT AND ESCALATOR INDUSTRY ASSOCIATION,,E1W 1YZ,—,£1.4m,55,Tier 3 — Quality Bolt-on,,No,"CHAPMAN, Martin Kenneth",director,67,1958,11,8.2,British
+Lift Maintenance,03851206,LIFT AND ESCALATOR INDUSTRY ASSOCIATION,,E1W 1YZ,—,£1.4m,55,Tier 3 — Quality Bolt-on,,No,"JACKSON, George Anthony",director,79,1946,4,26.5,British
+Lift Maintenance,03851206,LIFT AND ESCALATOR INDUSTRY ASSOCIATION,,E1W 1YZ,—,£1.4m,55,Tier 3 — Quality Bolt-on,,No,"MARTIN, David Steven",director,76,1949,12,3.1,English
+Lift Maintenance,03851206,LIFT AND ESCALATOR INDUSTRY ASSOCIATION,,E1W 1YZ,—,£1.4m,55,Tier 3 — Quality Bolt-on,,No,"SHARP, David",director,58,1967,6,1.2,British
+Lift Maintenance,03851206,LIFT AND ESCALATOR INDUSTRY ASSOCIATION,,E1W 1YZ,—,£1.4m,55,Tier 3 — Quality Bolt-on,,No,"TURNER, Paul",director,57,1968,12,6.1,British
+Lift Maintenance,03851206,LIFT AND ESCALATOR INDUSTRY ASSOCIATION,,E1W 1YZ,—,£1.4m,55,Tier 3 — Quality Bolt-on,,No,"WEBB, Laura Aldyth",director,55,1970,11,0.2,British
+Lift Maintenance,03890908,HYDRATEC LIFT SERVICES LIMITED,,GU46 6GA,—,—,55,Tier 3 — Quality Bolt-on,,Yes,"KEANE, Robert Patrick Alfred",director,64,1961,12,26.2,British
+Lift Maintenance,03890908,HYDRATEC LIFT SERVICES LIMITED,,GU46 6GA,—,—,55,Tier 3 — Quality Bolt-on,,Yes,"KEANE, Tracy Jane",director,61,1964,5,26.2,British
+Lift Maintenance,04039247,ELEVATOR (UK) LIFTS LIMITED,,SE7 7RX,—,—,55,Tier 3 — Quality Bolt-on,,Yes,"JACKSON, George Anthony",director,79,1946,4,25.6,British
+Lift Maintenance,04039247,ELEVATOR (UK) LIFTS LIMITED,,SE7 7RX,—,—,55,Tier 3 — Quality Bolt-on,,Yes,"JACKSON, Mary",director,79,1946,7,25.6,British
+Lift Maintenance,04802563,ASPECT LIFTS LTD,,DA14 4DT,—,£2.5m,55,Tier 3 — Quality Bolt-on,,Yes,"GILLMURRAY, William John",director,61,1964,9,22.8,British
+Lift Maintenance,04802563,ASPECT LIFTS LTD,,DA14 4DT,—,£2.5m,55,Tier 3 — Quality Bolt-on,,Yes,"KITHER-WHYBROW, Annette",director,64,1961,5,6.2,British
+Lift Maintenance,04802563,ASPECT LIFTS LTD,,DA14 4DT,—,£2.5m,55,Tier 3 — Quality Bolt-on,,Yes,"LAUNDER, David John",director,58,1967,8,3.0,British
+Lift Maintenance,04802563,ASPECT LIFTS LTD,,DA14 4DT,—,£2.5m,55,Tier 3 — Quality Bolt-on,,Yes,"MCDANIEL, Peter George",director,63,1962,5,3.0,British
+Lift Maintenance,04802563,ASPECT LIFTS LTD,,DA14 4DT,—,£2.5m,55,Tier 3 — Quality Bolt-on,,Yes,"MITCHELL, Kevin Brian",director,58,1967,12,3.0,British
+Lift Maintenance,04802563,ASPECT LIFTS LTD,,DA14 4DT,—,£2.5m,55,Tier 3 — Quality Bolt-on,,Yes,"WHYBROW, Leigh",director,67,1958,6,6.2,British
+Lift Maintenance,04852834,THE GOODS LIFT COMPANY LIMITED,,SP10 4NU,—,—,55,Tier 3 — Quality Bolt-on,,Yes,"BAXTER, Leigh",director,55,1970,9,21.6,British
+Lift Maintenance,04852834,THE GOODS LIFT COMPANY LIMITED,,SP10 4NU,—,—,55,Tier 3 — Quality Bolt-on,,Yes,"BAXTER, Paul Arnold",director,62,1964,3,22.7,British
+Lift Maintenance,04944384,EXTREME LIFT SERVICES LIMITED,,RH5 5NB,—,—,55,Tier 3 — Quality Bolt-on,,Yes,"COAD, Leonard John",director,60,1966,2,22.3,British
+Lift Maintenance,05112321,LIFT + ESCALATOR SOLUTIONS LIMITED,,NW1 1BU,—,—,55,Tier 3 — Quality Bolt-on,,No,"ANDERSON, Peter John",director,62,1963,6,21.9,British
+Lift Maintenance,05248192,ORTON LIFTS & ESCALATORS LTD,,AL7 1RX,—,—,55,Tier 3 — Quality Bolt-on,,Yes,"NEAL, Jason",director,60,1966,3,9.1,British
+Lift Maintenance,05381305,KH LIFT SERVICES LIMITED,,NG9 8AY,—,£12k,55,Tier 3 — Quality Bolt-on,,Yes,"HESELTON, Gaynor",director,59,1966,6,21.0,British
+Lift Maintenance,05381305,KH LIFT SERVICES LIMITED,,NG9 8AY,—,£12k,55,Tier 3 — Quality Bolt-on,,Yes,"HESELTON, Kent Anthony",director,57,1968,7,21.0,British
+Lift Maintenance,05757499,MOTION ELEVATORS LTD,,WN5 8EG,—,—,55,Tier 3 — Quality Bolt-on,,Yes,"THOMSON, Andrea Susan",director,57,1969,1,4.9,British
+Lift Maintenance,05758844,SUSSEX LIFTS LIMITED,,RH18 5AA,—,—,55,Tier 3 — Quality Bolt-on,,Yes,"THOMAS, Carole",director,76,1949,12,20.0,British
+Lift Maintenance,05760388,TITAN NEW LIFTS LIMITED,,DA11 8HJ,—,£105k,55,Tier 3 — Quality Bolt-on,,No,"LOMAS, Mark Andrew",director,56,1969,6,2.8,British
+Lift Maintenance,05760388,TITAN NEW LIFTS LIMITED,,DA11 8HJ,—,£105k,55,Tier 3 — Quality Bolt-on,,No,"WEBB, Graham Michael",director,59,1966,6,7.6,British
+Lift Maintenance,06064489,GSM ELEVATORS LTD,,ME16 9BD,—,—,55,Tier 3 — Quality Bolt-on,,No,"JOLLY, Steven Robert",director,57,1968,4,19.2,British
+Lift Maintenance,06064489,GSM ELEVATORS LTD,,ME16 9BD,—,—,55,Tier 3 — Quality Bolt-on,,No,"WOODS, Augustine Michael, Mr.",director,59,1966,7,19.2,British
+Lift Maintenance,06190325,MARSHALL ELEVATOR SERVICES LTD,,SO31 1BT,—,—,55,Tier 3 — Quality Bolt-on,,Yes,"MARSHALL, Stephen Richard",director,57,1969,2,19.0,British
+Lift Maintenance,06253488,MOTION ESCALATOR SERVICES LIMITED,,BD20 0EF,—,—,55,Tier 3 — Quality Bolt-on,,No,"LUND, Howard William",director,69,1956,12,18.8,British
+Lift Maintenance,06323621,LONDON ELEVATOR ENGINEERS LTD,,DA16 1EX,—,£655k,55,Tier 3 — Quality Bolt-on,,Yes,"DISHART, Lee",director,55,1970,10,18.7,British
+Lift Maintenance,06323621,LONDON ELEVATOR ENGINEERS LTD,,DA16 1EX,—,£655k,55,Tier 3 — Quality Bolt-on,,Yes,"DISHART, Tracey",director,58,1968,2,17.6,British
+Lift Maintenance,07695361,LIFT SERVICES (OLDHAM) LIMITED,,M24 1JT,—,£2k,55,Tier 3 — Quality Bolt-on,,Yes,"DWAYRE, Thomas",director,77,1949,2,4.9,British
+Lift Maintenance,07885879,THOMSON ELEVATOR COMPANY LTD,,WN5 8EG,—,—,55,Tier 3 — Quality Bolt-on,,Yes,"THOMSON, Andrea Susan",director,57,1969,1,14.0,British
+Lift Maintenance,08405504,BEWISE ELEVATORS LIMITED,,WA1 3RB,—,—,55,Tier 3 — Quality Bolt-on,,Yes,"YOUNG, Brian",director,60,1965,10,10.5,British
+Lift Maintenance,08673464,GALAXY LIFTS LTD,,SE9 4LR,—,—,55,Tier 3 — Quality Bolt-on,,No,"PITT, Nigel",director,62,1963,11,12.5,British
+Lift Maintenance,09726483,DIRECT LIFT REPAIR SERVICES LTD,,M27 6DB,—,£777k,55,Tier 3 — Quality Bolt-on,,No,"DWAYRE, Ian",director,56,1970,2,10.6,British
+Lift Maintenance,10200080,NETWORK LIFTS LIMITED,,BD20 8LT,—,—,55,Tier 3 — Quality Bolt-on,,No,"SCOTT, Paul",director,58,1968,1,0.5,British
+Lift Maintenance,10365745,GJ UK LIFTS LTD,,S35 7EG,—,£23k,55,Tier 3 — Quality Bolt-on,,Yes,"JAGGER, Christine Donna",director,62,1964,2,9.5,British
+Lift Maintenance,10365745,GJ UK LIFTS LTD,,S35 7EG,—,£23k,55,Tier 3 — Quality Bolt-on,,Yes,"JAGGER, Gary",director,59,1966,7,9.5,British
+Lift Maintenance,10833145,EUROPEAN ESCALATOR SOLUTIONS LTD,,NP15 1HY,—,—,55,Tier 3 — Quality Bolt-on,,No,"WILLIAMS, Stephen James",director,58,1967,6,8.8,British
+Lift Maintenance,12676185,JMC LIFTS LTD,,SM1 3SN,—,£12k,55,Tier 3 — Quality Bolt-on,,Yes,"SHADENBURG, Craig",director,56,1970,3,5.8,British
+Lift Maintenance,12676185,JMC LIFTS LTD,,SM1 3SN,—,£12k,55,Tier 3 — Quality Bolt-on,,Yes,"SHADENBURG, Juliet",director,55,1970,5,2.8,British
+Lift Maintenance,12906127,FULLER TECHNICAL ELEVATOR SERVICES LIMITED,,BR1 3QD,—,£22,55,Tier 3 — Quality Bolt-on,,Yes,"FULLER, David",director,59,1966,10,4.7,British
+Lift Maintenance,13274451,BKMR LIFTS LTD,,DE7 5AZ,—,—,55,Tier 3 — Quality Bolt-on,,No,"COY, Brian",director,58,1967,10,5.0,British
+Lift Maintenance,13274451,BKMR LIFTS LTD,,DE7 5AZ,—,—,55,Tier 3 — Quality Bolt-on,,No,"POLLARD, Karen",director,58,1967,4,5.0,British
+Lift Maintenance,14212037,OLEO ELEVATOR LTD,,CV7 9NE,—,—,55,Tier 3 — Quality Bolt-on,,Yes,"SAHOTA, Lynette Ann",director,64,1961,7,3.7,British
+Lift Maintenance,14212037,OLEO ELEVATOR LTD,,CV7 9NE,—,—,55,Tier 3 — Quality Bolt-on,,Yes,"SAHOTA, Sulakhan",director,66,1960,3,3.7,British
+Lift Maintenance,SC041085,ELLIS & MCDOUGALL LIFTS LIMITED,,G2 2LW,—,—,54,Tier 3 — Quality Bolt-on,,No,"DAY, Mark",director,66,1960,2,20.1,British
+Lift Maintenance,NI018449,OLYMPIC LIFTS LIMITED,,BT28 2SU,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"FORSYTH, Michael John",director,55,1971,1,6.8,British
+Lift Maintenance,NI018449,OLYMPIC LIFTS LIMITED,,BT28 2SU,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"PATTERSON, Eilish Michelle",director,60,1965,8,17.9,British
+Lift Maintenance,NI018449,OLYMPIC LIFTS LIMITED,,BT28 2SU,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"PATTERSON, Robert John Dean",director,68,1958,1,22.9,British
+Lift Maintenance,NI018971,POLLOCK LIFTS LIMITED,,BT38 8GX,—,—,54,Tier 3 — Quality Bolt-on,,No,"DAWSON, Steven",director,62,1963,12,1.5,American
+Lift Maintenance,NI018971,POLLOCK LIFTS LIMITED,,BT38 8GX,—,—,54,Tier 3 — Quality Bolt-on,,No,"MCCONVILLE, Brendan Gary",director,58,1967,5,10.0,Irish
+Lift Maintenance,NI018971,POLLOCK LIFTS LIMITED,,BT38 8GX,—,—,54,Tier 3 — Quality Bolt-on,,No,"PRITCHARD, Mark",director,55,1970,8,1.5,American
+Lift Maintenance,02133998,SLINGTAK HOISTS LIMITED,,HU9 1AP,—,£86k,54,Tier 3 — Quality Bolt-on,,No,"GIBLIN, Neil",director,67,1958,8,13.8,English
+Lift Maintenance,02488833,BRITANNIA LIFT SERVICES (U.K.) LIMITED,,TW8 9AG,—,—,54,Tier 3 — Quality Bolt-on,,No,"SADLER, Robert William",director,58,1967,5,9.8,British
+Lift Maintenance,02651759,CARDIFF LIFT COMPANY LIMITED,,CF5 5AD,—,—,54,Tier 3 — Quality Bolt-on,,No,"BROWN, Adrian John",director,58,1968,3,7.3,British
+Lift Maintenance,02651759,CARDIFF LIFT COMPANY LIMITED,,CF5 5AD,—,—,54,Tier 3 — Quality Bolt-on,,No,"PATTERSON, David John",director,66,1960,3,,British
+Lift Maintenance,02752136,THE CONVEYOR & ELEVATOR COMPANY LIMITED,,BB5 2NT,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"GOSNAY, Helen Tracey",director,61,1964,11,6.4,British
+Lift Maintenance,02752136,THE CONVEYOR & ELEVATOR COMPANY LIMITED,,BB5 2NT,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"WAREING, Eileen",director,68,1958,2,1.1,British
+Lift Maintenance,02752136,THE CONVEYOR & ELEVATOR COMPANY LIMITED,,BB5 2NT,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"WAREING, Shaun James",director,62,1964,1,14.0,British
+Lift Maintenance,03421887,A.M.E. LIFT ENGINEERING LTD.,,BN20 7BU,—,—,54,Tier 3 — Quality Bolt-on,,No,"KINSELLA, Andrew Jonathan",director,57,1969,3,28.6,British
+Lift Maintenance,03439949,SWIFT LIFT SERVICES (MAINTENANCE) LTD,,DA1 5ED,—,—,54,Tier 3 — Quality Bolt-on,,No,"PARTNER, Andrew",director,58,1968,3,2.2,British
+Lift Maintenance,03493472,LANDMARK LIFTS LIMITED,,ME20 7DH,—,—,54,Tier 3 — Quality Bolt-on,,No,"PRICE, Garry",director,63,1962,5,18.0,British
+Lift Maintenance,SC183498,CLYDE VALLEY LIFTS LIMITED,,G33 3NQ,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"HANNAH, Agnes Fairfull",director,75,1950,8,7.0,British
+Lift Maintenance,SC183498,CLYDE VALLEY LIFTS LIMITED,,G33 3NQ,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"MCKENNA, Catherine",director,60,1965,7,28.0,British
+Lift Maintenance,SC183498,CLYDE VALLEY LIFTS LIMITED,,G33 3NQ,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"MCKENNA, Francis William",director,63,1962,6,24.5,British
+Lift Maintenance,SC183498,CLYDE VALLEY LIFTS LIMITED,,G33 3NQ,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"MCKENNA, Paul",director,57,1968,11,8.2,British
+Lift Maintenance,03637402,COMPLETE LIFT SERVICES LIMITED,,BN11 1QR,—,—,54,Tier 3 — Quality Bolt-on,,No,"HUMPHREY, Sarah Ann",director,59,1966,5,0.2,British
+Lift Maintenance,04134353,DOMESTIC LIFT SERVICES LIMITED,,HP12 3RD,—,—,54,Tier 3 — Quality Bolt-on,,No,"CARRINGTON, Phillip Robert",director,63,1962,8,25.2,British
+Lift Maintenance,04134353,DOMESTIC LIFT SERVICES LIMITED,,HP12 3RD,—,—,54,Tier 3 — Quality Bolt-on,,No,"WINFIELD, Steven Michael",director,55,1971,3,25.2,British
+Lift Maintenance,04180224,R & R LIFT SERVICES LIMITED,,BS9 3DZ,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"GREEN, Glenys Jean",director,64,1961,6,12.8,British
+Lift Maintenance,04318266,KENT LIFT SERVICES LIMITED,,S60 1DX,—,—,54,Tier 3 — Quality Bolt-on,,No,"SHEEHAN, Kerry",director,57,1969,2,0.5,"British,Irish"
+Lift Maintenance,04553067,BRONEV LIFTS LIMITED,,BS10 6LA,—,—,54,Tier 3 — Quality Bolt-on,,No,"NEVILLE, Sean Jeffrey",director,60,1965,10,23.4,British
+Lift Maintenance,04635715,MARCIAC LIFT SERVICES LTD,,L18 1DG,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"DONOVAN, Anthony",director,70,1955,11,23.2,British
+Lift Maintenance,04700752,T.J. LIFT SOLUTIONS LTD.,,BB3 0FE,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"CATTERALL, Mark Edward",director,55,1970,12,23.0,British
+Lift Maintenance,04806809,HIWIRE LIFT SERVICES LIMITED,,TN33 9AY,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"LAIMBEER, Philip Clive",director,57,1968,8,22.8,British
+Lift Maintenance,04963894,MANOR LIFT INSTALLATIONS LIMITED,,NG14 6FE,—,—,54,Tier 3 — Quality Bolt-on,,No,"HODKINSON, Stephen Anthony",director,67,1958,7,22.3,British
+Lift Maintenance,05114899,BASS LIFT HOLDINGS LIMITED,,WR5 2QX,—,£31k,54,Tier 3 — Quality Bolt-on,,No,"HOLLAND, Philip John",director,56,1970,1,3.8,British
+Lift Maintenance,05201919,XL LIFTS LIMITED,,BN21 4PT,—,—,54,Tier 3 — Quality Bolt-on,,No,"MOCKFORD, David Dickerson",director,57,1968,8,21.6,British
+Lift Maintenance,05307764,ABILITY LIFTS LIMITED,,HP19 8HL,—,—,54,Tier 3 — Quality Bolt-on,,No,"HARPER, Andrew Frederick",director,67,1959,1,6.2,British
+Lift Maintenance,05572304,ELMBANK LIFTS LIMITED,,N14 6NZ,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"PITSILLIDES, David",director,65,1960,5,20.5,British
+Lift Maintenance,06002205,COMPREHENSIVE ELEVATOR SERVICES LIMITED,,N3 1XW,—,£14k,54,Tier 3 — Quality Bolt-on,,Yes,"LAMBERT, Christopher John",director,63,1963,3,19.3,British
+Lift Maintenance,06002205,COMPREHENSIVE ELEVATOR SERVICES LIMITED,,N3 1XW,—,£14k,54,Tier 3 — Quality Bolt-on,,Yes,"LAMBERT, Philip Paul",director,61,1964,8,19.3,British
+Lift Maintenance,06002205,COMPREHENSIVE ELEVATOR SERVICES LIMITED,,N3 1XW,—,£14k,54,Tier 3 — Quality Bolt-on,,Yes,"O'KEEFFE, Simon Anthony",director,56,1969,6,19.3,British
+Lift Maintenance,06096464,FACADE HOISTS LIMITED,,BA3 2DZ,—,£774k,54,Tier 3 — Quality Bolt-on,,Yes,"MILTON, Geoffrey",director,65,1960,11,17.6,British
+Lift Maintenance,06096464,FACADE HOISTS LIMITED,,BA3 2DZ,—,£774k,54,Tier 3 — Quality Bolt-on,,Yes,"WHERRY, Stephen John",director,60,1965,4,17.6,British
+Lift Maintenance,06096464,FACADE HOISTS LIMITED,,BA3 2DZ,—,£774k,54,Tier 3 — Quality Bolt-on,,Yes,"WILSON, Janis Dawn, Allison",director,82,1944,1,15.5,British
+Lift Maintenance,06342783,NEWMATIC ELEVATORS LIMITED,,N20 9HR,—,£13k,54,Tier 3 — Quality Bolt-on,,No,"SAW, David Matthew",director,67,1958,5,18.6,British
+Lift Maintenance,06415702,BROADCAST & HOIST SERVICES LIMITED,,NE39 1AU,—,—,54,Tier 3 — Quality Bolt-on,,No,"SIMPSON, John William",director,56,1969,10,18.3,British
+Lift Maintenance,06480677,ASTUTE LIFTS LIMITED,,TN14 5QH,—,—,54,Tier 3 — Quality Bolt-on,,No,"OWEN, David Alun",director,62,1963,9,18.2,British
+Lift Maintenance,06590101,AVANTE ELEVATORS LIMITED,,CV5 9AP,—,—,54,Tier 3 — Quality Bolt-on,,No,"CRAME, Brett",director,57,1969,2,17.8,British
+Lift Maintenance,06624944,WEST MIDLAND LIFT SERVICES LIMITED,,B78 3RT,—,—,54,Tier 3 — Quality Bolt-on,,No,"BURDEN, Leslie Alexander",director,61,1964,11,17.8,British
+Lift Maintenance,06782238,EXCEL LIFTS LIMITED,,LE3 3TP,—,—,54,Tier 3 — Quality Bolt-on,,No,"ALI, Mohanad",director,55,1970,11,17.2,British
+Lift Maintenance,07166096,THE LONDON LIFT COMPANY LIMITED,,UB7 7QG,—,—,54,Tier 3 — Quality Bolt-on,,No,"HANLEY, Angela",director,84,1941,8,12.0,British
+Lift Maintenance,07766950,UTILITY ELEVATORS LTD,,DE55 3BU,—,—,54,Tier 3 — Quality Bolt-on,,No,"GEORGIADIS, Efthymios John",director,62,1964,3,14.5,Greek
+Lift Maintenance,07860251,S&L LIFTS LIMITED,,SL6 3EA,—,—,54,Tier 3 — Quality Bolt-on,,No,"ROOPRAI, Pupinder Kaur",director,55,1970,7,14.3,British
+Lift Maintenance,07944242,KINGSWAY LIFTS LIMITED,,BR4 9JE,—,£47k,54,Tier 3 — Quality Bolt-on,,No,"MULGRAVE, Glenton Edison",director,72,1954,1,14.1,British
+Lift Maintenance,08087593,PIONEER LIFTS LIMITED,,WR1 1HB,—,£4,54,Tier 3 — Quality Bolt-on,,Yes,"HOULT, Matthew Ronald",director,56,1970,3,13.8,British
+Lift Maintenance,08419054,LEEMOORE LIFTS LTD,,DY8 4DN,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"MOORE, Alan",director,72,1953,5,13.1,British
+Lift Maintenance,08833825,PLATINUM LIFTS LTD,,BS9 4JT,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"STRANGE, Jacqueline",director,62,1963,8,12.2,British
+Lift Maintenance,08833825,PLATINUM LIFTS LTD,,BS9 4JT,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"STRANGE, Robert Michael",director,59,1966,6,12.2,British
+Lift Maintenance,10095293,TELCO LIFTS LIMITED,,RM1 3JT,—,—,54,Tier 3 — Quality Bolt-on,,No,"GIALANZE, Anthony Joseph",director,72,1953,7,10.0,British
+Lift Maintenance,10095293,TELCO LIFTS LIMITED,,RM1 3JT,—,—,54,Tier 3 — Quality Bolt-on,,No,"O'CONNOR, Michael",director,67,1958,12,10.0,British
+Lift Maintenance,10412992,JS LIFTS LTD,,SS9 3PT,—,—,54,Tier 3 — Quality Bolt-on,,No,"SWAN, Jon",director,59,1967,2,9.4,British
+Lift Maintenance,10663665,ALLIANCE ELEVATOR SERVICES LIMITED,,DA14 6NE,—,—,54,Tier 3 — Quality Bolt-on,,No,"ASHENDEN, Matthew",director,56,1969,12,8.3,British
+Lift Maintenance,10973455,POLAR LIFTS & ESCALATORS LTD,,RM17 6BU,—,—,54,Tier 3 — Quality Bolt-on,,No,"KNOWLES, Paul",director,61,1964,9,8.5,British
+Lift Maintenance,10973455,POLAR LIFTS & ESCALATORS LTD,,RM17 6BU,—,—,54,Tier 3 — Quality Bolt-on,,No,"QUINN, Ann Marie",director,59,1966,8,0.2,British
+Lift Maintenance,11021452,REGAL ELEVATORS & LIFT CONSULTANTS LTD,,SW2 1QN,—,£3k,54,Tier 3 — Quality Bolt-on,,No,"FITZGERALD, Debbie",director,55,1970,7,5.9,British
+Lift Maintenance,11102746,EMPIRE LIFT GROUP LIMITED,,UB1 2YG,—,£26,54,Tier 3 — Quality Bolt-on,,No,"DAVIES, Andrew Alan",director,62,1963,12,2.0,British
+Lift Maintenance,11269815,UNIVERSAL LIFT REPAIRS LIMITED,,DA1 5FS,—,£1k,54,Tier 3 — Quality Bolt-on,,No,"COCKS, Ricahrd Anthony",director,63,1962,7,8.0,British
+Lift Maintenance,11365265,IKONIC LIFTS LIMITED,,B98 8LG,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"HASTINGS, Mark Anthony",director,64,1962,3,7.8,British
+Lift Maintenance,11809779,DSH LIFTS LTD,,CR7 7NQ,—,£22k,54,Tier 3 — Quality Bolt-on,,No,"BOSHNAK, Safet Bayram",director,58,1968,1,7.1,Bulgarian
+Lift Maintenance,11943343,DH LIFTS LIMITED,,DY10 4LN,—,—,54,Tier 3 — Quality Bolt-on,,No,"HAYWOOD, David",director,59,1967,1,6.9,British
+Lift Maintenance,12346363,EAST 6 LIFT SERVICES LTD,,DA14 4DT,—,£10k,54,Tier 3 — Quality Bolt-on,,No,"LAUNDER, David John",director,58,1967,8,6.2,British
+Lift Maintenance,12960082,FUTURE LIFT SERVICES LTD,,SS17 9NQ,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"D'ARCY, Paul James",director,57,1968,12,3.8,British
+Lift Maintenance,12960082,FUTURE LIFT SERVICES LTD,,SS17 9NQ,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"SAMUELS, John Peter",director,62,1964,3,3.2,British
+Lift Maintenance,13064540,OPAL LIFTS LIMITED,,BD21 4LN,—,—,54,Tier 3 — Quality Bolt-on,,No,"GAUNT, Alan James",director,56,1969,8,5.2,British
+Lift Maintenance,13166469,SUPERIOR LIFTS LTD,,DA15 9NB,—,£2k,54,Tier 3 — Quality Bolt-on,,Yes,"DOONA, Lee",director,57,1968,5,5.2,British
+Lift Maintenance,13278833,QTEC LIFT SERVICES LTD,,DA1 3EN,—,£2k,54,Tier 3 — Quality Bolt-on,,No,"QUINNEAR, Colin David",director,64,1961,12,5.0,British
+Lift Maintenance,13652930,LMS LIFT SERVICES LIMITED,,IG5 0DW,—,—,54,Tier 3 — Quality Bolt-on,,Yes,"SHAIKH, Mohammed Latif",director,57,1968,9,4.5,English
+Lift Maintenance,02186996,JACKSON LIFT SERVICES LIMITED,,SE7 7RX,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"BUTTERFIELD, Anthony",director,62,1963,12,13.2,British
+Lift Maintenance,02186996,JACKSON LIFT SERVICES LIMITED,,SE7 7RX,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"CURTIS, Colin",director,57,1969,2,8.9,British
+Lift Maintenance,02186996,JACKSON LIFT SERVICES LIMITED,,SE7 7RX,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"JACKSON, George Anthony",director,79,1946,4,,British
+Lift Maintenance,02186996,JACKSON LIFT SERVICES LIMITED,,SE7 7RX,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"JACKSON, Mary",director,79,1946,7,,British
+Lift Maintenance,02186996,JACKSON LIFT SERVICES LIMITED,,SE7 7RX,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"RUDD, Philip John",director,64,1962,3,14.2,British
+Lift Maintenance,02564051,CURTI LIFTS (UK) LIMITED,,BD14 6TG,—,—,53,Tier 3 — Quality Bolt-on,,No,"MCSHERA, Joseph",director,74,1951,5,28.8,British
+Lift Maintenance,02570100,FREEWAY LIFT SERVICES LIMITED,,LU7 7EA,—,£676,53,Tier 3 — Quality Bolt-on,,Yes,"COOKSEY, Peter Charles",director,67,1958,6,,British
+Lift Maintenance,02570100,FREEWAY LIFT SERVICES LIMITED,,LU7 7EA,—,£676,53,Tier 3 — Quality Bolt-on,,Yes,"GIBBINS, Joanne Rachel",director,56,1969,4,10.2,British
+Lift Maintenance,02570100,FREEWAY LIFT SERVICES LIMITED,,LU7 7EA,—,£676,53,Tier 3 — Quality Bolt-on,,Yes,"MCCORMICK, Janet Christine",director,82,1943,10,,British
+Lift Maintenance,02570100,FREEWAY LIFT SERVICES LIMITED,,LU7 7EA,—,£676,53,Tier 3 — Quality Bolt-on,,Yes,"MCCORMICK, John Michael",director,83,1942,12,,British
+Lift Maintenance,02570100,FREEWAY LIFT SERVICES LIMITED,,LU7 7EA,—,£676,53,Tier 3 — Quality Bolt-on,,Yes,"MCCORMICK, Nicholas Jason",director,59,1966,7,10.2,British
+Lift Maintenance,03699485,DORSET LIFTS LIMITED,,BH18 8AX,—,£12k,53,Tier 3 — Quality Bolt-on,,Yes,"WING, Lorraine Rosemarie",director,68,1957,12,27.2,British
+Lift Maintenance,03699485,DORSET LIFTS LIMITED,,BH18 8AX,—,£12k,53,Tier 3 — Quality Bolt-on,,Yes,"WING, Roy Raymond",director,68,1957,10,27.2,British
+Lift Maintenance,04130726,D.G. ELEVATOR SERVICES LIMITED,,SS9 2UJ,—,—,53,Tier 3 — Quality Bolt-on,,No,"GOLDING, David Graham",director,63,1963,2,25.2,British
+Lift Maintenance,04471616,PREMIUM LIFTS LIMITED,,SK1 4HE,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"BANCROFT, John",director,57,1968,5,23.7,British
+Lift Maintenance,04917576,B.G. LIFTS LIMITED,,SK1 4HE,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"COMMINS, Denise",director,64,1961,12,4.9,British
+Lift Maintenance,04917576,B.G. LIFTS LIMITED,,SK1 4HE,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"LOCKETT, Bernard",director,67,1958,4,22.4,British
+Lift Maintenance,04917576,B.G. LIFTS LIMITED,,SK1 4HE,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"YATES, Garry",director,62,1963,10,22.4,British
+Lift Maintenance,04917576,B.G. LIFTS LIMITED,,SK1 4HE,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"YATES, Paula",director,55,1970,6,4.9,British
+Lift Maintenance,04929517,NORTH NOTTINGHAMSHIRE LIFT COMPANY LIMITED,,NG8 6PY,£474,£399,53,Tier 3 — Quality Bolt-on,,No,"TIPPING, Simon Patrick",director,76,1949,10,18.0,British
+Lift Maintenance,05413724,LB ELEVATORS LIMITED,,BH23 1JE,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"BARNICOAT, Geoffrey",director,76,1949,9,20.9,British
+Lift Maintenance,05661067,FENWICK LIFTS LIMITED,,BN27 1DW,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"FENWICK, Daniel",director,69,1956,9,20.2,British
+Lift Maintenance,05661067,FENWICK LIFTS LIMITED,,BN27 1DW,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"FENWICK, Jane Anne",director,68,1957,5,11.2,British
+Lift Maintenance,06256931,SES LIFTS LIMITED,,DA1 5AJ,—,—,53,Tier 3 — Quality Bolt-on,,No,"MAY, Phillip",director,61,1964,6,18.8,English
+Lift Maintenance,06386572,THE ELEVATION LIFT GROUP LTD.,,BD14 6TG,—,—,53,Tier 3 — Quality Bolt-on,,No,"MCSHERA, Joseph",director,74,1951,5,8.3,British
+Lift Maintenance,06400544,M & S LIFTS LIMITED,,DA8 1JF,—,—,53,Tier 3 — Quality Bolt-on,,No,"BOWN, Mark Benjamin James, Mr.",director,63,1962,4,18.4,British
+Lift Maintenance,06400544,M & S LIFTS LIMITED,,DA8 1JF,—,—,53,Tier 3 — Quality Bolt-on,,No,"HAMBLIN, Stephen Frank",director,61,1965,3,18.4,British
+Lift Maintenance,06860681,M S LIFT SERVICES LTD,,SO31 1BS,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"SPEAR, Lorraine",director,64,1962,1,14.0,British
+Lift Maintenance,06860681,M S LIFT SERVICES LTD,,SO31 1BS,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"SPEAR, Michael Raymond",director,68,1957,4,17.0,British
+Lift Maintenance,07190873,JAC LIFTS LIMITED,,PR6 7JZ,—,—,53,Tier 3 — Quality Bolt-on,,No,"CARTER, Jason Alan",director,55,1970,12,16.0,English
+Lift Maintenance,07289312,NORTHUMBRIA LIFTS LIMITED,,NE23 7RZ,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"SAXON, Lilian",director,67,1958,8,5.8,British
+Lift Maintenance,07761279,A T LIFT SERVICES (KENT) LTD,,DA14 6NE,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"HICKMAN, Gary Bernard",director,60,1965,5,14.5,British
+Lift Maintenance,07761279,A T LIFT SERVICES (KENT) LTD,,DA14 6NE,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"HICKMAN, Jackie",director,61,1964,4,7.3,British
+Lift Maintenance,07761279,A T LIFT SERVICES (KENT) LTD,,DA14 6NE,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"THOMAS, Austin Frederick",director,68,1957,4,14.4,British
+Lift Maintenance,07761279,A T LIFT SERVICES (KENT) LTD,,DA14 6NE,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"THOMAS, Theresa",director,67,1959,1,7.3,British
+Lift Maintenance,08069436,WECO ELEVATOR PRODUCTS LTD,,M2 4DN,—,—,53,Tier 3 — Quality Bolt-on,,No,"CAREY, Dennis",director,58,1967,6,13.8,Irish
+Lift Maintenance,08154128,ORACLE LIFTS LTD.,,NP20 6QZ,—,£2k,53,Tier 3 — Quality Bolt-on,,Yes,"BREHME, Jean Carol",director,67,1959,1,13.7,British
+Lift Maintenance,08154128,ORACLE LIFTS LTD.,,NP20 6QZ,—,£2k,53,Tier 3 — Quality Bolt-on,,Yes,"BREHME, Peter Raymond",director,60,1966,1,13.7,British
+Lift Maintenance,08253084,THAMES VALLEY ELEVATORS LTD,,SM2 7AJ,—,—,53,Tier 3 — Quality Bolt-on,,No,"JONES, Van",director,67,1958,11,13.4,British
+Lift Maintenance,08726598,HUGHES LIFT SERVICES LTD,,BD22 0QG,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"HUGHES, David",director,61,1964,4,12.4,British
+Lift Maintenance,NI621735,CAM LIFTS LIMITED,,BT41 3TE,—,£201k,53,Tier 3 — Quality Bolt-on,,Yes,"O'DONNELL, Claire",director,60,1965,9,12.2,Irish
+Lift Maintenance,NI621735,CAM LIFTS LIMITED,,BT41 3TE,—,£201k,53,Tier 3 — Quality Bolt-on,,Yes,"O'DONNELL, Hugh",director,61,1964,7,12.2,Northern Irish
+Lift Maintenance,08863849,SYNERGY LIFTS LIMITED,,EN11 0LB,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"ROWE, Steven Gary",director,63,1963,2,12.2,British
+Lift Maintenance,08863849,SYNERGY LIFTS LIMITED,,EN11 0LB,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"ROWE, Tracey Anne",director,61,1964,5,8.9,British
+Lift Maintenance,08896050,SHAW LIFTS LTD,,DY12 1AN,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"SHAW, Martin Anthony",director,65,1960,7,12.1,English
+Lift Maintenance,09044253,WILLENHALL ELEVATORS LTD,,ST19 5AP,—,—,53,Tier 3 — Quality Bolt-on,,No,"LA HIFFE, Anthony Joseph",director,60,1965,8,11.8,British
+Lift Maintenance,09110859,APEX LIFTS (GROUP) LIMITED,,DA6 7BH,—,—,53,Tier 3 — Quality Bolt-on,,No,"BRANDHAMMAR, Lars Mathias",director,56,1969,11,3.9,Swedish
+Lift Maintenance,09202207,HARRIS LIFT SERVICES LIMITED,,B63 3US,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"HARRIS, Anthony John",director,57,1968,5,11.5,British
+Lift Maintenance,09378467,PROPERTY ELEVATOR PARTNERSHIP LTD,,SG4 8TH,—,—,53,Tier 3 — Quality Bolt-on,,No,"ASHDOWN, David Anthony",director,64,1961,11,5.4,British
+Lift Maintenance,09506409,THE POOL LIFT COMPANY LIMITED,,SP10 2RW,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"O'SULLIVAN, Elsa",director,59,1966,7,11.0,British
+Lift Maintenance,09506409,THE POOL LIFT COMPANY LIMITED,,SP10 2RW,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"O'SULLIVAN, Sean",director,61,1965,2,11.0,British
+Lift Maintenance,09534121,SERVICE & DISABLED LIFTS LTD,,NE6 2HL,—,£78k,53,Tier 3 — Quality Bolt-on,,Yes,"MURTAGH, Karen",director,60,1965,5,3.7,British
+Lift Maintenance,09609449,ASTON VERTICAL TRANSPORTATION CONSULTANTS LTD,,B18 6BA,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"BARRON, Karen Marie",director,58,1968,1,10.8,Irish
+Lift Maintenance,09609449,ASTON VERTICAL TRANSPORTATION CONSULTANTS LTD,,B18 6BA,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"BARRON, Paul Anthony",director,62,1963,12,10.8,Irish
+Lift Maintenance,09674615,BOCHICA LIFTS LIMITED,,E5 8JF,—,—,53,Tier 3 — Quality Bolt-on,,No,"VALENCIA ASPRILLA, Santo Tomas",director,58,1967,9,10.7,British
+Lift Maintenance,09828046,ASCEND LIFT SERVICES LIMITED,,N12 8NP,—,—,53,Tier 3 — Quality Bolt-on,,No,"VICCARS, Tim Francis",director,62,1963,6,10.4,British
+Lift Maintenance,10799302,UNITE LIFT SERVICES LIMITED,,ME5 9UD,—,£48k,53,Tier 3 — Quality Bolt-on,,No,"TAYLOR, Robert Brian",director,61,1964,6,1.8,British
+Lift Maintenance,10901679,ACE ELEVATORS (NORTHERN) LIMITED,,BD21 2BH,—,—,53,Tier 3 — Quality Bolt-on,,No,"MCGEE, Ian",director,58,1968,2,8.6,British
+Lift Maintenance,10919446,COMPASS LIFTS LTD,,WA14 2UQ,—,£48k,53,Tier 3 — Quality Bolt-on,,No,"EVANS, David Robert",director,58,1968,3,8.6,British
+Lift Maintenance,11171963,PROFESSIONAL LIFT SERVICES LIMITED,,CM9 8LZ,—,—,53,Tier 3 — Quality Bolt-on,,No,"MORE, Danielle Lynne",director,63,1962,10,7.2,British
+Lift Maintenance,11278934,CAPSTAN LIFTS LIMITED,,SE7 8NF,—,—,53,Tier 3 — Quality Bolt-on,,No,"DATERS, Stanley James",director,77,1949,2,8.0,British
+Lift Maintenance,11452202,PB LIFTS LIMITED,,CM6 1LY,—,£25k,53,Tier 3 — Quality Bolt-on,,No,"BURKE, Peter",director,65,1960,7,7.7,British
+Lift Maintenance,11637508,C & H LIFTS LTD,,WA7 5RL,—,—,53,Tier 3 — Quality Bolt-on,,No,"CUMMINGS, Graham John",director,64,1961,12,7.4,British
+Lift Maintenance,11637508,C & H LIFTS LTD,,WA7 5RL,—,—,53,Tier 3 — Quality Bolt-on,,No,"HUGHES, Graham Edward",director,61,1965,3,7.4,British
+Lift Maintenance,11671897,ELLERY LIFT SERVICES LTD,,TW15 3QN,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"ELLERY, Lynne",director,59,1966,12,7.2,British
+Lift Maintenance,11855255,LEVEL LIFT SERVICES LTD,,SO51 0NB,—,£14k,53,Tier 3 — Quality Bolt-on,,No,"DADE, Nicholas James",director,59,1967,3,7.0,British
+Lift Maintenance,SC649194,VEITECH LIFT SERVICES LIMITED,,G51 1HJ,—,—,53,Tier 3 — Quality Bolt-on,,No,"VEITCH, Jason",director,57,1969,3,6.2,Scottish
+Lift Maintenance,12939666,RJ LIFTS GROUP LIMITED,,ST4 3PE,£33.9m,£33k,53,Tier 3 — Quality Bolt-on,,No,"DAVIES, Stuart George William",director,58,1967,6,3.4,British
+Lift Maintenance,12939666,RJ LIFTS GROUP LIMITED,,ST4 3PE,£33.9m,£33k,53,Tier 3 — Quality Bolt-on,,No,"HARLEY, Warren",director,56,1969,12,4.2,British
+Lift Maintenance,12939666,RJ LIFTS GROUP LIMITED,,ST4 3PE,£33.9m,£33k,53,Tier 3 — Quality Bolt-on,,No,"WILLIAMS, Gareth",director,62,1963,12,4.2,British
+Lift Maintenance,13549692,PLATFORM & GOODS LIFT COMPANY LTD,,TN4 9PH,—,—,53,Tier 3 — Quality Bolt-on,,No,"MARRINER, Stephen",director,60,1965,12,4.6,British
+Lift Maintenance,14214345,SKYRISE LIFT INSTALLATIONS LTD,,CR2 8EH,—,—,53,Tier 3 — Quality Bolt-on,,Yes,"CHAKKALAKAL, Biju Jose",director,57,1968,5,3.7,British
+Lift Maintenance,14785382,SK ELEVATOR SERVICES LTD,,DA14 4DT,—,£20k,53,Tier 3 — Quality Bolt-on,,No,"KITTRIDGE, Steven",director,64,1962,3,2.9,English
+Lift Maintenance,SC777571,MY LIFTS (GLASGOW) LTD,,G32 8HE,—,—,53,Tier 3 — Quality Bolt-on,,No,"FISHER, Yvonne Marie",director,57,1969,3,2.1,British
+Lift Maintenance,15587201,J H ELEVATORS MANAGEMENT SERVICES LTD,,DA1 2AG,—,£11k,53,Tier 3 — Quality Bolt-on,,No,"HARVEY, Jason Henry",director,58,1967,12,2.0,British
+Lift Maintenance,ZC000058,LYNMOUTH & LYNTON LIFT COMPANY,,EX35 6EQ,—,—,52,Tier 3 — Quality Bolt-on,,No,"CLARKE, Ashley Paul",director,63,1962,7,2.0,British
+Lift Maintenance,ZC000058,LYNMOUTH & LYNTON LIFT COMPANY,,EX35 6EQ,—,—,52,Tier 3 — Quality Bolt-on,,No,"IRELAND, Andrew John Saxon",director,66,1959,7,26.2,British
+Lift Maintenance,ZC000058,LYNMOUTH & LYNTON LIFT COMPANY,,EX35 6EQ,—,—,52,Tier 3 — Quality Bolt-on,,No,"SLADER, Christopher Martin",director,67,1958,7,26.2,British
+Lift Maintenance,02956760,THAMES VALLEY LIFT COMPANY LIMITED,,CH6 5UY,—,—,52,Tier 3 — Quality Bolt-on,,No,"YOUNG, Richard John",director,69,1956,5,4.8,British
+Lift Maintenance,03153975,GEORGE JOHNSON LIFTS LIMITED,,SE15 4QJ,—,—,52,Tier 3 — Quality Bolt-on,,No,"WHITTY, Ian David",director,78,1947,4,30.1,British
+Lift Maintenance,03231129,ACCESS LIFTS LIMITED,,BH21 3DL,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"EDWARDS, Jane",director,67,1958,7,29.1,British
+Lift Maintenance,03231129,ACCESS LIFTS LIMITED,,BH21 3DL,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"EDWARDS, Robert John",director,67,1959,2,29.7,British
+Lift Maintenance,04405619,MERIDIAN LIFTS LIMITED,,BH14 9HA,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"TOMLIN, Andrew",director,64,1961,10,24.0,British
+Lift Maintenance,04446657,P & P LIFTS LIMITED,,TQ14 8EB,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"PILE, Barry Douglas",director,72,1954,3,23.5,British
+Lift Maintenance,04446657,P & P LIFTS LIMITED,,TQ14 8EB,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"PILE, Jacqueline Anne",director,68,1958,2,23.5,British
+Lift Maintenance,04446657,P & P LIFTS LIMITED,,TQ14 8EB,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"WESTERN, Jude Catherine",director,56,1969,10,7.0,British
+Lift Maintenance,04607600,GRIMSBY LIFTS LIMITED,,DN33 2LF,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"MCARDLE, Jill Mary",director,71,1954,11,16.2,British
+Lift Maintenance,04607600,GRIMSBY LIFTS LIMITED,,DN33 2LF,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"MCARDLE, Terence Michael",director,64,1961,8,23.2,British
+Lift Maintenance,05458214,PRECISION LIFTS LIMITED,,TQ12 2QA,—,£514k,52,Tier 3 — Quality Bolt-on,,Yes,"PUDDICOMBE, Anthony Michael",director,57,1968,6,19.8,British
+Lift Maintenance,05458214,PRECISION LIFTS LIMITED,,TQ12 2QA,—,£514k,52,Tier 3 — Quality Bolt-on,,Yes,"PUDDICOMBE, Deborah Eileen",director,55,1970,4,19.8,British
+Lift Maintenance,05495874,M L LIFTS LIMITED,,BD11 2BU,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"LUKACS, Michael",director,61,1964,8,20.8,British
+Lift Maintenance,05495874,M L LIFTS LIMITED,,BD11 2BU,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"LUKACS, Tracey",director,58,1967,8,8.9,British
+Lift Maintenance,06635597,M.B. LIFT SERVICES LTD.,,DA7 6DF,—,£-3355,52,Tier 3 — Quality Bolt-on,,No,"COLLINS, Mark Clinton",director,64,1961,10,3.3,British
+Lift Maintenance,06712739,STOUR LIFTS LIMITED,,S60 1DX,—,—,52,Tier 3 — Quality Bolt-on,,No,"HARVEY, Lindsay Eric",director,72,1953,6,2.2,British
+Lift Maintenance,06712739,STOUR LIFTS LIMITED,,S60 1DX,—,—,52,Tier 3 — Quality Bolt-on,,No,"SHEEHAN, Kerry",director,57,1969,2,0.5,"British,Irish"
+Lift Maintenance,07107549,GREEN LIFT COMPANY LTD,,DA14 6DF,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"GREEN, Gary Douglas",director,65,1960,11,16.2,English
+Lift Maintenance,07452473,P W LIFTS LTD,,CF14 9FB,—,—,52,Tier 3 — Quality Bolt-on,,No,"WEST, Phil",director,61,1965,2,15.3,British
+Lift Maintenance,07774969,AA LIFTS LTD,,ST11 9NR,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"DUNNING, Alan Thomas",director,57,1968,6,14.5,British
+Lift Maintenance,07880968,SWITCH LIFTS LTD,,BH25 5PS,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"WRIGHT, Simon James",director,56,1970,1,14.2,English
+Lift Maintenance,08139644,PREMIER PLATFORM LIFTS UK LIMITED,,TW4 6ER,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"DOLAN, Claire Julia",director,58,1967,6,3.5,British
+Lift Maintenance,08139644,PREMIER PLATFORM LIFTS UK LIMITED,,TW4 6ER,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"DOLAN, Simon Kevin",director,58,1968,2,13.7,British
+Lift Maintenance,08199807,NORTH WEST & CUMBRIA LIFTS LIMITED,,FY5 2DA,—,—,52,Tier 3 — Quality Bolt-on,,No,"ROBERTS, Mark",director,58,1967,5,13.5,British
+Lift Maintenance,08450340,SPIRAL LIFTS LIMITED,,CT12 5FD,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"TURNER, Ian Andrew",director,64,1961,6,13.0,British
+Lift Maintenance,08450340,SPIRAL LIFTS LIMITED,,CT12 5FD,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"TURNER, Michelle Kim",director,64,1961,6,13.0,British
+Lift Maintenance,08509751,ESPRIT LIFTS LIMITED,,RG8 7AY,—,—,52,Tier 3 — Quality Bolt-on,,No,"JUPP, Paul Robert",director,57,1968,8,0.3,British
+Lift Maintenance,08721434,DEA LIFTS LIMITED,,WC1H 8BP,—,—,52,Tier 3 — Quality Bolt-on,,No,"ZOTO, Astrit",director,55,1970,5,12.4,British
+Lift Maintenance,09074534,FREEMAN LIFT UK LTD,,WF10 4AB,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"FREEMAN, Andrew John",director,56,1969,12,11.8,British
+Lift Maintenance,09470764,AMBRITE LIFT HOLDINGS LIMITED,,SE1 2AQ,—,—,52,Tier 3 — Quality Bolt-on,,No,"BLANEY, Hugh Luke",director,62,1963,10,10.8,Irish
+Lift Maintenance,09470764,AMBRITE LIFT HOLDINGS LIMITED,,SE1 2AQ,—,—,52,Tier 3 — Quality Bolt-on,,No,"FROST, Giles James",director,63,1962,10,11.0,British
+Lift Maintenance,09470764,AMBRITE LIFT HOLDINGS LIMITED,,SE1 2AQ,—,—,52,Tier 3 — Quality Bolt-on,,No,"GREGORY, Michael John",director,57,1968,9,10.8,British
+Lift Maintenance,09676919,BLUE SKY LIFTS LTD,,SW8 2HU,—,—,52,Tier 3 — Quality Bolt-on,,No,"WHITTLESEY, John William",director,61,1964,7,10.7,English
+Lift Maintenance,10211522,ONLY LIFTS LIMITED,,TN38 9NR,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"TIDMAN, Gary",director,58,1967,11,9.8,British
+Lift Maintenance,10387628,RS LIFTS LTD,,CV7 9LH,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"STONE, Raymond",director,59,1966,11,9.5,British
+Lift Maintenance,10387628,RS LIFTS LTD,,CV7 9LH,—,—,52,Tier 3 — Quality Bolt-on,,Yes,"STONE, Sarah",director,59,1966,4,9.5,British
+Lift Maintenance,10702929,CALEDONIAN LIFTS MANCHESTER LTD,,OL8 2PF,—,£599k,52,Tier 3 — Quality Bolt-on,,No,"RAFTERY, Liam",director,64,1962,2,8.9,British
+Lift Maintenance,10988121,ECCAR ESCALATORS LIMITED,,ME2 2BF,—,—,52,Tier 3 — Quality Bolt-on,,No,"CARRINGTON, Dean",director,57,1969,2,0.5,British
+Lift Maintenance,11710735,BASE LIFT SERVICES LTD,,W1W 7LT,—,—,52,Tier 3 — Quality Bolt-on,,No,"HUMPHREY, Ralph Albert",director,58,1967,8,4.2,British
+Lift Maintenance,11745037,SWIFT HOME LIFTS UK LTD,,W1J 5BF,—,£-11832,52,Tier 3 — Quality Bolt-on,,No,"LÖWBÄCK, Tommy",director,74,1951,6,2.0,Swedish
+Roofing,09482065,N J STYLES ROOFING CONTRACTOR LIMITED,,,,,55,Medium,,Yes,"STYLES, Nigel John",director,59,1967,3,11.0,British
+Roofing,12915536,HERTS ROOFING CONTRACTORS LTD,,,,,55,Medium,,Yes,"HAESTIER, Lesley",director,65,1961,2,5.5,British
+Roofing,12915536,HERTS ROOFING CONTRACTORS LTD,,,,,55,Medium,,Yes,"HAESTIER, Neil",director,69,1956,6,5.5,British
+Roofing,07801759,G T JARVIS ROOFING CONTRACTORS LTD,,,,,55,Medium,,Yes,"JARVIS, Glenn Terence",director,57,1968,6,14.4,British
+Roofing,08942540,W & P ROOFING LIMITED,,,,,55,Medium,,No,"WILKES, Gary Anthony",director,56,1970,3,12.0,English
+Roofing,10196319,ELITE ROOFING SYSTEMS LTD,,,,,54,Medium,,No,"COLLINS, Michael James",director,56,1969,11,8.8,British
+Roofing,11540219,WEATHERPROOF ROOFING & SERVICES LTD,,,,,54,Medium,,No,"JOYCE, Matthew Leigh",director,59,1966,4,7.6,British
+Roofing,11666202,BARDSEY ROOFING & BUILDING SERVICES LTD,,,,,54,Medium,,No,"TIERNEY, Anthony James",director,59,1967,2,7.3,British
+Roofing,10848633,SAXON ROOFING LIMITED,,,,,54,Medium,,No,"RIMMER, John",director,58,1968,1,8.7,British
+Roofing,11434955,S ROLFE ROOFING LIMITED,,,,,54,Medium,,Yes,"ROLFE, Simon Andrew",director,56,1969,6,7.8,British
+Roofing,10731547,AA ROOFING SERVICES LIMITED,,,,,54,Medium,,No,"ALTENOR, Albert",director,60,1966,2,8.9,British
+Roofing,11267259,I HILL ROOFING LTD,,,,,54,Medium,,Yes,"HILL, Ian Michael",director,59,1966,12,3.7,British
+Roofing,11267259,I HILL ROOFING LTD,,,,,54,Medium,,Yes,"HILL, Rebecca Estelle",director,61,1964,12,8.0,British
+Roofing,10206146,BAKER FIELD ROOFING LTD,,,,,54,Medium,,Yes,"BAKER, Dean Jason",director,56,1969,7,9.8,British
+Roofing,11993848,STEADFAST ROOFING OXON LIMITED,,,,,54,Medium,,No,"MULLEN, Leo Luke",director,64,1961,9,6.8,British
+Roofing,11993848,STEADFAST ROOFING OXON LIMITED,,,,,54,Medium,,No,"RIDGWAY, Colin Patrick",director,64,1961,7,6.8,British
+Roofing,SC594011,AGM ROOFING & MAINTENANCE LTD,,,,,54,Medium,,No,"MARSHALL, Gerard James",director,57,1968,9,7.9,British
+Roofing,SC431572,STRATHISLA ROOFING LTD,,,,,53,Medium,,No,"MCMAHON, Gordon",director,55,1970,11,13.0,British
+Roofing,08813564,D LYFORD ROOFING LTD,,,,,53,Medium,,Yes,"LYFORD, Derek Geoffrey",director,55,1970,10,12.2,British
+Roofing,12122876,MJT ROOFING LTD,,,,,53,Medium,,Yes,"THOMPSON, Lena, Mrs.",director,66,1959,9,6.7,British
+Roofing,12122876,MJT ROOFING LTD,,,,,53,Medium,,Yes,"THOMPSON, Martin",director,67,1958,7,6.7,English
+Roofing,08333837,ROOFING & CONSTRUCTION LTD,,,,,53,Medium,,Yes,"RING, Jason Frederick",director,59,1967,1,8.8,British
+Roofing,08983517,HOME COUNTIES ROOFING LTD,,,,,53,Medium,,Yes,"GANNON, Neil James",director,56,1969,11,11.9,British
+Roofing,16137013,PSP ROOFING SERVICES LTD,,,,,53,Medium,,No,"PRICE, Paul Stephen",director,71,1955,3,1.2,English
+Roofing,09010982,CROWCLAD ROOFING LTD,,,,,52,Medium,,Yes,"CROWTHER, Jean",director,61,1964,11,11.9,British
+Roofing,09010982,CROWCLAD ROOFING LTD,,,,,52,Medium,,Yes,"CROWTHER, Steven",director,63,1962,6,11.9,British
+Roofing,09241812,ZINC AND COPPER ROOFING LIMITED,,,,,52,Medium,,No,"BUCKLEY, Gary Vincent",director,63,1963,1,11.2,British
+Roofing,SC568314,CHISHOLM ROOFING LTD,,,,,52,Medium,,Yes,"CHISHOLM, Cameron",director,58,1967,11,8.8,British
+Roofing,SC568314,CHISHOLM ROOFING LTD,,,,,52,Medium,,Yes,"CHISHOLM, Sandra",director,56,1969,8,3.7,British
+Roofing,07921425,HUGHES BROTHERS ROOFING LTD,,,,,52,Medium,,Yes,"HUGHES, Donna",director,57,1968,4,9.7,Welsh
+Roofing,07921425,HUGHES BROTHERS ROOFING LTD,,,,,52,Medium,,Yes,"HUGHES, Mark",director,58,1967,10,14.2,Welsh
+Roofing,13668732,ROGERS ROOFING & HOME IMPROVEMENTS LTD,,,,,52,Medium,,Yes,"ROGERS, Paul",director,67,1958,4,4.4,British
+Roofing,10690825,C K ROOFING CONTRACTORS LTD,,,,,52,Medium,,Yes,"KENT, Charmaine Denise",director,58,1968,2,9.0,British
+Roofing,10690825,C K ROOFING CONTRACTORS LTD,,,,,52,Medium,,Yes,"KENT, Colin Steven",director,60,1965,8,9.0,British
+Roofing,15754313,THE TRADITIONAL ROOFING COMPANY (WARWICK) LIMITED,,,,,52,Medium,,No,"DI PIETRO, Fernando",director,66,1959,4,1.8,Italian
+Roofing,08707735,PROFILE CLADDING & ROOFING LIMITED,,,,,51,Medium,,No,"LAUDER, Martin John",director,61,1964,10,12.5,British
+Roofing,08101232,WEATHERPROOFING SOLUTIONS LIMITED,,,,,51,Medium,,No,"EVANS, Paul John",director,67,1958,6,13.8,British
+Roofing,SC774952,TDP ROOFING SERVICES LTD,,,,,51,Medium,,No,"PEDEN, David",director,61,1965,2,2.7,British
+Roofing,08917373,JDP ROOFING LIMITED,,,,,51,Medium,,No,"POCOCK, John",director,56,1969,9,12.1,British
+Roofing,13150630,STORMPROOFING(UK) LTD,,,,,51,Medium,,No,"GILLEENEY, Mark",director,62,1963,4,5.2,British
+Roofing,09335825,MALLORN ROOFING CONTRACTORS LTD,,,,,51,Medium,,No,"BENNETT, Adrian",director,62,1963,7,11.2,British
+Roofing,SC688506,EK ROOFING LIMITED,,,,,51,Medium,,No,"KERR, Eric John",director,64,1962,1,5.1,British
+Roofing,SC550245,LKU ROOFING & JOINERY LTD,,,,,50,Medium,,No,"URQUHART, Lenn Kemp",director,55,1970,10,9.3,Scottish
+Roofing,10587904,R TYLER ROOFING LIMITED,,,,,50,Medium,,Yes,"PEARSON, Nigel Paul",director,58,1968,1,5.0,British
+Roofing,10587904,R TYLER ROOFING LIMITED,,,,,50,Medium,,Yes,"TYLER, Robert",director,67,1958,11,9.2,British
+Roofing,12356080,BRONTE FELT ROOFING LTD,,,,,50,Medium,,No,"FLAHERTY, John Martin",director,55,1971,1,6.2,British
+Roofing,16342368,BMK LIQUID ROOFING SYSTEMS LTD,,,,,50,Medium,,No,"KING, David",director,70,1955,6,1.0,British
+Roofing,SC553333,M AYRES ROOFING SERVICES LIMITED,,,,,50,Medium,,Yes,"AYRES, Michael",director,55,1970,11,9.2,British
+Roofing,13453779,DP ROOFING AND CLADDING LTD,,,,,49,Intelligence Only,,No,"PARRY, Darren",director,56,1969,7,4.8,British
+Roofing,SC747239,JH ROOFING AND CLADDING CONSULTING LTD,,,,,49,Intelligence Only,,No,"HAMILTON, James",director,56,1969,8,3.4,British
+Roofing,SC542514,MARK COPPER ROOFING LTD,,,,,49,Intelligence Only,,No,"MACEACHEN, Peggy",director,56,1969,7,9.3,British
+Roofing,13621097,DEAN POTTS ROOFING LIMITED,,,,,49,Intelligence Only,,Yes,"POTTS, Karen",director,62,1963,7,4.5,British
+Roofing,13621097,DEAN POTTS ROOFING LIMITED,,,,,49,Intelligence Only,,Yes,"POTTS, Melville Dean",director,59,1966,11,4.5,British
+Roofing,16026459,YORKSHIRE ZINC ROOFING LIMITED,,,,,49,Intelligence Only,,No,"LAWSON, Paul John",director,58,1968,1,1.4,British
+Roofing,15523646,JSD ROOFING AND CLADDING LIMITED,,,,,49,Intelligence Only,,No,"DEAKIN, James Simon",director,57,1968,6,2.1,British
+Roofing,11155956,ADVANCED ROOFING LINCOLNSHIRE LTD,,,,,49,Intelligence Only,,Yes,"HARDY, John Henry",director,56,1970,3,8.2,British
+Roofing,15448197,A1 WINDOWS AND ROOFING LTD,,,,,49,Intelligence Only,,No,"NEEDHAM, Stephen",director,59,1966,10,2.2,British
+Roofing,15887146,ELLIOTT ROOFING AND PROPERTY MAINTENANCE LTD,,,,,49,Intelligence Only,,Yes,"ELLIOTT, Andrew Olivia",director,58,1967,5,1.6,British
+Roofing,13475299,AM CONSTRUCTION AND ROOFING LTD,,,,,49,Intelligence Only,,No,"MARINSKAS, Alvydas",director,59,1966,9,4.8,Lithuanian
+Roofing,15925392,M.R ROOFING SERVICES LTD,,,,,48,Intelligence Only,,Yes,"SHENTON, David George",director,73,1952,7,1.2,British
+Roofing,15980960,WHELAN ROOFING & RENOVATIONS LIMITED,,,,,48,Intelligence Only,,Yes,"WHELAN, Reece Paul",director,61,1964,11,1.5,British
+Roofing,16298855,AL ROOFING (NW) LIMITED,,,,,48,Intelligence Only,,No,"LEYLAND, Andrew John Lesile",director,61,1964,5,1.0,British
+Roofing,11395463,R.VENABLES ROOFING LIMITED,,,,,47,Intelligence Only,,Yes,"VENABLES, Robert",director,55,1971,2,7.8,British
+Roofing,15859321,WF ROOFING LTD,,,,,47,Intelligence Only,,No,"MADDISON, Rachel Jane",director,57,1969,1,1.4,English
+Roofing,15859321,WF ROOFING LTD,,,,,47,Intelligence Only,,No,"WATSON, Ian Kenneth",director,58,1967,11,1.7,English
+Roofing,10698482,P.P.F. ROOFING & PROPERTY LIMITED,,,,,47,Intelligence Only,,Yes,"FITCHETT, Paul Philip",director,55,1970,10,9.0,British
+Roofing,10445206,A HUNTER ROOFING AND RENOVATIONS LTD,,,,,47,Intelligence Only,,Yes,"HUNTER, Alan David",director,56,1969,11,9.4,British
+Roofing,16085363,LOCAL ROOFING AND HOME IMPROVEMENTS LIMITED,,,,,46,Intelligence Only,,No,"SMITH, John",director,56,1970,1,1.3,British
+Roofing,16299965,ROCHE ROOFING SOLUTIONS LTD,,,,,46,Intelligence Only,,Yes,"ROCHE, Stephen George",director,56,1969,7,1.0,British
+Roofing,11354007,CRAVEN ROOFING LIMITED,,,,,45,Intelligence Only,,No,"CRAVEN, Kenneth",director,61,1965,2,7.8,British
+Roofing,11354007,CRAVEN ROOFING LIMITED,,,,,45,Intelligence Only,,No,"CRAVEN, Sharon Ann",director,62,1963,5,7.8,British
+Roofing,14848803,EAST RIDING ROOFING SERVICES LTD,,,,,45,Intelligence Only,,No,"CHALDERS, Thomas",director,62,1963,8,2.8,British
+Roofing,12288721,MONUMENT ROOFING & BUILDING (NORTH EAST) LTD,,,,,45,Intelligence Only,,No,"WILSON, Steve",director,55,1970,5,6.4,British
+Roofing,16310104,ELSENHAM ROOFING RECLAIM LIMITED,,,,,45,Intelligence Only,,No,"RIVETT, Christopher George",director,68,1958,2,1.0,British
+Roofing,14642246,PETE NICHOLLS ROOFING LIMITED,,,,,44,Intelligence Only,,Yes,"NICHOLLS, Peter",director,59,1966,8,3.1,British
+Roofing,15245851,THAME ROOFING LIMITED,,,,,44,Intelligence Only,,Yes,"HEDGER, Paul Robert",director,58,1968,1,2.4,British
+Roofing,13939011,TEGULA REACTIVE ROOFING LIMITED,,,,,44,Intelligence Only,,No,"FORREST, Elaine",director,67,1958,10,4.1,British
+Roofing,13939011,TEGULA REACTIVE ROOFING LIMITED,,,,,44,Intelligence Only,,No,"MURRAY, David",director,64,1961,4,1.1,British
+Roofing,15619059,LLEWELLYN ROOFING & SOLAR LIMITED,,,,,43,Intelligence Only,,Yes,"LLEWELLYN, Darren",director,62,1963,12,1.5,British
+Roofing,15621169,PREVENT ROOFING AND BUILDING LTD,,,,,42,Intelligence Only,,No,"SWAN, Sharon",director,58,1968,1,1.9,English
+Roofing,15962433,THORNTON ROOFING SOLUTIONS LTD,,,,,42,Intelligence Only,,Yes,"THORNTON, Garry",director,56,1970,3,1.5,British
+Roofing,14541636,LOCAL ROOFING CONSULTANTS LTD,,,,,42,Intelligence Only,,No,"POWELL, Adam Stephen",director,56,1970,2,3.2,British
+Roofing,15722075,ALD FLAT ROOFING LIMITED,,,,,41,Intelligence Only,,Yes,"SMITH, Samantha Jayne",director,58,1968,3,1.8,British
+Roofing,15722075,ALD FLAT ROOFING LIMITED,,,,,41,Intelligence Only,,Yes,"WHEAT, Wayne John",director,57,1969,1,1.8,British
+Roofing,13296320,BEACONSFIELD ROOFING LTD,,,,,41,Intelligence Only,,Yes,"DEARSLEY, Wayne Darryl",director,61,1964,4,5.0,English
+Roofing,13296320,BEACONSFIELD ROOFING LTD,,,,,41,Intelligence Only,,Yes,"GRIEVES, Brian Daniel Joseph",director,57,1968,10,5.0,English
+Roofing,14687583,BARBERS SPECIALIST WATERPROOFING LIMITED,,,,,40,Intelligence Only,,No,"BARBER, Simon Andrew",director,60,1965,11,3.1,British
+Roofing,14687583,BARBERS SPECIALIST WATERPROOFING LIMITED,,,,,40,Intelligence Only,,No,"FINLAYSON, Janine Marie",director,58,1967,4,2.8,British
+Roofing,14569194,THIRSK ROOFING LTD,,,,,40,Intelligence Only,,No,"LAWSON, Darryl Craig",director,57,1968,6,3.2,British
+Roofing,16005011,ABK FLAT ROOFING SPECIALIST AND MAINTENANCE LTD,,,,,40,Intelligence Only,,No,"KEENAN, Barry",director,56,1969,4,1.4,British
+Roofing,14306717,CHERWELL VALLEY ROOFING LTD,,,,,40,Intelligence Only,,No,"BUCKINGHAM, Paul",director,71,1955,1,3.6,British
+Roofing,15116344,ROSS'S ROOFING LIMITED,,,,,40,Intelligence Only,,No,"KING, Michael John",director,71,1954,12,2.5,British
+Roofing,14985407,J MARSHALL ROOFING (LONDON) LTD,,,,,40,Intelligence Only,,No,"MARSHALL, James",director,62,1964,2,2.7,British
+Roofing,15680173,WAKEHURST ROOFING LIMITED,,,,,40,Intelligence Only,,Yes,"HOWES, Derek",director,62,1963,12,1.9,British
+Roofing,16280973,CHOUGH ROOFING LTD,,,,,39,Intelligence Only,,No,"PINK, Martin Richard",director,56,1969,7,1.1,British
