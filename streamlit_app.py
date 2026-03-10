@@ -60,6 +60,8 @@ if "estimate_result" not in st.session_state:
     st.session_state.estimate_result = None     # parsed estimate.json once complete
 if "estimate_confirmed" not in st.session_state:
     st.session_state.estimate_confirmed = False # user pressed "Yes, run full search"
+if "_estimate_max_companies" not in st.session_state:
+    st.session_state["_estimate_max_companies"] = 0  # 0 = all companies
 
 
 # ── GitHub API helpers ─────────────────────────────────────────────────────────
@@ -286,6 +288,122 @@ def parse_excel_preview(zip_bytes: bytes) -> dict | None:
         return None
 
 
+def _show_reenrich_panel(run_id: str, run: dict, inputs: dict):
+    """
+    Show a 'Re-run enrichment' expander on completed runs.
+    Displays which modules were run originally, lets the user tick
+    additional ones, and triggers a new --extras-only GitHub Actions run.
+    """
+    ALL_MODULES = [
+        ("run_ocr",            "📄 Accounts OCR",      "Actual P&L from filed CH PDFs",               "~30 min"),
+        ("run_contacts",       "📧 Director Contacts",  "Email inference + LinkedIn",                   "~20 min"),
+        ("run_sell_signals",   "🚦 Sell Signals",       "Exit readiness, late filings, director churn", "~5 min"),
+        ("run_contracts",      "🏛 Gov. Contracts",     "Contracts Finder + Find a Tender",             "~10 min"),
+        ("run_digital",        "🌐 Digital Health",     "Website, domain age, LinkedIn, job postings",  "~20 min"),
+        ("run_accreditations", "🔖 Accreditations",     "EA, CQC, FCA, ICO, SIA, ISO checks",          "~10 min"),
+        ("run_competitor_map", "📍 Competitor Map",     "10 nearest rivals per company",                "~15 min"),
+    ]
+
+    sector = inputs.get("sector") or run.get("display_title", "")
+    if not sector:
+        return   # can't re-trigger without knowing the sector
+
+    orig_modules = inputs.get("modules", {})   # dict from original trigger
+
+    # Determine which modules were NOT run originally
+    missing = [k for k, *_ in ALL_MODULES if not orig_modules.get(k, True)]
+
+    with st.expander("🔄 Re-run / top-up enrichment modules", expanded=bool(missing)):
+        st.markdown(
+            "Select any modules to run (or re-run) against the existing search results. "
+            "Discovery and financials are skipped — only the selected steps will execute."
+        )
+
+        notify_email = inputs.get("notify_email", DEFAULT_EMAIL)
+
+        # Status badges for each module
+        badge_cols = st.columns(len(ALL_MODULES))
+        for i, (key, label, tip, est_time) in enumerate(ALL_MODULES):
+            was_run = orig_modules.get(key, True)
+            with badge_cols[i]:
+                color = "#E2EFDA" if was_run else "#FFD6D6"
+                text_color = "#1A5C2C" if was_run else "#7B0000"
+                icon  = "✅" if was_run else "❌"
+                st.markdown(
+                    f"<div style='background:{color};border-radius:6px;padding:6px 8px;"
+                    f"text-align:center;font-size:11px;color:{text_color};font-weight:600'>"
+                    f"{icon} {label.split(' ',1)[1]}</div>",
+                    unsafe_allow_html=True,
+                )
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        with st.form(key=f"reenrich_{run_id}"):
+            st.markdown("**Which modules do you want to run?**")
+            re_cols = st.columns(4)
+            re_vals = {}
+            for i, (key, label, tip, est_time) in enumerate(ALL_MODULES):
+                was_run = orig_modules.get(key, True)
+                # Pre-tick modules that were NOT run originally
+                default = not was_run
+                with re_cols[i % 4]:
+                    re_vals[key] = st.checkbox(
+                        label,
+                        value=default,
+                        help=f"{tip}  ·  Est. {est_time}",
+                        key=f"re_{run_id}_{key}",
+                    )
+
+            re_email = st.text_input(
+                "Notify email",
+                value=notify_email,
+                key=f"re_email_{run_id}",
+            )
+
+            selected_count = sum(re_vals.values())
+            est_extra = sum(
+                int(t.replace(" min","").replace("~",""))
+                for (k, _, _, t) in ALL_MODULES if re_vals.get(k)
+            )
+            if selected_count:
+                st.caption(f"{selected_count} module(s) selected · Est. ~{est_extra} min")
+
+            submitted = st.form_submit_button(
+                "🚀 Run selected modules",
+                type="primary",
+                disabled=(selected_count == 0),
+            )
+
+        if submitted and selected_count > 0:
+            workflow_inputs = {
+                "sector":      sector,
+                "region":      inputs.get("region", ""),
+                "min_revenue": inputs.get("min_revenue", ""),
+                "notify_email": re_email,
+                "extras_only": "true",   # skip steps 1–4
+                **{k: "true" if v else "false" for k, v in re_vals.items()},
+            }
+            ok = trigger_workflow(WORKFLOW_QUICK, workflow_inputs)
+            if ok:
+                # Track which modules this new run includes
+                combined = {k: (orig_modules.get(k, False) or re_vals.get(k, False)) for k, *_ in ALL_MODULES}
+                st.session_state.pending_trigger = {
+                    "sector": sector,
+                    "region": inputs.get("region", ""),
+                    "min_revenue": inputs.get("min_revenue", ""),
+                    "notify_email": re_email,
+                    "is_deep": False,
+                    "modules": combined,
+                    "triggered_at": datetime.now(timezone.utc).isoformat(),
+                }
+                st.success(f"✅ Re-enrichment run triggered for **{sector}**. You'll get an email at {re_email} when done.")
+                time.sleep(3)
+                st.cache_data.clear()
+                st.rerun()
+            else:
+                st.error("Failed to trigger re-enrichment. Check your GitHub token in secrets.")
+
+
 def show_excel_preview(zip_bytes: bytes, run_id: str):
     """Render grade distribution metrics + top companies table in Streamlit."""
     preview = parse_excel_preview(zip_bytes)
@@ -421,6 +539,7 @@ def _reset_estimate():
     st.session_state.estimate_result    = None
     st.session_state.estimate_sector    = ""
     st.session_state.estimate_confirmed = False
+    st.session_state["_estimate_max_companies"] = 0
 
 with tabs[0]:
     st.subheader("New Sector Search")
@@ -453,15 +572,6 @@ with tabs[0]:
                     help="Email address to notify when this specific search finishes.",
                 )
 
-            col3, _ = st.columns([1, 2])
-            with col3:
-                mode = st.radio(
-                    "Report depth",
-                    ["quick", "full"],
-                    captions=["~10 min · search + enrich + financials", "~60 min · adds sell signals, contracts, digital health"],
-                    index=0,
-                )
-
             with st.expander("Advanced filters (optional)"):
                 fc1, fc2 = st.columns(2)
                 with fc1:
@@ -475,6 +585,44 @@ with tabs[0]:
                         ["", "250000", "500000", "1000000", "2000000", "5000000"],
                         format_func=lambda x: "No minimum" if x == "" else f"£{int(x):,}",
                         index=0)
+
+            # ── Enrichment module checkboxes ──────────────────────────────────
+            st.markdown("**Enrichment modules** — tick what to include in this run")
+            st.caption("Core pipeline (search → filter → enrich → financials) always runs. Untick modules to speed up the search.")
+
+            MODULES = [
+                ("run_ocr",            "📄 Accounts OCR",      "Actual P&L figures from filed CH PDFs",               "~30 min", True),
+                ("run_contacts",       "📧 Director Contacts",  "Email inference + LinkedIn for each director",         "~20 min", True),
+                ("run_sell_signals",   "🚦 Sell Signals",       "Exit readiness: late filings, director churn, tenure", "~5 min",  True),
+                ("run_contracts",      "🏛 Gov. Contracts",     "Contracts Finder + Find a Tender lookups",             "~10 min", True),
+                ("run_digital",        "🌐 Digital Health",     "Website, domain age, LinkedIn, job postings",          "~20 min", True),
+                ("run_accreditations", "🔖 Accreditations",     "EA, CQC, FCA, ICO, SIA, ISO register checks",         "~10 min", True),
+                ("run_competitor_map", "📍 Competitor Map",     "10 nearest rivals per company (geographic + SIC)",     "~15 min", True),
+            ]
+
+            module_vals = {}
+            # Display 4 columns of checkboxes
+            mod_cols = st.columns(4)
+            for i, (key, label, tip, est_time, default) in enumerate(MODULES):
+                with mod_cols[i % 4]:
+                    module_vals[key] = st.checkbox(
+                        f"{label}",
+                        value=default,
+                        help=f"{tip}  ·  Est. {est_time}",
+                        key=f"mod_{key}",
+                    )
+
+            checked_count = sum(module_vals.values())
+            est_total = 10 + sum(
+                int(t.replace(" min","").replace("~",""))
+                for (k, _, _, t, _) in MODULES if module_vals.get(k)
+            )
+            st.caption(
+                f"**{checked_count}/{len(MODULES)} modules selected** "
+                f"· Estimated run time: ~{est_total} min"
+                + (" · All Excel tabs will be populated" if checked_count == len(MODULES) else
+                   " · Some Excel tabs will be blank (run Re-Enrich later to fill them in)")
+            )
 
             st.divider()
             deep_col, preview_col, _ = st.columns([1, 1, 1])
@@ -490,14 +638,13 @@ with tabs[0]:
             if not sector.strip():
                 st.error("Please enter a sector description.")
             else:
-                # ── Mark as triggered immediately so form disappears on rerun ──
-                st.session_state.estimate_triggered = True
-                st.session_state.estimate_sector    = sector.strip()
-                st.session_state._estimate_email    = notify_email
-                st.session_state._estimate_mode     = mode
-                st.session_state._estimate_region   = region
-                st.session_state._estimate_rev      = min_revenue
-                st.session_state._estimate_deep     = run_deep
+                st.session_state.estimate_triggered  = True
+                st.session_state.estimate_sector     = sector.strip()
+                st.session_state._estimate_email     = notify_email
+                st.session_state._estimate_region    = region
+                st.session_state._estimate_rev       = min_revenue
+                st.session_state._estimate_deep      = run_deep
+                st.session_state._estimate_modules   = dict(module_vals)
                 ok = trigger_workflow(WORKFLOW_ESTIMATE, {"sector": sector.strip()})
                 if not ok:
                     _reset_estimate()
@@ -627,9 +774,49 @@ with tabs[0]:
 
         # ── Confirm / restart ─────────────────────────────────────────────────
         st.markdown("**Would you like to run a full search on this sector?**")
+
+        # ── Company count limiter ──────────────────────────────────────────────
+        _COUNT_OPTIONS = {
+            "All companies":              0,
+            "Top 25  (quick test)":      25,
+            "Top 50  (quick test)":      50,
+            "Top 100":                  100,
+            "Top 250":                  250,
+            "Top 500":                  500,
+        }
+        # Suggest sensible default: cap at 250 for very large result sets
+        if total > 500:
+            _default_lbl = "Top 250"
+        elif total > 100:
+            _default_lbl = "Top 100"
+        else:
+            _default_lbl = "All companies"
+
+        _selected_lbl = st.selectbox(
+            "How many companies to process?",
+            options=list(_COUNT_OPTIONS.keys()),
+            index=list(_COUNT_OPTIONS.keys()).index(_default_lbl),
+            help=(
+                "Limit the number of companies enriched in this run. "
+                "Choose a smaller number for a quick test — you can always "
+                "re-run the remaining companies afterwards."
+            ),
+        )
+        _max_n = _COUNT_OPTIONS[_selected_lbl]
+
+        if _max_n and _max_n < total:
+            st.caption(
+                f"ℹ️ Will process the first **{_max_n:,}** of ~{total:,} estimated companies "
+                f"(≈ {_max_n / total * 100:.0f}% of the dataset). "
+                "You can top-up the rest later using the re-enrichment panel."
+            )
+        else:
+            st.caption(f"ℹ️ Will process all ~{total:,} estimated companies.")
+
         yes_col, no_col = st.columns([1, 1])
         with yes_col:
             if st.button("✅ Yes — Run Full Search", type="primary", use_container_width=True):
+                st.session_state["_estimate_max_companies"] = _max_n
                 st.session_state.estimate_confirmed = True
                 st.rerun()
         with no_col:
@@ -639,12 +826,16 @@ with tabs[0]:
 
     # ── PHASE 4: Confirmed — trigger the real pipeline ─────────────────────────
     elif st.session_state.estimate_confirmed:
-        sector       = st.session_state.estimate_sector
-        notify_email = st.session_state.get("_estimate_email", DEFAULT_EMAIL)
-        mode         = st.session_state.get("_estimate_mode", "quick")
-        region       = st.session_state.get("_estimate_region", "")
-        min_revenue  = st.session_state.get("_estimate_rev", "")
-        run_deep     = st.session_state.get("_estimate_deep", False)
+        sector        = st.session_state.estimate_sector
+        notify_email  = st.session_state.get("_estimate_email", DEFAULT_EMAIL)
+        region        = st.session_state.get("_estimate_region", "")
+        min_revenue   = st.session_state.get("_estimate_rev", "")
+        run_deep      = st.session_state.get("_estimate_deep", False)
+        max_companies = st.session_state.get("_estimate_max_companies", 0)
+        modules       = st.session_state.get("_estimate_modules", {k: True for k, *_ in [
+            ("run_ocr",), ("run_contacts",), ("run_sell_signals",),
+            ("run_contracts",), ("run_digital",), ("run_accreditations",), ("run_competitor_map",),
+        ]})
 
         with st.spinner(f"Launching full pipeline for '{sector}'…"):
             if run_deep:
@@ -653,19 +844,27 @@ with tabs[0]:
                 })
                 label = f"{sector} (Deep OCR)"
                 st.session_state.pending_trigger = {
-                    "sector": sector, "mode": "Deep OCR", "region": "",
-                    "min_revenue": "", "notify_email": notify_email, "is_deep": True,
+                    "sector": sector, "region": "", "min_revenue": "",
+                    "notify_email": notify_email, "is_deep": True,
+                    "modules": {k: True for k in modules},
                     "triggered_at": datetime.now(timezone.utc).isoformat(),
                 }
             else:
-                ok = trigger_workflow(WORKFLOW_QUICK, {
-                    "sector": sector, "mode": mode, "region": region,
-                    "min_revenue": min_revenue, "notify_email": notify_email,
-                })
+                workflow_inputs = {
+                    "sector":        sector,
+                    "region":        region,
+                    "min_revenue":   min_revenue,
+                    "notify_email":  notify_email,
+                    "extras_only":   "false",
+                    "max_companies": str(max_companies) if max_companies else "",
+                    **{k: "true" if v else "false" for k, v in modules.items()},
+                }
+                ok = trigger_workflow(WORKFLOW_QUICK, workflow_inputs)
                 label = sector
                 st.session_state.pending_trigger = {
-                    "sector": sector, "mode": mode, "region": region,
-                    "min_revenue": min_revenue, "notify_email": notify_email, "is_deep": False,
+                    "sector": sector, "region": region, "min_revenue": min_revenue,
+                    "notify_email": notify_email, "is_deep": False,
+                    "modules": modules,
                     "triggered_at": datetime.now(timezone.utc).isoformat(),
                 }
 
@@ -801,7 +1000,11 @@ for tab_idx, run_id in enumerate(pinned):
                         key=f"save_{run_id}",
                     )
                     show_excel_preview(data, run_id)
-            else:
+
+            # ── Re-enrichment panel ────────────────────────────────────────────
+            _show_reenrich_panel(run_id, run, inputs)
+
+            if not excel_arts:
                 st.info("No Excel artifact found — it may have expired (30-day retention).")
 
         elif status == "completed" and conc in ("failure", "timed_out"):

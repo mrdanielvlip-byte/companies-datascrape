@@ -8,14 +8,6 @@ on:
         description: 'Sector description (e.g. "fire safety", "HVAC contractors", "pest control")'
         required: true
         default: 'lift maintenance'
-      mode:
-        description: 'Report depth'
-        required: false
-        default: 'quick'
-        type: choice
-        options:
-          - quick
-          - full
       region:
         description: 'UK region filter (leave blank for all UK)'
         required: false
@@ -28,49 +20,161 @@ on:
         description: 'Email address to send results to'
         required: false
         default: 'daniellipinski@mac.com'
+      extras_only:
+        description: 'Re-enrichment run — skip discovery/financials, top-up selected modules only'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      max_companies:
+        description: 'Max companies to process after filtering (leave blank for all; e.g. 50 for a quick test)'
+        required: false
+        default: ''
+
+      # ── Per-module toggles (true = run, false = skip) ─────────────────────
+      run_ocr:
+        description: 'Accounts OCR — actual P&L from filed CH PDFs (~30 min extra)'
+        required: false
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+      run_contacts:
+        description: 'Director Contacts — email inference + LinkedIn (~20 min)'
+        required: false
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+      run_sell_signals:
+        description: 'Sell Signals — exit readiness, late filings, churn (~5 min)'
+        required: false
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+      run_contracts:
+        description: 'Gov. Contracts — Contracts Finder + Find a Tender (~10 min)'
+        required: false
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+      run_digital:
+        description: 'Digital Health — website, domain age, LinkedIn, jobs (~20 min)'
+        required: false
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+      run_accreditations:
+        description: 'Accreditations — EA, CQC, FCA, ICO, SIA, ISO registers (~10 min)'
+        required: false
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+      run_competitor_map:
+        description: 'Competitor Map — 10 nearest rivals per company (~15 min)'
+        required: false
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
 
 jobs:
   pe-search:
     name: PE Sector Search — ${{ inputs.sector }}
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 360
 
     steps:
       # ── 1. Checkout ───────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Python dependencies ────────────────────────────────────────────────
+      # ── 2. System dependencies (Tesseract for OCR) ───────────────────────────
+      - name: Install system packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-eng
+
+      # ── 3. Python dependencies ────────────────────────────────────────────────
       - name: Install Python packages
         run: |
           pip install --upgrade pip
-          pip install requests openpyxl python-dateutil PyMuPDF pgeocode
+          pip install \
+            requests \
+            openpyxl \
+            python-dateutil \
+            PyMuPDF \
+            pgeocode \
+            pandas \
+            numpy
 
-      # ── 3. Write API keys ────────────────────────────────────────────────────
+      # ── 4. Write API keys ─────────────────────────────────────────────────────
       - name: Write API keys
         run: |
           echo "COMPANIES_HOUSE_API_KEY=${{ secrets.CH_API_KEY }}" > .ch_api_key
           echo "FCA_SUBSCRIPTION_KEY=${{ secrets.FCA_SUBSCRIPTION_KEY }}" >> .ch_api_key
           echo "FCA_EMAIL=${{ secrets.FCA_EMAIL }}" >> .ch_api_key
 
-      # ── 4. Build output directory ─────────────────────────────────────────────
-      - name: Prepare output directory
-        run: mkdir -p output
+      # ── 5. Build output directory ─────────────────────────────────────────────
+      - name: Prepare directories
+        run: mkdir -p output data/sectors
 
-      # ── 5. Run pipeline ───────────────────────────────────────────────────────
+      # ── 6. Build pipeline flags from per-module inputs ────────────────────────
+      - name: Build pipeline flags
+        id: flags
+        run: |
+          FLAGS=""
+
+          # Re-enrichment mode: skip discovery/financials steps 1-4
+          if [ "${{ inputs.extras_only }}" = "true" ]; then
+            FLAGS="$FLAGS --extras-only"
+          fi
+
+          # Company count cap (optional quick-test mode)
+          if [ -n "${{ inputs.max_companies }}" ] && [ "${{ inputs.max_companies }}" != "0" ]; then
+            FLAGS="$FLAGS --max-companies ${{ inputs.max_companies }}"
+          fi
+
+          # Per-module skip flags (we skip when the input is 'false')
+          if [ "${{ inputs.run_ocr }}" = "false" ]; then
+            FLAGS="$FLAGS --no-accounts-ocr"
+          fi
+          if [ "${{ inputs.run_contacts }}" = "false" ]; then
+            FLAGS="$FLAGS --skip-contacts"
+          fi
+          if [ "${{ inputs.run_sell_signals }}" = "false" ]; then
+            FLAGS="$FLAGS --no-sell-signals"
+          fi
+          if [ "${{ inputs.run_contracts }}" = "false" ]; then
+            FLAGS="$FLAGS --no-contracts"
+          fi
+          if [ "${{ inputs.run_digital }}" = "false" ]; then
+            FLAGS="$FLAGS --no-digital"
+          fi
+          if [ "${{ inputs.run_accreditations }}" = "false" ]; then
+            FLAGS="$FLAGS --no-accreditations"
+          fi
+          if [ "${{ inputs.run_competitor_map }}" = "false" ]; then
+            FLAGS="$FLAGS --no-competitor-map"
+          fi
+
+          echo "flags=$FLAGS" >> $GITHUB_OUTPUT
+          echo "Built flags: $FLAGS"
+
+      # ── 7. Run pipeline ───────────────────────────────────────────────────────
       - name: Run PE sourcing pipeline
         env:
           COMPANIES_HOUSE_API_KEY: ${{ secrets.CH_API_KEY }}
           SECTOR_REGION: ${{ inputs.region }}
           SECTOR_MIN_REVENUE: ${{ inputs.min_revenue }}
         run: |
-          MODE_FLAG="--${{ inputs.mode }}"
           SECTOR="${{ inputs.sector }}"
+          FLAGS="${{ steps.flags.outputs.flags }}"
 
-          echo "Running pipeline for: $SECTOR (mode: ${{ inputs.mode }})"
-          python3 run.py --sector "$SECTOR" $MODE_FLAG
+          echo "Running pipeline for: $SECTOR"
+          echo "Flags: $FLAGS"
+          python3 run.py --sector "$SECTOR" $FLAGS
 
-      # ── 6. Upload Excel artifact ──────────────────────────────────────────────
+      # ── 8. Upload Excel artifact ──────────────────────────────────────────────
       - name: Upload Excel output
         uses: actions/upload-artifact@v4
         if: always()
@@ -80,7 +184,7 @@ jobs:
           retention-days: 30
           overwrite: true
 
-      # ── 7. Send completion email via Resend ───────────────────────────────────
+      # ── 9. Send completion email via Resend ───────────────────────────────────
       - name: Send completion email
         if: always()
         env:
@@ -96,12 +200,26 @@ jobs:
               print("[notify] RESEND_API_KEY not set — skipping email")
               raise SystemExit(0)
 
-          run_id  = "${{ github.run_id }}"
-          repo    = "${{ github.repository }}"
-          sector  = "${{ inputs.sector }}"
-          mode    = "${{ inputs.mode }}"
-          status  = "${{ job.status }}"
-          run_url = f"https://github.com/{repo}/actions/runs/{run_id}"
+          run_id     = "${{ github.run_id }}"
+          repo       = "${{ github.repository }}"
+          sector     = "${{ inputs.sector }}"
+          status     = "${{ job.status }}"
+          run_url    = f"https://github.com/{repo}/actions/runs/{run_id}"
+          flags      = "${{ steps.flags.outputs.flags }}"
+          extras_only = "${{ inputs.extras_only }}" == "true"
+
+          modules_run = []
+          if "${{ inputs.run_ocr }}"           != "false": modules_run.append("Accounts OCR")
+          if "${{ inputs.run_contacts }}"       != "false": modules_run.append("Contacts")
+          if "${{ inputs.run_sell_signals }}"   != "false": modules_run.append("Sell Signals")
+          if "${{ inputs.run_contracts }}"      != "false": modules_run.append("Gov. Contracts")
+          if "${{ inputs.run_digital }}"        != "false": modules_run.append("Digital Health")
+          if "${{ inputs.run_accreditations }}" != "false": modules_run.append("Accreditations")
+          if "${{ inputs.run_competitor_map }}" != "false": modules_run.append("Competitor Map")
+
+          run_type    = "Re-enrichment" if extras_only else "Full search"
+          max_co_raw  = "${{ inputs.max_companies }}"
+          max_co_str  = f"Top {max_co_raw} companies (test run)" if max_co_raw and max_co_raw != "0" else "All companies"
 
           payload = {
               "from":    "PE Deal Sourcing <onboarding@resend.dev>",
@@ -109,7 +227,9 @@ jobs:
               "subject": f"✅ {sector.title()} — Deal Sourcing Report Ready ({status})",
               "text": (
                   f"Your {sector} intelligence report has finished.\n\n"
-                  f"Mode: {mode}  |  Status: {status}\n\n"
+                  f"Run type: {run_type}  |  Status: {status}\n"
+                  f"Scope: {max_co_str}\n"
+                  f"Modules run: {', '.join(modules_run) if modules_run else 'Core only (1-4)'}\n\n"
                   f"DOWNLOAD YOUR EXCEL:\n{run_url}\n\n"
                   f"→ Open the link → scroll to bottom → click 'pe-sourcing-results'\n\n"
                   f"Run ID: {run_id}\n"

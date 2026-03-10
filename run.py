@@ -303,13 +303,26 @@ Examples:
     parser.add_argument("--contacts-only",     action="store_true", help="Step 5 only")
     parser.add_argument("--no-accounts-ocr",   action="store_true", help="Skip Step 4b (accounts PDF OCR). Use with --quick or if OCR already done.")
     parser.add_argument("--excel-only",      action="store_true", help="Steps 10–11 only (bolt-on + Excel)")
-    parser.add_argument("--skip-contacts",   action="store_true", help="Skip contact enrichment (faster)")
-    parser.add_argument("--no-disify",       action="store_true", help="Skip Disify email verification")
-    parser.add_argument("--skip-extras",     action="store_true", help="Skip steps 6–9 (sell signals, contracts, digital, accreditations)")
-    parser.add_argument("--no-sell-signals", action="store_true", help="Skip sell intent signal analysis (step 6)")
-    parser.add_argument("--no-contracts",    action="store_true", help="Skip government contracts lookup (step 7)")
-    parser.add_argument("--no-digital",      action="store_true", help="Skip digital health assessment (step 8)")
+    parser.add_argument("--skip-contacts",     action="store_true", help="Skip contact enrichment (step 5)")
+    parser.add_argument("--no-disify",         action="store_true", help="Skip Disify email verification")
+    parser.add_argument("--skip-extras",       action="store_true", help="Skip steps 6–12 (sell signals, contracts, digital, accreditations, competitor map, acquisition score)")
+    parser.add_argument("--no-sell-signals",   action="store_true", help="Skip sell intent signal analysis (step 6)")
+    parser.add_argument("--no-contracts",      action="store_true", help="Skip government contracts lookup (step 7)")
+    parser.add_argument("--no-digital",        action="store_true", help="Skip digital health assessment (step 8)")
     parser.add_argument("--no-accreditations", action="store_true", help="Skip accreditation enrichment (step 9)")
+    parser.add_argument("--no-bolt-on",        action="store_true", help="Skip bolt-on sector adjacency analysis (step 10)")
+    parser.add_argument("--no-competitor-map", action="store_true", help="Skip competitor mapping (step 11)")
+    parser.add_argument("--no-acquisition-score", action="store_true", help="Skip acquisition attractiveness scoring (step 12)")
+    # Re-enrichment mode: skip discovery/search/financials, run only the selected
+    # enrichment modules on an already-enriched dataset (for post-run top-ups).
+    parser.add_argument("--extras-only",       action="store_true",
+                        help="Skip steps 1–4 (discovery already done); run only the selected "
+                             "enrichment modules (5–12) on the existing enriched JSON. "
+                             "Use with --no-* flags to pick exactly which modules to run.")
+    parser.add_argument("--max-companies",     type=int, default=0, metavar="N",
+                        help="Limit the pipeline to the first N companies after filtering "
+                             "(step 2). 0 or omitted = process all. Useful for quick test "
+                             "runs before committing to a full sector search.")
 
     parser.add_argument(
         "--local-db",
@@ -403,6 +416,13 @@ Examples:
         contacts.run()
         return
 
+    if args.extras_only:
+        # Re-enrichment mode: steps 1–4 already done; run only selected modules.
+        # The --no-* flags control which modules are skipped.
+        print("  [EXTRAS-ONLY MODE]  Skipping discovery/search/financials — running selected enrichment modules only.\n")
+        # fall through to the enrichment steps below; the skip_* guards handle exclusion
+        pass
+
     if args.excel_only:
         bolt = reload("bolt_on")
         bolt.run()
@@ -412,64 +432,94 @@ Examples:
 
     # ── Full pipeline ─────────────────────────────────────────────────────────
 
-    # --quick preset: skip contacts + all extra enrichment steps (5x faster)
+    # --quick preset: propagate to individual --no-* flags (keeps logic below clean)
     if args.quick:
-        args.skip_contacts = True
-        args.skip_extras   = True
-        print("  [QUICK MODE]  Steps 1-4 + Excel only. Use --full for contacts, sell signals,")
-        print("                contracts, digital health and accreditations.\n")
+        args.skip_contacts       = True
+        args.no_accounts_ocr     = True
+        args.no_sell_signals     = True
+        args.no_contracts        = True
+        args.no_digital          = True
+        args.no_accreditations   = True
+        args.no_bolt_on          = True
+        args.no_competitor_map   = True
+        args.no_acquisition_score = True
+        print("  [QUICK MODE]  Steps 1-4 + Excel only. Uncheck individual modules to re-add them,")
+        print("                or run without --quick for the full pipeline.\n")
 
-    skip_extras = args.skip_extras
+    # --skip-extras: legacy batch-skip for steps 6–12
+    if args.skip_extras:
+        args.no_sell_signals      = True
+        args.no_contracts         = True
+        args.no_digital           = True
+        args.no_accreditations    = True
+        args.no_bolt_on           = True
+        args.no_competitor_map    = True
+        args.no_acquisition_score = True
 
-    if args.smart:
-        # ── Smart guided search ───────────────────────────────────────────────
-        print(f"Step 1/11 — Smart Sector Search  ⚡")
-        smart = reload("smart_search")
-        result = smart.run_interactive(
-            sector=args.sector or cfg.SECTOR_LABEL,
-            non_interactive=False,
-        )
-        if not result:
-            return
-        print("\nStep 2/11 — Filter (applied during smart search)")
-    elif args.reg_source:
-        # ── Register-first discovery ──────────────────────────────────────────
-        reg_query = getattr(args, "reg_query", "")
-        print(f"Step 1/11 — Register Discovery ({args.reg_source}: '{reg_query}')")
-        _run_register_discovery(args.reg_source, reg_query, cfg)
-        print("\nStep 2/11 — Filter (applied during register discovery)")
-    elif args.local_db:
-        # ── Local SQLite DB search (fast, no API calls) ───────────────────────
-        print("Step 1/11 — Local DB Search  ⚡ (SQLite, no API)")
-        local = reload("local_search")
-        local.run()
-        print("\nStep 2/11 — Filter (applied during local search)")
+    if not args.extras_only:
+        # ── Steps 1–4: Discovery, filter, enrich, financials ──────────────────
+        if args.smart:
+            print(f"Step 1/13 — Smart Sector Search  ⚡")
+            smart = reload("smart_search")
+            result = smart.run_interactive(
+                sector=args.sector or cfg.SECTOR_LABEL,
+                non_interactive=False,
+            )
+            if not result:
+                return
+            print("\nStep 2/13 — Filter (applied during smart search)")
+        elif args.reg_source:
+            reg_query = getattr(args, "reg_query", "")
+            print(f"Step 1/13 — Register Discovery ({args.reg_source}: '{reg_query}')")
+            _run_register_discovery(args.reg_source, reg_query, cfg)
+            print("\nStep 2/13 — Filter (applied during register discovery)")
+        elif args.local_db:
+            print("Step 1/13 — Local DB Search  ⚡ (SQLite, no API)")
+            local = reload("local_search")
+            local.run()
+            print("\nStep 2/13 — Filter (applied during local search)")
+        else:
+            print("Step 1/13 — Search (Companies House API)")
+            search = reload("ch_search")
+            search.run()
+            print("\nStep 2/13 — Filter")
+            filter_companies(cfg)
+
+        # ── Optional: cap company count after filtering ───────────────────────
+        max_n = getattr(args, "max_companies", 0) or 0
+        if max_n > 0:
+            filtered_path = os.path.join(cfg.OUTPUT_DIR, cfg.FILTERED_JSON)
+            try:
+                with open(filtered_path) as _f:
+                    _filtered = json.load(_f)
+                if len(_filtered) > max_n:
+                    print(f"\n  [MAX-COMPANIES] Capping to first {max_n:,} of {len(_filtered):,} filtered companies")
+                    with open(filtered_path, "w") as _f:
+                        json.dump(_filtered[:max_n], _f, indent=2)
+                else:
+                    print(f"\n  [MAX-COMPANIES] {len(_filtered):,} companies ≤ limit ({max_n:,}) — no cap applied")
+            except Exception as _e:
+                print(f"\n  [MAX-COMPANIES] Warning: could not apply cap — {_e}")
+
+        print("\nStep 3/13 — Enrich (directors, PSC, charges, acquisition scoring)")
+        enrich = reload("ch_enrich")
+        enrich.run()
+
+        print("\nStep 4/13 — Financial estimation (PE 6-model triangulation)")
+        fin = reload("ch_financials")
+        fin.run()
     else:
-        # ── Standard SIC sweep via Companies House API ────────────────────────
-        print("Step 1/11 — Search (Companies House API)")
-        search = reload("ch_search")
-        search.run()
+        print("  [EXTRAS-ONLY]  Steps 1–4 skipped — using existing enriched dataset.\n")
 
-        print("\nStep 2/11 — Filter")
-        filter_companies(cfg)
-
-    print("\nStep 3/11 — Enrich (directors, PSC, charges, acquisition scoring)")
-    enrich = reload("ch_enrich")
-    enrich.run()
-
-    print("\nStep 4/11 — Financial estimation (PE 6-model triangulation: Employee, Asset, Staff Cost, Net Asset, Location, Director Hybrid)")
-    fin = reload("ch_financials")
-    fin.run()
-
-    # Step 4b — Accounts OCR (skipped in --quick mode or with --no-accounts-ocr)
-    skip_ocr = args.quick or getattr(args, "no_accounts_ocr", False)
-    if not skip_ocr:
-        print("\nStep 4b/13 — Accounts OCR (CH Document API + Tesseract: pull actual P&L from filed PDFs)")
+    # ── Step 4b: Accounts OCR ─────────────────────────────────────────────────
+    if not getattr(args, "no_accounts_ocr", False):
+        print("\nStep 4b/13 — Accounts OCR (CH Document API + Tesseract: actual P&L from filed PDFs)")
         ocr = reload("ch_accounts_ocr")
         ocr.run(resume=True)
     else:
-        print("\nStep 4b/13 — Accounts OCR SKIPPED (--quick mode; use --full or omit --no-accounts-ocr)")
+        print("\nStep 4b/13 — Accounts OCR SKIPPED")
 
+    # ── Step 5: Contacts ──────────────────────────────────────────────────────
     if not args.skip_contacts:
         run_disify = not args.no_disify
         label = "Disify verified" if run_disify else "unverified (no Disify)"
@@ -477,57 +527,63 @@ Examples:
         contacts = reload("ch_contacts")
         contacts.run(run_disify=run_disify)
     else:
-        print("\nStep 5/13 — Contact intelligence SKIPPED (--skip-contacts)")
+        print("\nStep 5/13 — Contact intelligence SKIPPED")
 
-    # ── Enhanced intelligence steps (6–9) ────────────────────────────────────
-
-    if not skip_extras and not args.no_sell_signals:
+    # ── Step 6: Sell signals ──────────────────────────────────────────────────
+    if not getattr(args, "no_sell_signals", False):
         print("\nStep 6/13 — Sell intent signals (late filings, director churn, age/tenure)")
         sell = reload("sell_signals")
         sell.run()
     else:
         print("\nStep 6/13 — Sell signals SKIPPED")
 
-    if not skip_extras and not args.no_contracts:
+    # ── Step 7: Government contracts ─────────────────────────────────────────
+    if not getattr(args, "no_contracts", False):
         print("\nStep 7/13 — Government contracts (Contracts Finder + Find a Tender)")
         contracts = reload("contracts_finder")
         contracts.run()
     else:
         print("\nStep 7/13 — Government contracts SKIPPED")
 
-    if not skip_extras and not args.no_digital:
+    # ── Step 8: Digital health ────────────────────────────────────────────────
+    if not getattr(args, "no_digital", False):
         print("\nStep 8/13 — Digital health (domain age, LinkedIn, job postings)")
         digital = reload("digital_health")
         digital.run()
     else:
         print("\nStep 8/13 — Digital health SKIPPED")
 
-    if not skip_extras and not args.no_accreditations:
+    # ── Step 9: Accreditations ────────────────────────────────────────────────
+    if not getattr(args, "no_accreditations", False):
         print("\nStep 9/13 — Accreditations (CQC, Environment Agency, ICO, ISO/CHAS)")
         accreds = reload("accreditations")
         accreds.run()
     else:
         print("\nStep 9/13 — Accreditations SKIPPED")
 
-    print("\nStep 10/13 — Bolt-on sector adjacency analysis")
-    bolt = reload("bolt_on")
-    bolt.run()
+    # ── Step 10: Bolt-on adjacency ────────────────────────────────────────────
+    if not getattr(args, "no_bolt_on", False):
+        print("\nStep 10/13 — Bolt-on sector adjacency analysis")
+        bolt = reload("bolt_on")
+        bolt.run()
+    else:
+        print("\nStep 10/13 — Bolt-on analysis SKIPPED")
 
-    # ── Step 11: Competitor Map (geographic + operational) ────────────────────
-    if not skip_extras:
+    # ── Step 11: Competitor Map ───────────────────────────────────────────────
+    if not getattr(args, "no_competitor_map", False):
         print("\nStep 11/13 — Competitor mapping (10 closest rivals per company, PE-backed flags)")
         comp_map = reload("competitor_map")
         comp_map.run()
     else:
-        print("\nStep 11/13 — Competitor mapping SKIPPED (--quick mode)")
+        print("\nStep 11/13 — Competitor mapping SKIPPED")
 
-    # ── Step 12: Acquisition Attractiveness Score ──────────────────────────────
-    if not skip_extras:
+    # ── Step 12: Acquisition Score ────────────────────────────────────────────
+    if not getattr(args, "no_acquisition_score", False):
         print("\nStep 12/13 — Acquisition attractiveness scoring (5-dimension, 0–100)")
         acq = reload("acquisition_score")
         acq.run()
     else:
-        print("\nStep 12/13 — Acquisition scoring SKIPPED (--quick mode)")
+        print("\nStep 12/13 — Acquisition scoring SKIPPED")
 
     print("\nStep 13/13 — Build Excel (10-sheet workbook)")
     excel = reload("build_excel")
