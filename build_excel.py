@@ -84,19 +84,30 @@ def _normalise(c: dict) -> dict:
         c["director_count"] = len(c["directors"])
 
     # ── Normalise director dicts ───────────────────────────────────────────────
-    # enrich_batch uses age_est (not age) and has no years_active / occupation
+    # enrich_batch stores age under "age_est"; live pipeline uses "age".
+    # If neither is available (pre-fix batch data), estimate from tenure:
+    #   assumed_age = max(45, 22 + years_active) — youngest a director could
+    #   reasonably be at appointment is 22; floor at 45 (UK SME conservative).
     raw_dirs = c.get("directors", [])
     norm_dirs = []
     for d in raw_dirs:
         nd = dict(d)
+        # 1. Prefer explicit age, fall back to age_est
         if nd.get("age") is None:
             nd["age"] = nd.get("age_est")
+        # 2. Derive years_active from appointment date if missing
         if nd.get("years_active") is None:
             appt_year = (nd.get("appointed") or "")[:4]
             try:
                 nd["years_active"] = round(2026 - int(appt_year), 1) if len(appt_year) == 4 else 0
             except (ValueError, TypeError):
                 nd["years_active"] = 0
+        # 3. If age is still unknown, estimate conservatively from tenure
+        #    (marks it as estimated so succession scoring is appropriately modest)
+        if nd.get("age") is None:
+            tenure = nd.get("years_active") or 0
+            nd["age"] = max(45, round(22 + tenure))
+            nd["age_estimated"] = True   # flag so downstream can distinguish
         if not nd.get("occupation"):
             nd["occupation"] = nd.get("role", "")
         norm_dirs.append(nd)
@@ -124,23 +135,54 @@ def _normalise(c: dict) -> dict:
             }
 
     # ── Dealability ────────────────────────────────────────────────────────────
+    # Offline proxy (max 12/20 — ceiling left for live API signals):
+    #   +3  Clean charge register (no outstanding charges)
+    #   +1  Low charges (1–2 outstanding)
+    #   +2  Long-tenure directors (≥15 yrs) — owner-managed stability signal
+    #   +2  Single / dual director — simple ownership structure
+    #   +2  Company age ≥ 20 yrs — proven longevity, mature exit candidate
+    #   +1  No active charges at all in charges dict
+    #   +1  Consistent accounts filing history (≥2 years on record)
     if not c.get("dealability"):
-        charges = c.get("charges", {})
-        outstanding = charges.get("outstanding_charges", 0)
+        charges      = c.get("charges", {})
+        outstanding  = charges.get("outstanding_charges", 0) or 0
+        hist         = c.get("accounts_history") or []
+        age_yrs      = c.get("company_age_years") or c.get("age_years") or 0
+        signals      = []
         sc = 0
-        # Clean charge register signal
+
+        # Charge register
         if outstanding == 0:
-            sc += 3
+            sc += 3; signals.append("Clean charge register (+3)")
         elif outstanding <= 2:
-            sc += 1
-        # Governance hire proxy: any director with a known occupation/role
-        if any(d.get("occupation") or d.get("role") for d in norm_dirs):
-            sc += 1
+            sc += 1; signals.append("Low outstanding charges (+1)")
+
+        # Director tenure — long-serving = likely founder/owner
+        long_tenure = [d for d in norm_dirs if (d.get("years_active") or 0) >= 15]
+        if long_tenure:
+            sc += 2; signals.append(f"{len(long_tenure)} long-tenure director(s) ≥15yr (+2)")
+
+        # Simple ownership structure
+        if len(norm_dirs) <= 2:
+            sc += 2; signals.append("Simple ownership (≤2 directors) (+2)")
+        elif len(norm_dirs) == 3:
+            sc += 1; signals.append("Small board (3 directors) (+1)")
+
+        # Company maturity
+        if age_yrs >= 20:
+            sc += 2; signals.append(f"Mature business ({age_yrs:.0f} yrs) (+2)")
+        elif age_yrs >= 10:
+            sc += 1; signals.append(f"Established business ({age_yrs:.0f} yrs) (+1)")
+
+        # Filing history consistency
+        if len(hist) >= 2:
+            sc += 1; signals.append("Consistent accounts history (+1)")
+
         c["dealability"] = {
             "score":        min(sc, 20),
-            "signals":      [],
-            "signal_count": 0,
-            "data_tier":    "Tier 4 — derived from charges",
+            "signals":      signals,
+            "signal_count": len(signals),
+            "data_tier":    "Tier 4 — offline proxy (charges + tenure + structure + maturity)",
         }
 
     # ── Acquisition score ──────────────────────────────────────────────────────

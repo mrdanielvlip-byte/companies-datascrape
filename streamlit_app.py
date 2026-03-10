@@ -11,8 +11,11 @@ Features:
 
 import time
 import json
+import zipfile
+import io
 import streamlit as st
 import requests
+import pandas as pd
 from datetime import datetime, timezone
 
 # ── Page config ────────────────────────────────────────────────────────────────
@@ -173,6 +176,162 @@ def fmt_duration(started, completed=None):
 def run_display_name(run):
     name = run.get("display_title") or run.get("name") or f"Run {run.get('id', '?')}"
     return name[:50]
+
+
+# ── Excel preview helper ──────────────────────────────────────────────────────
+
+GRADE_COLOURS = {
+    "Prime":             "#375623",   # dark green
+    "High":              "#1F5C99",   # dark blue
+    "Medium":            "#7B5B00",   # amber
+    "Intelligence Only": "#555555",   # grey
+}
+GRADE_BG = {
+    "Prime":             "#E2EFDA",
+    "High":              "#DDEEFF",
+    "Medium":            "#FFF2CC",
+    "Intelligence Only": "#EEEEEE",
+}
+
+def parse_excel_preview(zip_bytes: bytes) -> dict | None:
+    """
+    Extract the PE Pipeline sheet from the downloaded zip artifact.
+    Returns a dict with grade_counts, top_companies DataFrame, and summary stats.
+    """
+    try:
+        from openpyxl import load_workbook
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
+            xlsx_names = [n for n in z.namelist() if n.endswith(".xlsx")]
+            if not xlsx_names:
+                return None
+            xlsx_data = z.read(xlsx_names[0])
+
+        wb = load_workbook(io.BytesIO(xlsx_data), read_only=True, data_only=True)
+
+        if "PE Pipeline" not in wb.sheetnames:
+            return None
+
+        ws = wb["PE Pipeline"]
+        rows = list(ws.iter_rows(values_only=True))
+
+        # Row 3 (index 2) is the header row
+        if len(rows) < 4:
+            return None
+
+        headers = [str(h).strip() if h else "" for h in rows[2]]
+
+        # Find key columns by header name
+        def col(name):
+            try:
+                return headers.index(name)
+            except ValueError:
+                return None
+
+        ci_name   = col("Company Name")
+        ci_grade  = col("Grade")
+        ci_score  = col("Acq. Score")
+        ci_rev    = col("Rev. Base £")
+        ci_ebitda = col("EBITDA £")
+        ci_epct   = col("EBITDA %")
+        ci_sell   = col("SI Band")
+        ci_family = col("Family")
+        ci_pe     = col("PE")
+        ci_dirs   = col("Dirs")
+        ci_age    = col("Age")
+
+        data_rows = rows[3:]   # skip title, subtitle, header
+        records = []
+        for r in data_rows:
+            if not r or not any(r):
+                continue
+            name = r[ci_name] if ci_name is not None else ""
+            if not name:
+                continue
+            records.append({
+                "Company":     str(name),
+                "Grade":       str(r[ci_grade]  or "") if ci_grade  is not None else "",
+                "Score":       r[ci_score]  if ci_score  is not None else None,
+                "Rev. Base":   str(r[ci_rev]    or "") if ci_rev    is not None else "",
+                "EBITDA £":    str(r[ci_ebitda] or "") if ci_ebitda is not None else "",
+                "EBITDA %":    str(r[ci_epct]   or "") if ci_epct   is not None else "",
+                "Sell Intent": str(r[ci_sell]   or "") if ci_sell   is not None else "",
+                "Family":      str(r[ci_family] or "") if ci_family is not None else "",
+                "PE":          str(r[ci_pe]     or "") if ci_pe     is not None else "",
+                "Dirs":        r[ci_dirs]  if ci_dirs  is not None else None,
+                "Age (yr)":    r[ci_age]   if ci_age   is not None else None,
+            })
+
+        df = pd.DataFrame(records)
+        if df.empty:
+            return None
+
+        # Grade distribution
+        grade_counts = df["Grade"].value_counts().to_dict()
+        grade_order  = ["Prime", "High", "Medium", "Intelligence Only"]
+        grade_counts = {g: grade_counts.get(g, 0) for g in grade_order}
+
+        # Top companies — Prime first, then High, sorted by score
+        df["_score_num"] = pd.to_numeric(df["Score"], errors="coerce").fillna(0)
+        grade_rank = {"Prime": 0, "High": 1, "Medium": 2, "Intelligence Only": 3}
+        df["_grade_rank"] = df["Grade"].map(grade_rank).fillna(9)
+        top = df.sort_values(["_grade_rank", "_score_num"], ascending=[True, False]).head(25)
+        display_cols = ["Company", "Grade", "Score", "Rev. Base", "EBITDA £",
+                        "EBITDA %", "Sell Intent", "Family", "Dirs", "Age (yr)"]
+        top_df = top[display_cols].reset_index(drop=True)
+        top_df.index = top_df.index + 1   # 1-based rank
+
+        return {"grade_counts": grade_counts, "top_df": top_df, "total": len(df)}
+
+    except Exception:
+        return None
+
+
+def show_excel_preview(zip_bytes: bytes, run_id: str):
+    """Render grade distribution metrics + top companies table in Streamlit."""
+    preview = parse_excel_preview(zip_bytes)
+    if not preview:
+        return
+
+    st.divider()
+    st.markdown("#### 📊 Results Preview")
+
+    gc   = preview["grade_counts"]
+    total = preview["total"]
+
+    # Grade metric cards
+    mcols = st.columns(4)
+    for i, grade in enumerate(["Prime", "High", "Medium", "Intelligence Only"]):
+        count = gc.get(grade, 0)
+        pct   = f"{count/total*100:.0f}%" if total > 0 else "0%"
+        with mcols[i]:
+            st.markdown(
+                f"<div style='background:{GRADE_BG[grade]};border-radius:8px;padding:12px 16px;"
+                f"text-align:center;border-left:4px solid {GRADE_COLOURS[grade]}'>"
+                f"<div style='font-size:28px;font-weight:700;color:{GRADE_COLOURS[grade]}'>{count}</div>"
+                f"<div style='font-size:12px;font-weight:600;color:{GRADE_COLOURS[grade]}'>{grade}</div>"
+                f"<div style='font-size:11px;color:#888'>{pct} of {total}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(f"**Top targets** (sorted by grade then acquisition score)  ·  {total} companies total")
+
+    # Colour-code Grade column
+    def style_grade(val):
+        bg = GRADE_BG.get(val, "#FFFFFF")
+        fg = GRADE_COLOURS.get(val, "#000000")
+        return f"background-color:{bg};color:{fg};font-weight:600"
+
+    styled = (
+        preview["top_df"]
+        .style
+        .applymap(style_grade, subset=["Grade"])
+        .format({"Score": lambda x: str(int(x)) if pd.notna(x) and x != "" else "-",
+                 "Dirs":  lambda x: str(int(x)) if pd.notna(x) and x != "" else "-",
+                 "Age (yr)": lambda x: f"{x:.0f}" if pd.notna(x) and x != "" else "-"})
+    )
+    st.dataframe(styled, use_container_width=True, height=600)
 
 
 # ── Load all recent runs (auto-pin any active ones) ───────────────────────────
@@ -622,17 +781,26 @@ for tab_idx, run_id in enumerate(pinned):
                 art = excel_arts[0]
                 size_kb = art["size_in_bytes"] // 1024
                 st.markdown(f"**📊 Excel report ready** — {art['name']} ({size_kb} KB)")
-                if st.button(f"⬇ Download Excel", key=f"dl_{run_id}", type="primary"):
+                # Cache the downloaded artifact bytes in session state so
+                # clicking "Download" once lets both the save button and
+                # the preview render without a second API call.
+                cache_key = f"_artifact_bytes_{run_id}"
+                if st.button(f"⬇ Download & Preview Excel", key=f"dl_{run_id}", type="primary"):
                     with st.spinner("Downloading from GitHub…"):
                         data = download_artifact(art["id"])
                     if data:
-                        st.download_button(
-                            label="💾 Save to your computer",
-                            data=data,
-                            file_name=f"PE_Sourcing_{run['created_at'][:10]}.zip",
-                            mime="application/zip",
-                            key=f"save_{run_id}",
-                        )
+                        st.session_state[cache_key] = data
+
+                if st.session_state.get(cache_key):
+                    data = st.session_state[cache_key]
+                    st.download_button(
+                        label="💾 Save to your computer",
+                        data=data,
+                        file_name=f"PE_Sourcing_{run['created_at'][:10]}.zip",
+                        mime="application/zip",
+                        key=f"save_{run_id}",
+                    )
+                    show_excel_preview(data, run_id)
             else:
                 st.info("No Excel artifact found — it may have expired (30-day retention).")
 

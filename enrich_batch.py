@@ -105,15 +105,20 @@ for i, row in enumerate(companies):
         family = ch_enrich.detect_family(name, dirs_raw) if dirs_raw else {}
 
         # Build director list
+        # NOTE: dirs_raw comes from ch_enrich.get_directors() which already processes
+        # the CH API response — field names are "role", "appointed", "dob_year", "age"
+        # (not the raw CH API names officer_role / appointed_on / date_of_birth).
         directors = []
         for d in dirs_raw:
-            dob_yr = (d.get("date_of_birth") or {}).get("year")
             directors.append({
                 "name":         d.get("name", ""),
-                "role":         d.get("officer_role", ""),
-                "appointed":    d.get("appointed_on", ""),
-                "dob_year":     dob_yr,
-                "age_est":      (2026 - dob_yr) if dob_yr else None,
+                "role":         d.get("role", ""),           # get_directors() renames officer_role → role
+                "appointed":    d.get("appointed", ""),      # get_directors() renames appointed_on → appointed
+                "dob_year":     d.get("dob_year"),           # get_directors() extracts date_of_birth.year
+                "age_est":      d.get("age"),                # get_directors() computes calc_age(dob) → age
+                "years_active": d.get("years_active", 0),   # get_directors() computes tenure
+                "occupation":   d.get("occupation", ""),    # CH occupation field (job title)
+                "nationality":  d.get("nationality", ""),
             })
 
         rec = {
