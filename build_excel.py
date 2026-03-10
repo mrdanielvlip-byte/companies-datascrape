@@ -19,6 +19,7 @@ import os
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.comments import Comment
 
 import config as cfg
 
@@ -115,6 +116,62 @@ PIPELINE_COLS = [
     ("Charges", 8), ("Contracts", 9), ("Digital", 9), ("Accreds", 8), ("SIC", 22),
 ]
 
+# Column header tooltips — explain the formula or data source for each column
+PIPELINE_COL_NOTES = [
+    "Rank: ordered 1→N by Acquisition Score (descending).",
+    "Reg. No.: Companies House registration number. Source: CH API.",
+    "Company Name: Registered name at Companies House.",
+    "Incorp.: Year of incorporation from Companies House.",
+    "Age: Current year − incorporation year. Used in Scale & Financial score.",
+    "Dirs: Number of active directors at Companies House.",
+    "Max Age: Age of the oldest active director (from CH API date-of-birth data).",
+    "Avg Age: Mean age of all active directors with known date-of-birth.",
+    "Succ. (Succession Score 0–100): Composite of director age + tenure risk.\n"
+    "  High age (≥65) → high score; single director → high concentration risk.",
+    "Deal. (Dealability Score 0–20): Signals from CH API:\n"
+    "  +charges filed, +director resignations, +dormant subsidiaries,\n"
+    "  +group structure simplicity. Raw 0–20 then converted to 0–100 weight.",
+    "Acq. Score (0–100): Weighted acquisition attractiveness.\n"
+    "  = Scale×0.30 + Market×0.20 + Ownership/Succession×0.30 + Dealability×0.20\n"
+    "  Source: ch_enrich.py → acquisition_score()",
+    "Grade: Banding of Acquisition Score.\n"
+    "  Prime = 80–100 | High = 65–79 | Medium = 50–64 | Intelligence Only = <50",
+    "Sell Intent (0–100): Composite exit-readiness signal.\n"
+    "  A. Age & Tenure (0–40 pts): founder age + long tenure\n"
+    "  B. Business Structure (0–25 pts): single director, no subsidiaries\n"
+    "  C. Operational Stress (0–20 pts): charges, cashflow stress\n"
+    "  D. Market Maturity (0–15 pts): sector cyclicality, age of firm\n"
+    "  Source: sell_signals.py → sell_intent_score()",
+    "SI Band: Sell Intent banding.\n"
+    "  Hot = 70–100 | Warm = 45–69 | Watchlist = 25–44 | Cold = <25",
+    "PE: ✓ if company shows signs of PE backing (investor in name, group structure).\n"
+    "  PE-backed companies are deprioritised as acquisition targets.",
+    "Family: ✓ if likely family-owned (shared surname directors, long tenures, small board).\n"
+    "  Family businesses score higher on succession dimension.",
+    "Scale (weighted 0–30): Scale & Financial dimension of Acquisition Score.\n"
+    "  Based on company age as maturity proxy (age ≥25 → 90/100 raw × 0.30).\n"
+    "  Contribution: Scale_raw × 0.30",
+    "Market (weighted 0–20): Market Attractiveness dimension.\n"
+    "  Fixed sector-level fragmentation score from SIC discovery × 0.20.\n"
+    "  Contribution: MARKET_ATTRACTIVENESS_SCORE × 0.20",
+    "Own./Succ. (weighted 0–30): Ownership & Succession dimension.\n"
+    "  = (PE_independence_pts(0/40) + succession_score(0–100)) / 1.4 × 0.30\n"
+    "  PE-independent companies start with 40 pts; succession risk adds more.",
+    "Dealability (weighted 0–20): Dealability Signals dimension.\n"
+    "  = (dealability_raw(0–20) / 20) × 100 × 0.20\n"
+    "  Source: ch_enrich.py → dealability_score()",
+    "Charges: Number of outstanding charges (mortgages/debentures) at Companies House.\n"
+    "  High charges may indicate leveraged balance sheet.",
+    "Contracts: Government contracts found on Contracts Finder (contracts.service.gov.uk).\n"
+    "  Count of contracts awarded in last 3 years.",
+    "Digital (0–100): Digital health score.\n"
+    "  Composite of: domain age, website presence, LinkedIn activity, job postings.\n"
+    "  Source: digital_health.py",
+    "Accreds: Number of industry accreditations found (e.g. CHAS, SafeContractor, ISO).\n"
+    "  Source: accreditations.py — checks regulatory and trade body registers.",
+    "SIC: SIC codes registered at Companies House for this company.",
+]
+
 def build_pipeline(wb, companies):
     ws = wb.active
     ws.title = "PE Pipeline"
@@ -129,6 +186,13 @@ def build_pipeline(wb, companies):
     for ci, (label, width) in enumerate(PIPELINE_COLS, 1):
         cell(ws, 3, ci, label, bg=NAVY, fg=WHITE, bold=True, align="center", wrap=True)
         ws.column_dimensions[get_column_letter(ci)].width = width
+        # Add formula/source tooltip as a cell comment
+        if ci <= len(PIPELINE_COL_NOTES):
+            note_text = PIPELINE_COL_NOTES[ci - 1]
+            cmt = Comment(note_text, "V² Pipeline")
+            cmt.width  = 320
+            cmt.height = max(60, note_text.count("\n") * 18 + 40)
+            ws.cell(row=3, column=ci).comment = cmt
 
     for i, c in enumerate(companies, 1):
         row  = i + 3
