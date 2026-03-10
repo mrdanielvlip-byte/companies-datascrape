@@ -107,13 +107,14 @@ def sub_row(ws, row, cols_span, text, bg=BLUE):
 # ── Sheet 1: Full pipeline ────────────────────────────────────────────────────
 
 PIPELINE_COLS = [
-    ("Rank", 5), ("Reg. No.", 12), ("Company Name", 48), ("Incorp.", 11),
+    ("Rank", 5), ("Reg. No.", 12), ("Company Name", 48), ("Sector ✓", 13), ("Incorp.", 11),
     ("Age", 7), ("Dirs", 5), ("Max Age", 8), ("Avg Age", 8),
     ("Succ.", 7), ("Deal.", 7), ("Acq. Score", 10), ("Grade", 10),
     ("Sell Intent", 10), ("SI Band", 10),
     ("PE", 5), ("Family", 6),
     ("Scale", 7), ("Market", 7), ("Own./Succ.", 10), ("Dealability", 11),
     ("Charges", 8), ("Contracts", 9), ("Digital", 9), ("Accreds", 8), ("SIC", 22),
+    ("Director", 28), ("Email", 36), ("Email Conf.", 12), ("Director LinkedIn", 40),
 ]
 
 # Column header tooltips — explain the formula or data source for each column
@@ -121,6 +122,12 @@ PIPELINE_COL_NOTES = [
     "Rank: ordered 1→N by Acquisition Score (descending).",
     "Reg. No.: Companies House registration number. Source: CH API.",
     "Company Name: Registered name at Companies House.",
+    "Sector ✓: Web-verified sector match.\n"
+    "  Confirmed (green)   — company name or website clearly mentions the sector keywords.\n"
+    "  Likely (yellow)     — partial keyword match on website or name stem.\n"
+    "  Uncertain (red)     — website found but no sector keywords detected.\n"
+    "  Unverified (grey)   — no website; sector match based on SIC code only.\n"
+    "  Source: digital_health.py → sector_relevance_score()",
     "Incorp.: Year of incorporation from Companies House.",
     "Age: Current year − incorporation year. Used in Scale & Financial score.",
     "Dirs: Number of active directors at Companies House.",
@@ -170,6 +177,20 @@ PIPELINE_COL_NOTES = [
     "Accreds: Number of industry accreditations found (e.g. CHAS, SafeContractor, ISO).\n"
     "  Source: accreditations.py — checks regulatory and trade body registers.",
     "SIC: SIC codes registered at Companies House for this company.",
+    "Director: Name of the first active director (for email outreach context).\n"
+    "  Source: Companies House director records.",
+    "Email: Best inferred director email address for outbound outreach.\n"
+    "  Green  = DNS-verified (MX record confirmed, domain accepts mail).\n"
+    "  Yellow = Inferred pattern (domain confirmed but email not directly found).\n"
+    "  Grey   = No email found.\n"
+    "  Source: ch_contacts.py — pattern inference + Disify DNS verification.",
+    "Email Conf.: Email confidence level.\n"
+    "  High   = Found directly on website or company directory.\n"
+    "  Medium = Common pattern (firstname.lastname@domain) with DNS-valid domain.\n"
+    "  Low    = Inferred pattern, domain unconfirmed.\n"
+    "  Source: ch_contacts.py",
+    "Director LinkedIn: LinkedIn profile URL of the director or company page.\n"
+    "  Source: ch_contacts.py + digital_health.py (website scrape for LinkedIn links).",
 ]
 
 def build_pipeline(wb, companies):
@@ -210,56 +231,106 @@ def build_pipeline(wb, companies):
         cell(ws, row, 1,  i,                              bg=bg, align="center", bold=True)
         cell(ws, row, 2,  c["company_number"],            bg=bg)
         cell(ws, row, 3,  c["company_name"],              bg=bg)
-        cell(ws, row, 4,  (c.get("date_of_creation") or "")[:4], bg=bg, align="center")
-        cell(ws, row, 5,  c.get("company_age_years", 0), bg=bg, align="center")
-        cell(ws, row, 6,  c.get("director_count", 0),    bg=bg, align="center")
-        cell(ws, row, 7,  ss.get("max_age") or "-",      bg=bg, align="center")
-        cell(ws, row, 8,  ss.get("avg_age") or "-",      bg=bg, align="center")
-        cell(ws, row, 9,  ss.get("total", 0),            bg=bg, align="center")
-        cell(ws, row, 10, deal.get("score", 0),          bg=bg, align="center")
 
-        # Acquisition score (cols 11–12)
-        for col in (11, 12):
-            val = acq if col == 11 else c.get("acquisition_grade", "")
+        # ── Col 4: Sector web-verification ────────────────────────────────────
+        srl = dh.get("sector_relevance_label", "Unverified")
+        srs = dh.get("sector_relevance_score", 0)
+        sector_fill_map = {
+            "Confirmed":  GREEN,
+            "Likely":     fill("FFF2CC"),
+            "Uncertain":  fill("FFD6D6"),
+            "Unverified": fill("EEEEEE"),
+        }
+        cx4 = ws.cell(row=row, column=4, value=srl)
+        cx4.fill      = sector_fill_map.get(srl, fill("EEEEEE"))
+        cx4.font      = Font(name="Arial", size=9, bold=True)
+        cx4.alignment = Alignment(horizontal="center", vertical="center")
+        cx4.border    = THIN
+        if srs:
+            cx4.comment = Comment(f"Sector match score: {srs}/100\n"
+                                  + "\n".join(dh.get("sector_match_signals", [])),
+                                  "V² Pipeline")
+
+        cell(ws, row, 5,  (c.get("date_of_creation") or "")[:4], bg=bg, align="center")
+        cell(ws, row, 6,  c.get("company_age_years", 0), bg=bg, align="center")
+        cell(ws, row, 7,  c.get("director_count", 0),    bg=bg, align="center")
+        cell(ws, row, 8,  ss.get("max_age") or "-",      bg=bg, align="center")
+        cell(ws, row, 9,  ss.get("avg_age") or "-",      bg=bg, align="center")
+        cell(ws, row, 10, ss.get("total", 0),            bg=bg, align="center")
+        cell(ws, row, 11, deal.get("score", 0),          bg=bg, align="center")
+
+        # Acquisition score (cols 12–13)
+        for col in (12, 13):
+            val = acq if col == 12 else c.get("acquisition_grade", "")
             cx  = ws.cell(row=row, column=col, value=val)
             cx.fill      = score_fill(acq)
             cx.font      = Font(name="Arial", size=9, bold=True, color=score_font_color(acq))
             cx.alignment = Alignment(horizontal="center", vertical="center")
             cx.border    = THIN
 
-        # Sell Intent Score (cols 13–14)
+        # Sell Intent Score (cols 14–15)
         si_score = si.get("sell_intent_score")
         si_band  = si.get("sell_intent_band", "")
-        for col in (13, 14):
-            val = si_score if col == 13 else si_band
+        for col in (14, 15):
+            val = si_score if col == 14 else si_band
             cx  = ws.cell(row=row, column=col, value=val if val is not None else "-")
             cx.fill      = sell_intent_fill(si_band) if si_band else fill(GREY)
             cx.font      = Font(name="Arial", size=9, bold=True, color=sell_intent_font(si_band))
             cx.alignment = Alignment(horizontal="center", vertical="center")
             cx.border    = THIN
 
-        cell(ws, row, 15, "⚠" if c.get("pe_backed") else "-",
+        cell(ws, row, 16, "⚠" if c.get("pe_backed") else "-",
              bg=RED if c.get("pe_backed") else bg, align="center")
-        cell(ws, row, 16, "✓" if c.get("is_family") else "-",
+        cell(ws, row, 17, "✓" if c.get("is_family") else "-",
              bg=GREEN if c.get("is_family") else bg, align="center")
 
-        cell(ws, row, 17, comp.get("scale_financial", 0),       bg=bg, align="center")
-        cell(ws, row, 18, comp.get("market_attractiveness", 0), bg=bg, align="center")
-        cell(ws, row, 19, comp.get("ownership_succession", 0),  bg=bg, align="center")
-        cell(ws, row, 20, comp.get("dealability", 0),           bg=bg, align="center")
-        cell(ws, row, 21, ch.get("outstanding_charges", "-"),   bg=bg, align="center")
+        cell(ws, row, 18, comp.get("scale_financial", 0),       bg=bg, align="center")
+        cell(ws, row, 19, comp.get("market_attractiveness", 0), bg=bg, align="center")
+        cell(ws, row, 20, comp.get("ownership_succession", 0),  bg=bg, align="center")
+        cell(ws, row, 21, comp.get("dealability", 0),           bg=bg, align="center")
+        cell(ws, row, 22, ch.get("outstanding_charges", "-"),   bg=bg, align="center")
         # Contracts found
         cf = gc.get("contracts_found")
-        cell(ws, row, 22, cf if cf is not None else "-",        bg=GREEN if cf else bg, align="center")
+        cell(ws, row, 23, cf if cf is not None else "-",        bg=GREEN if cf else bg, align="center")
         # Digital score
         ds = dh.get("digital_health_score")
-        cell(ws, row, 23, ds if ds is not None else "-",        bg=bg, align="center")
+        cell(ws, row, 24, ds if ds is not None else "-",        bg=bg, align="center")
         # Accreditation count
         ac_n = ac.get("accreditation_count")
-        cell(ws, row, 24, ac_n if ac_n is not None else "-",    bg=GREEN if ac_n else bg, align="center")
-        cell(ws, row, 25, ", ".join(c.get("sic_codes", [])),    bg=bg, size=8)
+        cell(ws, row, 25, ac_n if ac_n is not None else "-",    bg=GREEN if ac_n else bg, align="center")
+        cell(ws, row, 26, ", ".join(c.get("sic_codes", [])),    bg=bg, size=8)
 
-    ws.freeze_panes = "A4"
+        # ── Director email + LinkedIn (cols 27–29) ────────────────────────────
+        contacts  = c.get("contacts", {})
+        directors = c.get("directors", [])
+
+        # Best verified email from contacts enrichment
+        best_email      = contacts.get("best_email", "")
+        email_conf      = contacts.get("email_confidence", "")
+        email_verified  = contacts.get("email_dns_valid", False)
+
+        # Director LinkedIn (from contacts or digital_health social signals)
+        dir_linkedin = (
+            contacts.get("linkedin_url")
+            or dh.get("linkedin_url")        # company LinkedIn from website
+            or ""
+        )
+
+        # Director name (first active director for context)
+        dir_name = ""
+        for d in directors:
+            if d.get("resigned_on") is None and d.get("name"):
+                dir_name = d["name"].title()
+                break
+
+        # Email cell — green if DNS-verified, amber if inferred, grey if missing
+        email_bg = GREEN if email_verified else (fill("FFF2CC") if best_email else fill("EEEEEE"))
+        cell(ws, row, 27, dir_name,    bg=bg, size=8)
+        cell(ws, row, 28, best_email,  bg=email_bg, size=8)
+        cell(ws, row, 29, email_conf,  bg=email_bg, align="center", size=8)
+        cell(ws, row, 30, dir_linkedin, bg=bg, size=8)
+
+    ws.freeze_panes = "E4"   # freeze cols A-D (Rank, Reg, Name, Sector ✓)
     ws.auto_filter.ref = f"A3:{get_column_letter(n)}{len(companies)+3}"
 
 
@@ -719,17 +790,18 @@ def build_contracts(wb, companies):
 
 def build_digital_health(wb, companies):
     ws = wb.create_sheet("Digital Health")
-    n  = 12
+    n  = 14
 
-    title_row(ws, 1, n, "DIGITAL HEALTH ASSESSMENT — Online Presence & Maturity Signals")
+    title_row(ws, 1, n, "DIGITAL HEALTH & SECTOR VERIFICATION — Online Presence, Maturity & Sector Confirmation")
     sub_row(ws, 2, n,
-            "Score 0–100: Mature(80+) | Adequate(60–79) | Below Average(40–59) | Poor(<40)  |  "
-            "Poor digital = underinvestment = pre-exit signal  |  Tier 3 — Website analysis + WHOIS")
+            "Digital Score 0–100: Mature(80+) | Adequate(60–79) | Below Average(40–59) | Poor(<40)  |  "
+            "Sector Match: Confirmed(70+) | Likely(40–69) | Uncertain(<40) | Unverified(no website)  |  Tier 3 — Website analysis + WHOIS")
 
     headers = ["Rank", "Company", "Digital Score", "Band", "Domain Age (yrs)",
                "Website Live", "LinkedIn", "Job Postings",
-               "Accreditations Detected", "Accred. Score", "Domain"]
-    widths  = [6, 44, 13, 14, 15, 12, 10, 12, 50, 13, 35]
+               "Accreditations Detected", "Accred. Score", "Domain",
+               "Sector Match", "Sector Match Score", "Match Signals"]
+    widths  = [6, 44, 13, 14, 15, 12, 10, 12, 50, 13, 35, 14, 14, 60]
 
     ws.row_dimensions[3].height = 22
     for ci, (h, w) in enumerate(zip(headers, widths), 1):
@@ -779,6 +851,28 @@ def build_digital_health(wb, companies):
         cell(ws, row, 9,  "  |  ".join(all_accreds[:6]) or "-",    bg=bg, size=8)
         cell(ws, row, 10, ac.get("accreditation_score", "-"),      bg=bg, align="center")
         cell(ws, row, 11, dh.get("domain", ""),                    bg=bg, size=8)
+
+        # ── Sector relevance columns ──────────────────────────────────────────
+        srl   = dh.get("sector_relevance_label", "Unverified")
+        srs   = dh.get("sector_relevance_score", 0)
+        srsig = " | ".join(dh.get("sector_match_signals", []))
+
+        # Colour-code the sector match label
+        match_fill = {
+            "Confirmed":  GREEN,
+            "Likely":     fill("FFF2CC"),   # soft yellow
+            "Uncertain":  fill("FFD6D6"),   # light red
+            "Unverified": fill("EEEEEE"),   # grey
+        }.get(srl, fill("EEEEEE"))
+
+        cx12 = ws.cell(row=row, column=12, value=srl)
+        cx12.fill      = match_fill
+        cx12.font      = Font(name="Arial", size=9, bold=True)
+        cx12.alignment = Alignment(horizontal="center", vertical="center")
+        cx12.border    = THIN
+
+        cell(ws, row, 13, srs,   bg=bg, align="center")
+        cell(ws, row, 14, srsig, bg=bg, size=8)
         ws.row_dimensions[row].height = 18
 
     ws.freeze_panes = "A4"

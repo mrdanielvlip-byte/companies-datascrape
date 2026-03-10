@@ -6,18 +6,19 @@ A weak/stale digital presence combined with sell intent signals suggests
 the owner is not investing for future growth — classic pre-exit behaviour.
 
 Checks:
-  1. Domain age         — whois lookup (older domain = established presence)
-  2. Website status     — HTTP 200 check
-  3. LinkedIn presence  — detect company LinkedIn page link on website
-  4. Job posting signals — detect active hiring (growth vs stagnation)
-  5. Social signals     — Twitter/X, Facebook links detected on website
-  6. Digital health score (0–100)
+  1. Domain age              — whois lookup (older domain = established presence)
+  2. Website status          — HTTP 200 check
+  3. LinkedIn presence       — detect company LinkedIn page link on website
+  4. Job posting signals     — detect active hiring (growth vs stagnation)
+  5. Social signals          — Twitter/X, Facebook links detected on website
+  6. Digital health score    (0–100)
+  7. Sector relevance score  — confirms company website matches the searched sector
 
-Score interpretation:
-  80–100  Digitally mature — good buyer story
-  60–79   Adequate digital presence
-  40–59   Below average — underinvestment likely
-  <40     Poor digital — classic pre-exit signal
+Sector relevance score interpretation:
+  Confirmed (70–100)   — Website/name clearly mentions the sector
+  Likely    (40–69)    — Partial keyword match on website or name
+  Uncertain (1–39)     — Website found but few/no sector keywords
+  Unverified (0)       — No website to check; use SIC code as proxy
 
 Data tiers:
   Tier 3 — Verified corporate website data
@@ -237,6 +238,96 @@ def digital_health_score(
     }
 
 
+# ── Sector Relevance Score ────────────────────────────────────────────────────
+
+def sector_relevance_score(
+    company_name: str,
+    html:         str | None,
+    name_queries: list[str],
+    include_stems: list[str],
+    exclude_terms: list[str],
+) -> dict:
+    """
+    Score how well this company's name + website content matches the sector.
+
+    Scoring (max 100):
+      +40  Company name contains a sector keyword / stem
+      +20  Website content has ≥3 distinct sector keyword hits
+      +15  Website content has 1–2 sector keyword hits
+      +15  Company name contains a secondary stem match
+      -25  Company name or content contains an exclusion term
+
+    Returns:
+      sector_relevance_score   int 0–100
+      sector_relevance_label   "Confirmed" | "Likely" | "Uncertain" | "Unverified"
+      sector_match_signals     list[str]  — what was found / not found
+    """
+    name_lower    = (company_name or "").lower()
+    content_lower = re.sub(r"<[^>]+>", " ", html or "").lower()  # strip HTML tags
+    signals: list[str] = []
+    score = 0
+
+    # ── 1. Company name check ─────────────────────────────────────────────────
+    name_hit = False
+    for kw in name_queries:
+        if kw.lower() in name_lower:
+            signals.append(f"Company name contains '{kw}'")
+            score += 40
+            name_hit = True
+            break
+
+    if not name_hit:
+        for stem in include_stems:
+            if stem.lower() in name_lower:
+                signals.append(f"Company name contains stem '{stem}'")
+                score += 15
+                break
+
+    # ── 2. Website content check ──────────────────────────────────────────────
+    if html:
+        matched_kws: list[str] = []
+        for kw in name_queries:
+            if kw.lower() in content_lower and kw not in matched_kws:
+                matched_kws.append(kw)
+        for stem in include_stems:
+            if stem.lower() in content_lower and stem not in matched_kws:
+                matched_kws.append(stem)
+
+        if len(matched_kws) >= 3:
+            signals.append(f"Website mentions {len(matched_kws)} sector terms: {', '.join(matched_kws[:5])}")
+            score += 30   # name(40) + website(30) = 70 → Confirmed
+        elif len(matched_kws) >= 1:
+            signals.append(f"Website mentions sector term(s): {', '.join(matched_kws)}")
+            score += 15
+        else:
+            signals.append("Website found but no sector keywords detected")
+    else:
+        signals.append("No website — sector relevance based on SIC code only")
+
+    # ── 3. Exclusion check ────────────────────────────────────────────────────
+    for excl in exclude_terms:
+        excl_l = excl.lower()
+        hit_name    = excl_l in name_lower
+        hit_content = excl_l in content_lower[:5000]  # check first 5KB of content
+        if hit_name or hit_content:
+            signals.append(f"Exclusion term '{excl}' found — possible false positive")
+            score -= 25
+            break  # one penalty per company
+
+    score = max(0, min(100, score))
+
+    if   score >= 70: label = "Confirmed"
+    elif score >= 40: label = "Likely"
+    elif html:        label = "Uncertain"
+    else:             label = "Unverified"
+
+    return {
+        "sector_relevance_score": score,
+        "sector_relevance_label": label,
+        "sector_match_signals":   signals,
+    }
+
+
 # ── Main enrichment function ──────────────────────────────────────────────────
 
 def enrich_digital(company: dict) -> dict:
@@ -280,12 +371,22 @@ def enrich_digital(company: dict) -> dict:
         has_facebook = social["has_facebook"],
     )
 
+    # ── Sector relevance check (reuses already-fetched HTML, zero extra cost) ──
+    srs = sector_relevance_score(
+        company_name  = company.get("company_name", ""),
+        html          = html,
+        name_queries  = getattr(cfg, "NAME_QUERIES",   []),
+        include_stems = getattr(cfg, "INCLUDE_STEMS",  []),
+        exclude_terms = getattr(cfg, "EXCLUDE_TERMS",  []),
+    )
+
     return {
         "domain":               domain,
         "domain_age_years":     domain_age,
         "website_live":         website_live,
         **social,
         **dhs,
+        **srs,
         "data_tier":            "Tier 3 — Website analysis / WHOIS",
     }
 
