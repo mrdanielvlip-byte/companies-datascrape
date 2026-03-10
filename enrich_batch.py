@@ -78,6 +78,14 @@ for i, row in enumerate(companies):
         except Exception:
             pass
 
+        # Accounts history — last 3 years of filings (period ends + available figures)
+        accounts_history = []
+        try:
+            accounts_history = ch_financials.get_accounts_history(cn, years=3)
+            time.sleep(DELAY * 0.5)
+        except Exception:
+            pass
+
         # Revenue estimate
         pe_input = {
             "company_name":  name,
@@ -143,8 +151,15 @@ for i, row in enumerate(companies):
             "ebitda_base": pe_d["ebitda_base"],
             "confidence":  pe_d["confidence_label"],
             "models_used": pe_d.get("models_used", []),
+            "accounts_history": accounts_history,
             "ch_url": f"https://find-and-update.company-information.service.gov.uk/company/{cn}",
         }
+
+        # Employee estimate — best available source
+        emp_count, emp_source = ch_financials.estimate_employees(rec)
+        if emp_count is not None:
+            rec["estimated_employees"]        = emp_count
+            rec["estimated_employees_source"] = emp_source
         done.append(rec)
         done_nums.add(cn)
 

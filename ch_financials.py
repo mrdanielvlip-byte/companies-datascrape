@@ -69,6 +69,90 @@ def get_filing_history(company_number: str) -> list[dict]:
     return data.get("items", [])
 
 
+def get_accounts_history(company_number: str, years: int = 3) -> list[dict]:
+    """
+    Fetch the last N years of accounts filings and extract what data is available.
+
+    For each filing returns:
+      period_end       — accounts period end date (YYYY-MM-DD)
+      accounts_type    — e.g. total-exemption-full, full, micro-entity
+      net_assets       — from XBRL where available (null for most SMEs)
+      total_assets     — from XBRL where available
+      total_employees  — from XBRL where available (rare for UK SMEs)
+      staff_costs      — from XBRL where available
+
+    Most UK SMEs file Total Exemption accounts so structured financial data
+    is unavailable — only the period end and accounts type will be populated.
+    """
+    filings = get(f"/company/{company_number}/filing-history?category=accounts&items_per_page={years + 2}")
+    items = filings.get("items", [])
+    history = []
+
+    for filing in items[:years]:
+        acc_type_raw = filing.get("description", "")
+        # Normalise CH description string e.g. "accounts-with-accounts-type-total-exemption-full"
+        acc_type = acc_type_raw.replace("accounts-with-accounts-type-", "").replace("-", " ").title()
+        period_end = filing.get("action_date", "")
+
+        entry = {
+            "period_end":      period_end,
+            "accounts_type":   acc_type,
+            "net_assets":      None,
+            "total_assets":    None,
+            "total_employees": None,
+            "staff_costs":     None,
+        }
+
+        # Try to get XBRL structured data from document metadata link
+        # (Available for larger / full accounts; not for Total Exemption)
+        doc_url = filing.get("links", {}).get("document_metadata", "")
+        if doc_url:
+            try:
+                doc_meta = get(doc_url.replace("https://api.company-information.service.gov.uk", ""))
+                xbrl = doc_meta.get("xbrl_data", {}) or {}
+                if xbrl:
+                    entry["net_assets"]      = xbrl.get("net_assets") or xbrl.get("NetAssets")
+                    entry["total_assets"]    = xbrl.get("total_assets") or xbrl.get("TotalAssets")
+                    entry["total_employees"] = xbrl.get("employees") or xbrl.get("NumberEmployees")
+                    entry["staff_costs"]     = xbrl.get("staff_costs") or xbrl.get("StaffCosts")
+            except Exception:
+                pass
+
+        history.append(entry)
+
+    return history
+
+
+def estimate_employees(company: dict) -> tuple[int | None, str]:
+    """
+    Best-effort employee count estimate.
+    Returns (count, source) where source describes the data tier.
+
+    Priority:
+      1. bs.total_employees  — from filed accounts (Tier 1)
+      2. staff_costs / avg sector salary  — derived (Tier 4)
+      3. rev_base / sector revenue-per-head  — derived (Tier 4)
+    """
+    bs = company.get("bs", {})
+    emp = bs.get("total_employees")
+    if emp and emp > 0:
+        return int(emp), "Tier 1 — filed accounts"
+
+    # Staff costs proxy: assume ~£35,000 avg fully-loaded salary for service sector SME
+    sc = bs.get("staff_costs")
+    if sc and sc > 0:
+        est = max(1, round(sc / 35_000))
+        return est, "Tier 4 — staff costs ÷ £35k"
+
+    # Revenue-per-head proxy: assume ~£80,000 revenue per employee for service sector
+    rev = company.get("rev_base")
+    if rev and rev > 0:
+        est = max(1, round(rev / 80_000))
+        return est, "Tier 4 — revenue ÷ £80k"
+
+    return None, ""
+
+
 def get_accounts_document_metadata(company_number: str) -> dict:
     """
     Pull the most recent accounts filing metadata.
@@ -392,6 +476,7 @@ def enrich_financials(company: dict) -> dict:
     employees = company.get("total_employees")
     bs        = get_balance_sheet(num)
     charges   = get_charges(num)
+    accounts_history = get_accounts_history(num, years=3)
     time.sleep(0.1)
 
     # ── Legacy single-sector models (kept for backward compat) ───────────────
@@ -452,6 +537,7 @@ def enrich_financials(company: dict) -> dict:
         "ebitda_estimate":       ebitda_out,
         "balance_sheet_ratios":  ratios,
         "pe_triangulation":      pe_dict,   # full detail always stored
+        "accounts_history":      accounts_history,   # last 3 years of filed accounts
     }
 
 
@@ -470,6 +556,12 @@ def run():
             print(f"  [{i+1}/{len(companies)}] processing...")
         fin = enrich_financials(c)
         c["financials"] = fin
+        # Surface key fields at top level for easy access in build_excel + downstream
+        c["accounts_history"] = fin.get("accounts_history", [])
+        emp_count, emp_source = estimate_employees(c)
+        if emp_count is not None:
+            c["estimated_employees"]        = emp_count
+            c["estimated_employees_source"] = emp_source
         time.sleep(0.1)
 
     fin_path = os.path.join(cfg.OUTPUT_DIR, cfg.ENRICHED_JSON)

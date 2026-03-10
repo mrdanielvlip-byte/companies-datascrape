@@ -116,6 +116,13 @@ PIPELINE_COLS = [
     ("Charges", 8), ("Contracts", 9), ("Digital", 9), ("Accreds", 8), ("SIC", 22),
     ("Director", 28), ("Email", 36), ("Email Conf.", 12), ("Director LinkedIn", 40),
     ("Nearest Competitor", 35), ("Competitor 2", 32), ("Competitor 3", 32),
+    # ── Financial intelligence ────────────────────────────────────────────────
+    ("Employees", 11), ("Emp. Source", 22),
+    ("Rev. Low £", 13), ("Rev. Base £", 13), ("Rev. High £", 13),
+    ("Rev. Trend", 12), ("EBITDA £", 13), ("Rev. Conf.", 10),
+    ("Yr1 Period", 11), ("Yr1 Accts", 20),
+    ("Yr2 Period", 11), ("Yr2 Accts", 20),
+    ("Yr3 Period", 11), ("Yr3 Accts", 20),
 ]
 
 # Column header tooltips — explain the formula or data source for each column
@@ -197,6 +204,32 @@ PIPELINE_COL_NOTES = [
     "  Source: competitor_map.py + pgeocode lat/lon lookup.",
     "Competitor 2: Second-nearest competitor company name with distance in miles.",
     "Competitor 3: Third-nearest competitor company name with distance in miles.",
+    # ── Financial intelligence notes ──────────────────────────────────────────
+    "Employees: Best available employee count.\n"
+    "  Tier 1 — from filed Companies House accounts (when disclosed).\n"
+    "  Tier 4 — estimated from staff costs ÷ £35k avg salary, or revenue ÷ £80k per head.\n"
+    "  UK SMEs filing Total Exemption accounts do not disclose headcount publicly.",
+    "Emp. Source: Data reliability tier for the employee figure.\n"
+    "  Tier 1 = Companies House filing  |  Tier 4 = Derived estimate.",
+    "Rev. Low £: Low end of revenue estimate range.\n"
+    "  Source: ch_financials.py PE triangulation — Staff Cost, Net Asset, Location, Employee models.",
+    "Rev. Base £: Central revenue estimate (most likely scenario).\n"
+    "  Source: ch_financials.py PE triangulation — weighted blend of available models.",
+    "Rev. High £: High end of revenue estimate range.",
+    "Rev. Trend: Year-on-year revenue direction based on accounts history.\n"
+    "  ↑ = growing  |  ↓ = declining  |  → = flat  |  ? = insufficient data.\n"
+    "  Derived from net assets trend across the last 3 annual filings.",
+    "EBITDA £: Estimated EBITDA at base revenue.\n"
+    "  Source: Sector-average EBITDA margin applied to Rev. Base.",
+    "Rev. Conf.: Revenue estimate confidence level.\n"
+    "  HIGH = 3+ financial models available (actual accounts data).\n"
+    "  MEDIUM = 2 models.  LOW = 1 model (estimates only).",
+    "Yr1 Period: Period end date of the most recent annual accounts filing.",
+    "Yr1 Accts: Accounts type for the most recent filing (e.g. Total Exemption, Full).",
+    "Yr2 Period: Period end date of the second most recent annual accounts filing.",
+    "Yr2 Accts: Accounts type for the second most recent filing.",
+    "Yr3 Period: Period end date of the third most recent annual accounts filing.",
+    "Yr3 Accts: Accounts type for the third most recent filing.",
 ]
 
 def build_pipeline(wb, companies):
@@ -349,6 +382,82 @@ def build_pipeline(wb, companies):
             is_pe = comp_entry.get("is_pe_backed", False)
             comp_bg = fill("FFD6D6") if is_pe else (ALT if i % 2 == 0 else None)
             cell(ws, row, 31 + ci_off, label, bg=comp_bg, size=8, wrap=False)
+
+        # ── Cols 34–46: Financial intelligence ────────────────────────────────
+        emp       = c.get("estimated_employees")
+        emp_src   = c.get("estimated_employees_source", "")
+        rev_low   = c.get("rev_low")
+        rev_base  = c.get("rev_base")
+        rev_high  = c.get("rev_high")
+        ebitda    = c.get("ebitda_base")
+        conf      = c.get("confidence", "")
+        hist      = c.get("accounts_history") or []
+
+        # Col 34 — Employees (green if Tier 1, amber if estimated)
+        emp_bg = GREEN if emp_src.startswith("Tier 1") else (fill("FFF2CC") if emp else bg)
+        cell(ws, row, 34, emp if emp is not None else "-", bg=emp_bg, align="center", size=9,
+             bold=emp_src.startswith("Tier 1"))
+
+        # Col 35 — Employee source
+        cell(ws, row, 35, emp_src, bg=bg, size=7)
+
+        # Cols 36–38 — Revenue Low / Base / High
+        def rev_str(v):
+            return f"£{v:,.0f}" if v else "-"
+        cell(ws, row, 36, rev_str(rev_low),  bg=bg, align="right", size=9)
+        cx_rev = ws.cell(row=row, column=37, value=rev_str(rev_base))
+        cx_rev.font      = Font(name="Arial", size=9, bold=True)
+        cx_rev.alignment = Alignment(horizontal="right", vertical="center")
+        cx_rev.border    = THIN
+        cx_rev.fill      = fill("E8F4FD") if rev_base else (bg or fill("FFFFFF"))
+        cell(ws, row, 38, rev_str(rev_high), bg=bg, align="right", size=9)
+
+        # Col 39 — Revenue trend (derived from accounts history net_assets if available,
+        #           otherwise from est revenue confidence direction indicator)
+        trend_symbol = "?"
+        if len(hist) >= 2:
+            na_vals = [h.get("net_assets") for h in hist if h.get("net_assets") is not None]
+            if len(na_vals) >= 2:
+                diff = na_vals[0] - na_vals[-1]   # most recent vs oldest
+                pct  = diff / abs(na_vals[-1]) * 100 if na_vals[-1] else 0
+                if pct > 5:
+                    trend_symbol = "↑"
+                elif pct < -5:
+                    trend_symbol = "↓"
+                else:
+                    trend_symbol = "→"
+        trend_bg = fill("E2EFDA") if trend_symbol == "↑" else (
+                   fill("FFD6D6") if trend_symbol == "↓" else
+                   fill("FFF2CC") if trend_symbol == "→" else bg)
+        trend_color = "1A5C2C" if trend_symbol == "↑" else (
+                      "7B0000" if trend_symbol == "↓" else "7B5B00")
+        cx_tr = ws.cell(row=row, column=39, value=trend_symbol)
+        cx_tr.fill      = trend_bg or fill("EEEEEE")
+        cx_tr.font      = Font(name="Arial", size=12, bold=True, color=trend_color)
+        cx_tr.alignment = Alignment(horizontal="center", vertical="center")
+        cx_tr.border    = THIN
+
+        # Col 40 — EBITDA estimate
+        cell(ws, row, 40, rev_str(ebitda), bg=bg, align="right", size=9)
+
+        # Col 41 — Revenue confidence
+        conf_bg = fill("E2EFDA") if conf == "HIGH" else (
+                  fill("FFF2CC") if conf == "MEDIUM" else
+                  fill("FFD6D6") if conf == "LOW" else bg)
+        cell(ws, row, 41, conf, bg=conf_bg, align="center", size=8, bold=(conf == "HIGH"))
+
+        # Cols 42–47 — Last 3 years of accounts filings (period + type)
+        for yr_idx in range(3):
+            base_col = 42 + yr_idx * 2
+            if yr_idx < len(hist):
+                h = hist[yr_idx]
+                period = (h.get("period_end") or "")[:7]   # YYYY-MM
+                acc_type = h.get("accounts_type", "")
+                cell(ws, row, base_col,     period,   bg=bg, align="center", size=8)
+                cell(ws, row, base_col + 1, acc_type, bg=bg, size=7)
+            else:
+                cell(ws, row, base_col,     "—", bg=bg, align="center", size=8, fg="AAAAAA")
+                cell(ws, row, base_col + 1, "—", bg=bg, size=7, fg="AAAAAA")
 
     ws.freeze_panes = "E4"   # freeze cols A-D (Rank, Reg, Name, Sector ✓)
     ws.auto_filter.ref = f"A3:{get_column_letter(n)}{len(companies)+3}"
