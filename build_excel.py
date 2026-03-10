@@ -386,12 +386,17 @@ def build_pipeline(wb, companies):
         # ── Cols 34–46: Financial intelligence ────────────────────────────────
         emp       = c.get("estimated_employees")
         emp_src   = c.get("estimated_employees_source", "")
-        rev_low   = c.get("rev_low")
-        rev_base  = c.get("rev_base")
-        rev_high  = c.get("rev_high")
-        ebitda    = c.get("ebitda_base")
-        conf      = c.get("confidence", "")
-        hist      = c.get("accounts_history") or []
+        # Revenue: try nested financials dict first (live pipeline),
+        # then fall back to flat top-level keys (enrich_batch / legacy format)
+        fin       = c.get("financials") or {}
+        rev_est   = fin.get("revenue_estimate") or {}
+        ebitda_est= fin.get("ebitda_estimate") or {}
+        rev_low   = rev_est.get("revenue_low")  or c.get("rev_low")
+        rev_base  = rev_est.get("revenue_base") or c.get("rev_base")
+        rev_high  = rev_est.get("revenue_high") or c.get("rev_high")
+        ebitda    = ebitda_est.get("ebitda_base") or c.get("ebitda_base")
+        conf      = rev_est.get("confidence") or c.get("confidence", "")
+        hist      = c.get("accounts_history") or fin.get("accounts_history") or []
 
         # Col 34 — Employees (green if Tier 1, amber if estimated)
         emp_bg = GREEN if emp_src.startswith("Tier 1") else (fill("FFF2CC") if emp else bg)
@@ -1502,9 +1507,11 @@ def build_overview(wb, companies):
         services_text = "  |  ".join(sic_labels) if sic_labels else "—"
 
         # ── Revenue + employees ───────────────────────────────────────────────
-        rev_base = c.get("rev_base")
-        rev_str  = f"£{rev_base:,.0f}" if rev_base else "—"
-        emp      = c.get("estimated_employees")
+        _fin_ov   = c.get("financials") or {}
+        _rev_ov   = _fin_ov.get("revenue_estimate") or {}
+        rev_base  = _rev_ov.get("revenue_base") or c.get("rev_base")
+        rev_str   = f"£{rev_base:,.0f}" if rev_base else "—"
+        emp       = c.get("estimated_employees")
 
         # ── Sector match ──────────────────────────────────────────────────────
         srl = dh.get("sector_relevance_label", "Unverified")
