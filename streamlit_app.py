@@ -47,10 +47,12 @@ if "run_inputs_store" not in st.session_state:
 if "pending_trigger" not in st.session_state:
     st.session_state.pending_trigger = None # inputs saved just before workflow dispatch
 # Estimate state
+if "estimate_triggered" not in st.session_state:
+    st.session_state.estimate_triggered = False # True the moment Preview is clicked
 if "estimate_run_id" not in st.session_state:
-    st.session_state.estimate_run_id = None     # run_id of in-flight estimate job
+    st.session_state.estimate_run_id = None     # run_id once GitHub creates it
 if "estimate_sector" not in st.session_state:
-    st.session_state.estimate_sector = ""       # sector the estimate was triggered for
+    st.session_state.estimate_sector = ""
 if "estimate_result" not in st.session_state:
     st.session_state.estimate_result = None     # parsed estimate.json once complete
 if "estimate_confirmed" not in st.session_state:
@@ -254,15 +256,26 @@ tabs = st.tabs(tab_labels)
 # TAB 0 — New Search
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _reset_estimate():
+    st.session_state.estimate_triggered = False
+    st.session_state.estimate_run_id    = None
+    st.session_state.estimate_result    = None
+    st.session_state.estimate_sector    = ""
+    st.session_state.estimate_confirmed = False
+
 with tabs[0]:
     st.subheader("New Sector Search")
     st.caption("Each search runs independently on GitHub — you can start multiple and close this window at any time.")
 
     # ── PHASE 1: Search form ───────────────────────────────────────────────────
-    # Hidden once an estimate is in-flight or confirmed
+    # Hide form as soon as Preview is clicked (estimate_triggered), not just
+    # when we have a run_id — prevents the race condition where GitHub takes
+    # longer than 4s to create the run and the form reappears.
     estimate_active = (
-        st.session_state.estimate_run_id is not None
+        st.session_state.estimate_triggered
+        or st.session_state.estimate_run_id is not None
         or st.session_state.estimate_result is not None
+        or st.session_state.estimate_confirmed
     )
 
     if not estimate_active:
@@ -318,76 +331,88 @@ with tabs[0]:
             if not sector.strip():
                 st.error("Please enter a sector description.")
             else:
-                with st.spinner("Launching quick estimate on GitHub (~2 min)…"):
-                    ok = trigger_workflow(WORKFLOW_ESTIMATE, {"sector": sector.strip()})
-                if ok:
-                    # stash form values so we can re-use them after confirmation
-                    st.session_state.estimate_sector  = sector.strip()
-                    st.session_state._estimate_email  = notify_email
-                    st.session_state._estimate_mode   = mode
-                    st.session_state._estimate_region = region
-                    st.session_state._estimate_rev    = min_revenue
-                    st.session_state._estimate_deep   = run_deep
-                    # find the new run id on next load
-                    time.sleep(4)
-                    st.cache_data.clear()
-                    # grab the newest estimate run
-                    wf_runs = gh(f"/repos/{GITHUB_REPO}/actions/workflows/{WORKFLOW_ESTIMATE}/runs?per_page=1")
-                    runs = wf_runs.get("workflow_runs", [])
-                    if runs:
-                        st.session_state.estimate_run_id = runs[0]["id"]
-                    st.rerun()
-                else:
+                # ── Mark as triggered immediately so form disappears on rerun ──
+                st.session_state.estimate_triggered = True
+                st.session_state.estimate_sector    = sector.strip()
+                st.session_state._estimate_email    = notify_email
+                st.session_state._estimate_mode     = mode
+                st.session_state._estimate_region   = region
+                st.session_state._estimate_rev      = min_revenue
+                st.session_state._estimate_deep     = run_deep
+                ok = trigger_workflow(WORKFLOW_ESTIMATE, {"sector": sector.strip()})
+                if not ok:
+                    _reset_estimate()
                     st.error("Failed to trigger estimate. Check your GitHub token in secrets.")
+                else:
+                    st.rerun()
 
-    # ── PHASE 2: Estimate in progress ─────────────────────────────────────────
-    elif st.session_state.estimate_run_id and st.session_state.estimate_result is None:
-        run_id  = st.session_state.estimate_run_id
-        run     = get_run(run_id)
-        status  = run.get("status", "unknown")
-        conc    = run.get("conclusion")
+    # ── PHASE 2: Estimate in progress (triggered but may not have run_id yet) ──
+    elif (st.session_state.estimate_triggered or st.session_state.estimate_run_id) \
+            and st.session_state.estimate_result is None \
+            and not st.session_state.estimate_confirmed:
 
         st.info(f"🔍 Estimating company universe for **{st.session_state.estimate_sector}** …")
 
-        if status in ("queued", "in_progress"):
-            # time-based progress for estimate (target 2 min)
-            started_str = run.get("run_started_at") or run.get("created_at", "")
-            try:
-                started_dt  = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
-                elapsed_sec = (datetime.now(timezone.utc) - started_dt).total_seconds()
-                pct = min(elapsed_sec / 120, 0.95)
-                remain = max(0, int((120 - elapsed_sec) // 60))
-                bar_txt = f"~{int(elapsed_sec//60)}m {int(elapsed_sec%60)}s elapsed · ~{remain} min remaining"
-            except Exception:
-                pct, bar_txt = 0.05, "Starting up…"
-
-            st.progress(pct, text=bar_txt)
-            st.caption("Page auto-refreshes every 10 s")
-            if st.button("✕ Cancel estimate", key="cancel_est"):
-                cancel_run(run_id)
-                st.session_state.estimate_run_id = None
-                st.rerun()
-            time.sleep(10)
-            st.rerun()
-
-        elif status == "completed" and conc == "success":
-            result = fetch_estimate_result(run_id)
-            if result:
-                st.session_state.estimate_result = result
-                st.rerun()
+        # If we don't have a run_id yet, poll GitHub until the run appears
+        if st.session_state.estimate_run_id is None:
+            wf_runs = gh(f"/repos/{GITHUB_REPO}/actions/workflows/{WORKFLOW_ESTIMATE}/runs?per_page=1")
+            runs = wf_runs.get("workflow_runs", [])
+            if runs:
+                st.session_state.estimate_run_id = runs[0]["id"]
+                st.session_state.estimate_triggered = True  # keep active
             else:
-                st.error("Estimate finished but could not download results.")
-                if st.button("Start over"):
-                    st.session_state.estimate_run_id = None
+                st.progress(0.02, text="Waiting for GitHub to start the estimate job…")
+                st.caption("Auto-checks every 5 s")
+                if st.button("✕ Cancel", key="cancel_est_wait"):
+                    _reset_estimate()
                     st.rerun()
-        else:
-            st.error(f"Estimate run ended with status: {conc or status}")
-            if st.button("Start over"):
-                st.session_state.estimate_run_id = None
+                time.sleep(5)
                 st.rerun()
+        else:
+            run_id = st.session_state.estimate_run_id
+            run    = get_run(run_id)
+            status = run.get("status", "unknown")
+            conc   = run.get("conclusion")
+
+            if status in ("queued", "in_progress"):
+                started_str = run.get("run_started_at") or run.get("created_at", "")
+                try:
+                    started_dt  = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
+                    elapsed_sec = (datetime.now(timezone.utc) - started_dt).total_seconds()
+                    pct     = min(elapsed_sec / 120, 0.95)
+                    remain  = max(0, int((120 - elapsed_sec) // 60))
+                    bar_txt = f"~{int(elapsed_sec//60)}m {int(elapsed_sec%60)}s elapsed · ~{remain} min remaining"
+                except Exception:
+                    pct, bar_txt = 0.05, "Starting up…"
+
+                st.progress(pct, text=bar_txt)
+                st.caption("Auto-refreshes every 10 s")
+                if st.button("✕ Cancel estimate", key="cancel_est"):
+                    cancel_run(run_id)
+                    _reset_estimate()
+                    st.rerun()
+                time.sleep(10)
+                st.rerun()
+
+            elif status == "completed" and conc == "success":
+                result = fetch_estimate_result(run_id)
+                if result:
+                    st.session_state.estimate_result = result
+                    st.rerun()
+                else:
+                    st.error("Estimate finished but could not read results. Try again.")
+                    if st.button("Start over", key="est_retry"):
+                        _reset_estimate()
+                        st.rerun()
+            else:
+                st.error(f"Estimate ended with: **{conc or status}**. Try again or use a different sector description.")
+                if st.button("Start over", key="est_fail"):
+                    _reset_estimate()
+                    st.rerun()
 
     # ── PHASE 3: Show estimate results and ask to confirm ─────────────────────
-    elif st.session_state.estimate_result is not None and not st.session_state.estimate_confirmed:
+    elif st.session_state.estimate_result is not None \
+            and not st.session_state.estimate_confirmed:
         r       = st.session_state.estimate_result
         sector  = r.get("sector", st.session_state.estimate_sector)
         total   = r.get("total_companies", 0)
@@ -443,11 +468,7 @@ with tabs[0]:
                 st.rerun()
         with no_col:
             if st.button("✏️ No — Change Sector", use_container_width=True):
-                # reset everything so the form reappears
-                st.session_state.estimate_run_id    = None
-                st.session_state.estimate_result    = None
-                st.session_state.estimate_sector    = ""
-                st.session_state.estimate_confirmed = False
+                _reset_estimate()
                 st.rerun()
 
     # ── PHASE 4: Confirmed — trigger the real pipeline ─────────────────────────
@@ -485,11 +506,7 @@ with tabs[0]:
         if ok:
             st.success(f"✅ Full pipeline triggered for **{label}**.")
             st.info(f"📧 You'll get an email at **{notify_email}** when it's done.")
-            # Reset estimate state for next search
-            st.session_state.estimate_run_id    = None
-            st.session_state.estimate_result    = None
-            st.session_state.estimate_sector    = ""
-            st.session_state.estimate_confirmed = False
+            _reset_estimate()
             time.sleep(4)
             st.cache_data.clear()
             st.rerun()
@@ -572,7 +589,8 @@ for tab_idx, run_id in enumerate(pinned):
         with hcol2:
             st.link_button("View on GitHub", run_url, use_container_width=True)
         with hcol3:
-            if st.button("✕ Close tab", key=f"close_{run_id}", use_container_width=True):
+            if st.button("🗑 Delete Tab", key=f"close_{run_id}", use_container_width=True,
+                         help="Remove this tab. The run itself keeps going on GitHub."):
                 st.session_state.pinned_runs.remove(run_id)
                 st.rerun()
 
