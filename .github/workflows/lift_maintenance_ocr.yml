@@ -155,6 +155,7 @@ jobs:
               body = json.loads(resp.read())
               print(f"[notify] ✅ Email sent  (id: {body.get('id')})")
           except urllib.error.HTTPError as e:
-              print(f"[notify] ❌ Resend error {e.code}: {e.read().decode()}")
-              raise SystemExit(1)
+              print(f"[notify] ⚠ Resend error {e.code}: {e.read().decode()} — email skipped, pipeline succeeded")
+          except Exception as e:
+              print(f"[notify] ⚠ Email skipped ({e}) — pipeline succeeded")
           EOF
