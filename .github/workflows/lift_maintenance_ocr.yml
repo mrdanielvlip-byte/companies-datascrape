@@ -89,40 +89,61 @@ jobs:
           retention-days: 30
           overwrite: true
 
-      # ── 10. Send completion email ─────────────────────────────────────────────
-      # Requires two GitHub secrets:
-      #   MAIL_USERNAME — your iCloud email address (daniellipinski@mac.com)
-      #   MAIL_PASSWORD — iCloud app-specific password (NOT your Apple ID password)
-      #                   Generate at: appleid.apple.com → Sign-In & Security → App-Specific Passwords
+      # ── 10. Send completion email via Resend ──────────────────────────────────
+      # Uses Resend (resend.com) — free tier, no personal credentials needed.
+      # Requires one GitHub secret:
+      #   RESEND_API_KEY — get free at resend.com → Dashboard → API Keys
       - name: Send completion email
         if: always()
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.mail.me.com
-          server_port: 587
-          secure: false
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "✅ Lift Maintenance Deal Sourcing — Excel Ready (${{ job.status }})"
-          to: daniellipinski@mac.com
-          from: "PE Deal Sourcing <${{ secrets.MAIL_USERNAME }}>"
-          body: |
-            Your UK Lift Maintenance intelligence report has finished.
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          python3 - <<'EOF'
+          import os, json, urllib.request, urllib.error
 
-            Status: ${{ job.status }}
+          api_key = os.environ.get("RESEND_API_KEY", "")
+          if not api_key:
+              print("[notify] RESEND_API_KEY not set — skipping email")
+              raise SystemExit(0)
 
-            📥 DOWNLOAD YOUR EXCEL:
-            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          run_id   = "${{ github.run_id }}"
+          repo     = "${{ github.repository }}"
+          status   = "${{ job.status }}"
+          run_url  = f"https://github.com/{repo}/actions/runs/{run_id}"
 
-            → Open the link above → scroll to bottom → click "lift-maintenance-excel"
+          payload = {
+              "from":    "PE Deal Sourcing <onboarding@resend.dev>",
+              "to":      ["daniellipinski@mac.com"],
+              "subject": f"✅ Lift Maintenance Deal Sourcing — Excel Ready ({status})",
+              "text": (
+                  f"Your UK Lift Maintenance intelligence report has finished.\n\n"
+                  f"Status: {status}\n\n"
+                  f"DOWNLOAD YOUR EXCEL:\n{run_url}\n\n"
+                  f"→ Open the link → scroll to bottom → click 'lift-maintenance-excel'\n\n"
+                  f"What's in the file:\n"
+                  f"  - Summary Dashboard\n"
+                  f"  - All 542 companies with acquisition scores\n"
+                  f"  - Prime Targets (Tier 1 & 2)\n"
+                  f"  - Competitor Maps\n"
+                  f"  - Directors Register\n"
+                  f"  - Family Businesses\n\n"
+                  f"Run ID: {run_id}\n"
+                  f"— PE Deal Sourcing Pipeline\n"
+              ),
+          }
 
-            What's in the file:
-            - Summary Dashboard
-            - All 542 companies with acquisition scores
-            - Prime Targets (Tier 1 & 2)
-            - Competitor Maps
-            - Directors Register
-            - Family Businesses
-
-            Run ID: ${{ github.run_id }}
-            — PE Deal Sourcing Pipeline
+          data = json.dumps(payload).encode()
+          req  = urllib.request.Request(
+              "https://api.resend.com/emails",
+              data=data,
+              headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+              method="POST",
+          )
+          try:
+              resp = urllib.request.urlopen(req, timeout=30)
+              body = json.loads(resp.read())
+              print(f"[notify] ✅ Email sent  (id: {body.get('id')})")
+          except urllib.error.HTTPError as e:
+              print(f"[notify] ❌ Resend error {e.code}: {e.read().decode()}")
+              raise SystemExit(1)
+          EOF
