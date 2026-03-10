@@ -1089,28 +1089,61 @@ def build_summary(wb, companies):
 
 # ── Sheet 11: Competitor Map ──────────────────────────────────────────────────
 
+def _load_sic_descriptions() -> dict[str, str]:
+    """Load SIC code → human-readable description from data/sic_codes.json."""
+    sic_path = os.path.join(os.path.dirname(__file__), "data", "sic_codes.json")
+    try:
+        with open(sic_path) as f:
+            raw = json.load(f)
+        # Values may be dicts {"description": "...", "count": N} or plain strings
+        return {
+            k: (v["description"] if isinstance(v, dict) else str(v))
+            for k, v in raw.items()
+        }
+    except Exception:
+        return {}
+
+
+def _sic_labels(sic_codes: list[str], sic_desc: dict[str, str]) -> list[str]:
+    """Translate a list of SIC codes to short description labels."""
+    labels = []
+    for code in sic_codes:
+        desc = sic_desc.get(str(code), "")
+        # Truncate long descriptions to keep cells readable
+        if desc:
+            labels.append(desc[:70] + ("…" if len(desc) > 70 else ""))
+        else:
+            labels.append(code)  # fallback to raw code
+    return labels
+
+
 def build_competitors(wb, companies):
     """
     One row per competitor per target company.
-    Shows: target name, competitor name, distance in miles, band, revenue, PE-backed, fit.
+    Columns include:
+      - Distance in miles + band (colour-coded)
+      - Competitor services (SIC descriptions)
+      - Services not offered by the target (SIC gap — competitor has, target lacks)
+      - Revenue, PE-backed, group, acquisition fit, sell intent
     """
     ws = wb.create_sheet("Competitor Map")
     headers = [
-        ("Rank",          5),
-        ("Target Company", 40),
-        ("#", 4),
-        ("Competitor Name", 40),
-        ("Reg. No.", 12),
-        ("Postcode", 10),
-        ("Distance (mi)", 13),
-        ("Band", 15),
-        ("Est. Revenue £", 14),
-        ("Accts Type", 12),
-        ("PE-backed", 9),
-        ("Group", 7),
-        ("Acq. Fit", 9),
-        ("Sell Intent", 10),
-        ("SIC Codes", 24),
+        ("Rank",                   5),
+        ("Target Company",        38),
+        ("#",                      4),
+        ("Competitor Name",       38),
+        ("Reg. No.",              12),
+        ("Postcode",              10),
+        ("Distance (mi)",         13),
+        ("Band",                  15),
+        ("Est. Revenue £",        14),
+        ("Accts Type",            11),
+        ("PE-backed",              9),
+        ("Group",                  7),
+        ("Acq. Fit",               9),
+        ("Sell Intent",           10),
+        ("Competitor Services",   52),
+        ("Services Not in Target", 52),
     ]
     n = len(headers)
 
@@ -1118,17 +1151,36 @@ def build_competitors(wb, companies):
     sub_row(ws, 2, n,
             "Distance = haversine miles between registered postcodes  ·  "
             "Local ≤15mi  ·  Regional 15–50mi  ·  Adjacent Region 50–100mi  ·  National >100mi  ·  "
-            "Red = PE-backed or group-owned competitor")
+            "Red = PE-backed/group  ·  Orange = services the target does NOT offer")
 
     ws.row_dimensions[3].height = 24
     for ci, (label, width) in enumerate(headers, 1):
-        cell(ws, 3, ci, label, bg=NAVY, fg=WHITE, bold=True, align="center")
+        cell(ws, 3, ci, label, bg=NAVY, fg=WHITE, bold=True, align="center", wrap=True)
         ws.column_dimensions[get_column_letter(ci)].width = width
+
+    # Load SIC descriptions once
+    sic_desc = _load_sic_descriptions()
+
+    # Band and fit colour maps (defined once, reused per row)
+    band_fill_map = {
+        "Local":           fill("E2EFDA"),
+        "Regional":        fill("FFF2CC"),
+        "Adjacent Region": fill("FFE0B2"),
+        "National":        fill("D9D9D9"),
+    }
+    fit_fill_map = {
+        "High":   fill("E2EFDA"),
+        "Medium": fill("FFF2CC"),
+        "Low":    fill("FFD6D6"),
+    }
 
     row = 4
     for rank, c in enumerate(companies, 1):
         comp_analysis = c.get("competitor_analysis") or {}
-        comp_map = comp_analysis.get("competitor_map", [])
+        comp_map      = comp_analysis.get("competitor_map", [])
+
+        # Target's own SIC codes (normalised to strings)
+        target_sics = set(str(s) for s in (c.get("sic_codes") or []) if s)
 
         if not comp_map:
             bg = ALT if rank % 2 == 0 else None
@@ -1144,7 +1196,6 @@ def build_competitors(wb, companies):
         for comp_idx, comp in enumerate(comp_map, 1):
             bg = ALT if rank % 2 == 0 else None
 
-            # Flag PE-backed/group competitors in red
             is_pe  = comp.get("is_pe_backed", False)
             is_grp = comp.get("is_group_owned", False)
             row_bg = fill("FFD6D6") if (is_pe or is_grp) else bg
@@ -1155,53 +1206,51 @@ def build_competitors(wb, companies):
             rev       = comp.get("estimated_revenue_gbp", 0)
             si_score  = comp.get("sell_intent_score")
 
-            # Band fill colour
-            band_fill_map = {
-                "Local":           fill("E2EFDA"),
-                "Regional":        fill("FFF2CC"),
-                "Adjacent Region": fill("FFE0B2"),
-                "National":        fill("D9D9D9"),
-            }
+            # ── Service columns ──────────────────────────────────────────────
+            comp_sics = [str(s) for s in (comp.get("sic_codes") or []) if s]
 
-            # Acquisition fit fill
-            fit_fill_map = {
-                "High":   fill("E2EFDA"),
-                "Medium": fill("FFF2CC"),
-                "Low":    fill("FFD6D6"),
-            }
+            # All competitor services (labelled)
+            comp_services = _sic_labels(comp_sics, sic_desc)
 
-            cell(ws, row, 1,  rank,                         bg=bg, align="center")
+            # Services competitor offers that target does NOT (the gap)
+            gap_sics   = [s for s in comp_sics if s not in target_sics]
+            gap_labels = _sic_labels(gap_sics, sic_desc)
+
+            # ── Row cells ────────────────────────────────────────────────────
+            cell(ws, row, 1,  rank, bg=bg, align="center")
             cell(ws, row, 2,  c["company_name"] if comp_idx == 1 else "",
-                                                             bg=bg, size=8)
-            cell(ws, row, 3,  comp_idx,                     bg=bg, align="center", size=8)
-            cell(ws, row, 4,  comp.get("company_name", ""), bg=row_bg, bold=is_pe or is_grp, size=8)
+                              bg=bg, size=8)
+            cell(ws, row, 3,  comp_idx, bg=bg, align="center", size=8)
+            cell(ws, row, 4,  comp.get("company_name", ""),
+                              bg=row_bg, bold=is_pe or is_grp, size=8)
             cell(ws, row, 5,  comp.get("company_number", ""), bg=row_bg, size=8)
-            cell(ws, row, 6,  comp.get("postcode", ""),     bg=row_bg, size=8)
+            cell(ws, row, 6,  comp.get("postcode", ""),       bg=row_bg, size=8)
 
-            # Distance cell
-            dist_val  = f"{miles:.1f}" if miles is not None else "N/A"
+            # Distance
+            dist_val = f"{miles:.1f}" if miles is not None else "N/A"
             cx_dist = ws.cell(row=row, column=7, value=dist_val)
             cx_dist.fill      = band_fill_map.get(band, fill("D9D9D9"))
             cx_dist.font      = Font(name="Arial", size=9, bold=True)
             cx_dist.alignment = Alignment(horizontal="center", vertical="center")
             cx_dist.border    = THIN
 
-            # Band cell
+            # Band
             cx_band = ws.cell(row=row, column=8, value=band)
             cx_band.fill      = band_fill_map.get(band, fill("D9D9D9"))
             cx_band.font      = Font(name="Arial", size=9)
             cx_band.alignment = Alignment(horizontal="center", vertical="center")
             cx_band.border    = THIN
 
-            # Revenue
+            # Revenue / ownership / fit
             rev_str = f"£{rev:,.0f}" if rev else "-"
-            cell(ws, row, 9,  rev_str, bg=row_bg, align="right", size=8)
-            cell(ws, row, 10, comp.get("accounts_type", ""), bg=row_bg, size=8, align="center")
+            cell(ws, row, 9,  rev_str,  bg=row_bg, align="right",  size=8)
+            cell(ws, row, 10, comp.get("accounts_type", ""),
+                              bg=row_bg, align="center", size=8)
             cell(ws, row, 11, "⚠ PE" if is_pe else ("Grp" if is_grp else "-"),
-                 bg=fill("FFD6D6") if is_pe else row_bg, align="center", size=8)
+                              bg=fill("FFD6D6") if is_pe else row_bg,
+                              align="center", size=8)
             cell(ws, row, 12, "✓" if is_grp else "-", bg=row_bg, align="center", size=8)
 
-            # Acquisition fit
             cx_fit = ws.cell(row=row, column=13, value=acq_fit)
             cx_fit.fill      = fit_fill_map.get(acq_fit, fill("D9D9D9"))
             cx_fit.font      = Font(name="Arial", size=9, bold=(acq_fit == "High"))
@@ -1209,13 +1258,34 @@ def build_competitors(wb, companies):
             cx_fit.border    = THIN
 
             cell(ws, row, 14, si_score if si_score is not None else "-",
-                 bg=row_bg, align="center", size=8)
-            cell(ws, row, 15, ", ".join(comp.get("sic_codes", [])),
-                 bg=row_bg, size=7)
+                              bg=row_bg, align="center", size=8)
+
+            # Competitor services — all their SIC descriptions
+            services_text = "  |  ".join(comp_services) if comp_services else "-"
+            cell(ws, row, 15, services_text, bg=row_bg, size=8, wrap=True)
+
+            # Gap services — what competitor does that target does NOT
+            if gap_labels:
+                gap_text = "  |  ".join(gap_labels)
+                cx_gap = ws.cell(row=row, column=16, value=gap_text)
+                cx_gap.fill      = fill("FFE0B2")   # orange — highlights opportunity/threat
+                cx_gap.font      = Font(name="Arial", size=8, bold=True, color="7B3F00")
+                cx_gap.alignment = Alignment(horizontal="left", vertical="center",
+                                             wrap_text=True)
+                cx_gap.border    = THIN
+            else:
+                cell(ws, row, 16, "—  same services", bg=row_bg, fg="888888",
+                     size=8, align="center")
+
+            # Auto-height for wrapped rows
+            ws.row_dimensions[row].height = max(
+                15,
+                15 * max(1, len(gap_labels)),
+            )
 
             row += 1
 
-        # Spacer row between targets
+        # Thin spacer between targets
         ws.row_dimensions[row].height = 4
         row += 1
 
