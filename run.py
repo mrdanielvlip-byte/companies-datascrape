@@ -245,6 +245,109 @@ def _run_register_discovery(register_key: str, reg_query: str, cfg,
         return filtered
 
 
+def _run_trade_body_discovery(sector: str, trade_body_keys: list, cfg,
+                               merge_into_existing: bool = True) -> list:
+    """
+    Find UK trade/industry bodies relevant to the sector (or use explicitly
+    supplied keys), scrape their member lists, cross-reference with CH, and
+    merge into filtered_companies.json.
+
+    sector            — free-text sector (used for dynamic web discovery when
+                        trade_body_keys is empty or contains 'AUTO')
+    trade_body_keys   — explicit list of KNOWN_BODIES keys (e.g. ['LEIA'])
+                        or ['AUTO'] to trigger full web-search discovery
+    merge_into_existing — True to append to filtered JSON, False to overwrite
+    """
+    try:
+        from trade_body_finder import (
+            find_trade_bodies, discover_from_trade_body, KNOWN_BODIES,
+            discover_members_from_url,
+        )
+    except ImportError as e:
+        print(f"  ⚠️  trade_body_finder.py not available: {e}")
+        return []
+
+    api_key = load_api_key()
+
+    # ── Decide which bodies to use ─────────────────────────────────────────
+    if not trade_body_keys or trade_body_keys == ["AUTO"]:
+        print(f"\n  🔍 Searching for UK trade bodies matching '{sector}' ...")
+        bodies = find_trade_bodies(sector, max_bodies=3)
+        if not bodies:
+            print("  No relevant trade bodies found.")
+            return []
+        discoverable = [b for b in bodies if b.get("discoverable")]
+        if not discoverable:
+            blocked = [b["name"] for b in bodies]
+            print(f"  Trade bodies found but not scrapeable: {', '.join(blocked)}")
+            print("  (Members will still be detected via website keyword scanning)")
+            return []
+        for b in discoverable:
+            cnt = f"~{b['member_count_est']} members" if b.get("member_count_est") else ""
+            print(f"  Found: {b['name']} [{b['source']}] {cnt}  →  {b['url']}")
+        bodies_to_use = discoverable
+    else:
+        bodies_to_use = []
+        for key in trade_body_keys:
+            if key in KNOWN_BODIES:
+                body_info = KNOWN_BODIES[key]
+                bodies_to_use.append({
+                    "key":          key,
+                    "name":         body_info["name"],
+                    "url":          body_info["url"],
+                    "discoverable": body_info.get("scrape_type") != "blocked",
+                    "note":         body_info.get("note", ""),
+                })
+            else:
+                # Treat key as a raw URL
+                if key.startswith("http"):
+                    bodies_to_use.append({
+                        "key":          "CUSTOM",
+                        "name":         key,
+                        "url":          key,
+                        "discoverable": True,
+                    })
+                else:
+                    print(f"  ⚠️  Unknown trade body key: {key!r} (skipping)")
+
+    if not bodies_to_use:
+        return []
+
+    # ── Scrape each body and merge into filtered JSON ──────────────────────
+    os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
+    out_path     = os.path.join(cfg.OUTPUT_DIR, cfg.FILTERED_JSON)
+    all_new      = []
+    found_nums   = set()
+
+    # Load existing company numbers to avoid duplication
+    if merge_into_existing and os.path.exists(out_path):
+        with open(out_path) as f:
+            existing = json.load(f)
+        found_nums = {c.get("company_number") for c in existing if c.get("company_number")}
+    else:
+        existing = []
+
+    for body in bodies_to_use:
+        companies = discover_from_trade_body(body, api_key)
+        added = [c for c in companies
+                 if c.get("company_number") and
+                 c["company_number"] not in found_nums]
+        for c in added:
+            found_nums.add(c["company_number"])
+        all_new.extend(added)
+
+    if all_new:
+        merged = existing + all_new
+        with open(out_path, "w") as f:
+            json.dump(merged, f, indent=2)
+        print(f"\n  Trade body discovery: +{len(all_new)} new companies "
+              f"= {len(merged)} total  → {out_path}")
+        return merged
+    else:
+        print("  Trade body discovery: no new companies added.")
+        return existing
+
+
 def _apply_post_filters(cfg, args):
     """
     Apply optional post-discovery quality filters to filtered_companies.json:
@@ -358,6 +461,20 @@ Examples:
         help='Discovery source: "sic" (SIC codes only, default), '
              '"register" (regulatory register only), or '
              '"both" (SIC + register merged for broadest coverage).',
+    )
+    parser.add_argument(
+        "--trade-body",
+        metavar="KEY_OR_AUTO",
+        action="append",
+        dest="trade_bodies",
+        default=[],
+        help=(
+            'Trade/industry body to pull members from. Repeatable. '
+            'Use "AUTO" to dynamically discover bodies for the sector. '
+            'Use a key from trade_body_finder.KNOWN_BODIES (e.g. LEIA), '
+            'or a raw member-list URL. '
+            'Example: --trade-body LEIA  or  --trade-body AUTO'
+        ),
     )
     parser.add_argument(
         "--list-registers",
@@ -625,6 +742,21 @@ Examples:
                 search = reload("ch_search")
                 search.run()
                 filter_companies(cfg)
+
+        # ── Trade body member discovery ───────────────────────────────────────
+        # Always runs. If no --trade-body flags given, defaults to AUTO
+        # (dynamic web search for the sector). Explicit keys override AUTO.
+        trade_bodies = getattr(args, "trade_bodies", []) or []
+        sector_label = getattr(args, "sector", None) or getattr(cfg, "SECTOR_LABEL", "")
+        if not trade_bodies:
+            trade_bodies = ["AUTO"]   # discover relevant bodies dynamically
+        print(f"\nStep 2c/13 — Trade Body Member Discovery")
+        _run_trade_body_discovery(
+            sector=sector_label,
+            trade_body_keys=trade_bodies,
+            cfg=cfg,
+            merge_into_existing=True,
+        )
 
         # ── Post-filter 1: age / charges / SIC exclusion ─────────────────────
         _apply_post_filters(cfg, args)

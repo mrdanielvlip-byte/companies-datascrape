@@ -46,14 +46,17 @@ except ImportError:
 # ── Accreditation keyword scoring ──────────────────────────────────────────
 
 ACCREDITATION_WEIGHTS = {
+    # Quality standards
     "ISO 9001":          5,
     "ISO 14001":         4,
     "ISO 27001":         5,
     "ISO 45001":         4,
     "UKAS":              5,
+    # Safety & contractor schemes
     "CHAS":              3,
     "Safe Contractor":   3,
     "Constructionline":  3,
+    # Sector-specific bodies (regulatory/statutory)
     "Gas Safe":          4,
     "NICEIC":            4,
     "NAPIT":             4,
@@ -61,14 +64,22 @@ ACCREDITATION_WEIGHTS = {
     "BAFE":              4,
     "NSI":               3,
     "FIRAS":             3,
+    # Regulated registers
     "CQC":               5,
     "Ofsted":            5,
     "FCA":               4,
     "Environment Permit":4,
     "ICO":               2,
+    # Trust marks
     "TrustMark":         3,
     "Which? Trusted":    3,
     "Cyber Essentials":  3,
+    # Trade body memberships (populated dynamically from trade_body_finder)
+    "LEIA Member":       3,
+    "BESA Member":       3,
+    "ECA Member":        3,
+    "FMB Member":        3,
+    "trade_body_member": 2,   # generic fallback for any auto-discovered body
 }
 
 
@@ -157,6 +168,24 @@ def enrich_accreditations(company: dict) -> dict:
         r = reg_results.get(reg_key, {})
         if r.get("found") and accred_name not in " ".join(site_accreds):
             extra_accreds.append(accred_name)
+
+    # Credit confirmed trade body membership (populated by trade_body_finder)
+    trade_body = company.get("trade_body") or company.get("source", "")
+    trade_body_name = company.get("trade_body_name") or ""
+    if trade_body and trade_body not in ("", "sic", "ch_search"):
+        # Map known body keys to weight labels
+        _tb_accred_map = {
+            "LEIA":   "LEIA Member",
+            "BESA":   "BESA Member",
+            "ECA":    "ECA Member",
+            "FMB":    "FMB Member",
+        }
+        accred_label = _tb_accred_map.get(
+            trade_body.upper(),
+            f"{trade_body_name or trade_body} Member" if trade_body_name else "trade_body_member"
+        )
+        if accred_label not in " ".join(site_accreds + extra_accreds):
+            extra_accreds.append(accred_label)
 
     all_site_accreds = list(set(site_accreds + extra_accreds))
     accred_scoring   = score_website_accreditations(all_site_accreds)

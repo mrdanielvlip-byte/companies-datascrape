@@ -76,6 +76,9 @@ if "_estimate_clean_charges" not in st.session_state:
     st.session_state["_estimate_clean_charges"] = False
 if "_estimate_excluded_sics" not in st.session_state:
     st.session_state["_estimate_excluded_sics"] = []
+# Trade body state — AUTO = let pipeline discover; list of keys = explicit selection
+if "_estimate_trade_bodies" not in st.session_state:
+    st.session_state["_estimate_trade_bodies"] = "AUTO"
 
 
 # ── GitHub API helpers ─────────────────────────────────────────────────────────
@@ -560,6 +563,7 @@ def _reset_estimate():
     st.session_state["_estimate_min_age"]        = 0
     st.session_state["_estimate_clean_charges"]  = False
     st.session_state["_estimate_excluded_sics"]  = []
+    st.session_state["_estimate_trade_bodies"]   = "AUTO"
 
 with tabs[0]:
     st.subheader("New Sector Search")
@@ -647,6 +651,56 @@ with tabs[0]:
                 else:
                     reg_sources_sel = []
                     reg_query       = ""
+
+            # ── Trade body member discovery ────────────────────────────────────
+            st.markdown("**Trade & industry body members**")
+            st.caption(
+                "The pipeline automatically searches for relevant UK trade associations "
+                "when your sector is run. Known bodies are pre-loaded below — tick to "
+                "confirm or leave on AUTO to let the pipeline search dynamically."
+            )
+
+            # Instant suggestions from known bodies based on what's typed so far
+            _known_suggestions = []
+            if sector.strip():
+                try:
+                    from trade_body_finder import suggest_for_streamlit
+                    _known_suggestions = suggest_for_streamlit(sector.strip())
+                except ImportError:
+                    pass
+
+            tb_col1, tb_col2 = st.columns([3, 1])
+            with tb_col1:
+                if _known_suggestions:
+                    st.caption("✅ **Known bodies matched to this sector:**")
+                    _tb_sel = []
+                    tb_grid = st.columns(min(3, len(_known_suggestions)))
+                    for idx, body in enumerate(_known_suggestions):
+                        with tb_grid[idx % 3]:
+                            cnt_str   = (f" ~{body['member_count_est']} members"
+                                         if body.get("member_count_est") else "")
+                            disc_icon = "✅" if body["discoverable"] else "🚫"
+                            checked   = st.checkbox(
+                                f"{disc_icon} {body['name']}{cnt_str}",
+                                value=body["discoverable"],
+                                help=(
+                                    f"{body['name']}\n{body['url']}"
+                                    + (f"\n\n⚠️ {body['note']}" if body.get("note") else "")
+                                ),
+                                key=f"tb_{body['key']}",
+                                disabled=not body["discoverable"],
+                            )
+                            if checked and body["discoverable"]:
+                                _tb_sel.append(body["key"])
+                    _tb_sel_final = _tb_sel if _tb_sel else ["AUTO"]
+                else:
+                    st.caption(
+                        "No pre-loaded bodies for this sector — "
+                        "pipeline will search automatically when the run starts."
+                    )
+                    _tb_sel_final = ["AUTO"]
+            with tb_col2:
+                st.caption("🔍 Auto-search always also runs for any bodies not listed above.")
 
             # ── Advanced filters ──────────────────────────────────────────────
             with st.expander("Advanced filters (optional)"):
@@ -752,6 +806,7 @@ with tabs[0]:
                 st.session_state["_estimate_reg_query"]     = reg_query
                 st.session_state["_estimate_min_age"]       = min_age_yrs
                 st.session_state["_estimate_clean_charges"] = clean_charges
+                st.session_state["_estimate_trade_bodies"]  = _tb_sel_final
                 ok = trigger_workflow(WORKFLOW_ESTIMATE, {"sector": sector.strip()})
                 if not ok:
                     _reset_estimate()
@@ -969,6 +1024,7 @@ with tabs[0]:
         min_age       = st.session_state.get("_estimate_min_age", 0)
         clean_charges = st.session_state.get("_estimate_clean_charges", False)
         excluded_sics = st.session_state.get("_estimate_excluded_sics", [])
+        trade_bodies  = st.session_state.get("_estimate_trade_bodies", "AUTO")
         modules       = st.session_state.get("_estimate_modules", {k: True for k, *_ in [
             ("run_ocr",), ("run_contacts",), ("run_sell_signals",),
             ("run_contracts",), ("run_digital",), ("run_accreditations",), ("run_competitor_map",),
@@ -1000,6 +1056,10 @@ with tabs[0]:
                     "min_age_years":      str(min_age) if min_age else "",
                     "clean_charges_only": "true" if clean_charges else "false",
                     "excluded_sics":      ",".join(excluded_sics) if excluded_sics else "",
+                    "trade_bodies":       (
+                        ",".join(trade_bodies)
+                        if isinstance(trade_bodies, list) else str(trade_bodies or "AUTO")
+                    ),
                     **{k: "true" if v else "false" for k, v in modules.items()},
                 }
                 ok = trigger_workflow(WORKFLOW_QUICK, workflow_inputs)

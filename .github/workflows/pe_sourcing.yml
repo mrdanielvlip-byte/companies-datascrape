@@ -64,6 +64,10 @@ on:
         description: 'Comma-separated SIC codes to exclude (e.g. 38110,38120)'
         required: false
         default: ''
+      trade_bodies:
+        description: 'Trade/industry body member discovery. "AUTO" = dynamic web search for sector. Comma-separated keys to specify bodies: LEIA, BESA, ECA — or a raw member-list URL. Leave blank to disable.'
+        required: false
+        default: 'AUTO'
 
       # ── Per-module toggles (true = run, false = skip) ─────────────────────
       run_ocr:
@@ -196,6 +200,18 @@ jobs:
               S="$(echo "$S" | xargs)"
               if [ -n "$S" ]; then
                 FLAGS="$FLAGS --exclude-sic $S"
+              fi
+            done
+          fi
+
+          # Trade body discovery
+          # Default "AUTO" = dynamic web search; explicit keys e.g. "LEIA,BESA"
+          if [ -n "${{ inputs.trade_bodies }}" ] && [ "${{ inputs.trade_bodies }}" != "none" ]; then
+            IFS=',' read -ra TBS <<< "${{ inputs.trade_bodies }}"
+            for TB in "${TBS[@]}"; do
+              TB="$(echo "$TB" | xargs)"
+              if [ -n "$TB" ]; then
+                FLAGS="$FLAGS --trade-body $TB"
               fi
             done
           fi

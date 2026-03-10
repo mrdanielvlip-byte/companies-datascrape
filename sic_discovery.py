@@ -146,11 +146,28 @@ CURATED_SECTORS = [
         "market_score": 74,
     },
     {
+        # Passenger/goods lifts, platform lifts, escalators — building-installed vertical transport
+        # SEPARATE from industrial lifting/crane/forklift (below)
+        "triggers": ["lift maintenance", "lift service", "lift installation",
+                     "lift engineer", "lift contractor", "lift company",
+                     "passenger lift", "platform lift", "stairlift", "dumbwaiter",
+                     "elevator", "escalator", "leia member"],
+        "sic_codes": ["43290", "33120", "28221", "81100"],
+        "benchmark_category": "technical_services",
+        "market_score": 76,
+        "exclude_subsectors": [
+            "marine", "boat", "vessel", "ship", "yacht", "pontoon", "barge",
+            "dock", "watercraft", "crane", "forklift", "pallet", "hoist",
+            "conveyor", "mining",
+        ],
+    },
+    {
         "triggers": ["lifting equipment", "crane hire", "hoist", "rigging",
                      "material handling", "forklift", "plant hire"],
         "sic_codes": ["28220", "77320", "43999", "33120"],
         "benchmark_category": "technical_services",
         "market_score": 72,
+        "exclude_subsectors": ["marine", "boat", "vessel", "ship", "yacht"],
     },
     {
         "triggers": ["engineering consultancy", "engineering design", "process engineering",
@@ -1079,10 +1096,11 @@ def discover(
     curated = _curated_match(sector_description)
 
     if curated:
-        sic_code_list   = curated["sic_codes"][:top_sic]
-        bench_cat       = curated["benchmark_category"]
-        market_score    = curated["market_score"]
-        source          = "curated sector map"
+        sic_code_list    = curated["sic_codes"][:top_sic]
+        bench_cat        = curated["benchmark_category"]
+        market_score     = curated["market_score"]
+        curated_excludes = curated.get("exclude_subsectors", [])
+        source           = "curated sector map"
         # Build match metadata for display
         selected = [
             {
@@ -1095,6 +1113,7 @@ def discover(
         ]
         print(f"  ✓ Matched via curated sector map")
     else:
+        curated_excludes = []
         # ── Step 2: Fuzzy fallback ─────────────────────────────────────────────
         print(f"  No curated match found — using fuzzy SIC scoring ...")
         selected = _fuzzy_sic_match(sector_description, top_n=top_sic, min_score=min_score)
@@ -1149,7 +1168,7 @@ def discover(
         NAME_QUERIES            = kw["name_queries"],
         INCLUDE_STEMS           = kw["include_stems"],
         EXCLUDE_TERMS           = kw["exclude_terms"],
-        EXCLUDE_SUBSECTORS      = [],
+        EXCLUDE_SUBSECTORS      = curated_excludes,
         SECTOR_BENCHMARKS       = benchmarks,
         REVENUE_PER_HEAD_LOW    = benchmarks["revenue_per_head_low"],
         REVENUE_PER_HEAD_MID    = benchmarks["revenue_per_head_base"],
