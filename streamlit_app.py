@@ -413,14 +413,15 @@ with tabs[0]:
     # ── PHASE 3: Show estimate results and ask to confirm ─────────────────────
     elif st.session_state.estimate_result is not None \
             and not st.session_state.estimate_confirmed:
-        r       = st.session_state.estimate_result
-        sector  = r.get("sector", st.session_state.estimate_sector)
-        total   = r.get("total_companies", 0)
-        acc_pct = r.get("accuracy_pct", 0)
-        acc_lbl = r.get("accuracy_label", "")
-        source  = r.get("match_source", "fuzzy")
-        sic_bkd = r.get("sic_breakdown", [])
-        samples = r.get("sample_companies", [])
+        r          = st.session_state.estimate_result
+        sector     = r.get("sector", st.session_state.estimate_sector)
+        total      = r.get("total_companies", 0)
+        acc_pct    = r.get("accuracy_pct", 0)
+        acc_lbl    = r.get("accuracy_label", "")
+        source     = r.get("match_source", "fuzzy")
+        sic_bkd    = r.get("sic_breakdown", [])
+        samples    = r.get("sample_companies", [])
+        api_errors = r.get("api_errors", 0)
 
         # Accuracy colour
         if acc_pct >= 80:
@@ -431,6 +432,12 @@ with tabs[0]:
             acc_colour = "🔴"
 
         st.success(f"**Estimate complete for: {sector}**")
+
+        if api_errors > 0:
+            st.warning(
+                f"⚠️ {api_errors} SIC code(s) couldn't be counted due to API rate limits — "
+                "the total shown may be **understated**. The full search will not be affected."
+            )
 
         # ── Top metrics ────────────────────────────────────────────────────────
         m1, m2, m3 = st.columns(3)
