@@ -1421,6 +1421,216 @@ def build_competitors(wb, companies):
     ws.auto_filter.ref = f"A3:{get_column_letter(n)}3"
 
 
+# ── Sheet: Company Overviews ──────────────────────────────────────────────────
+
+def build_overview(wb, companies):
+    """
+    One row per company — rich overview card pulled from their website and CH data.
+
+    Columns:
+      Rank | Company | Website | Grade | Rev. Base | Employees | About (web description)
+      Services | Sector Match | Domain Age | LinkedIn | Job Postings
+      Address | Incorporated | Directors | CH Link
+    """
+    ws = wb.create_sheet("Company Overviews")
+
+    headers = [
+        ("Rank",          5),
+        ("Company",      42),
+        ("Website",      30),
+        ("Grade",        10),
+        ("Rev. Est.",    14),
+        ("Employees",    11),
+        ("About",        70),   # web meta description / og:description
+        ("Services",     55),   # SIC descriptions
+        ("Sector Match", 14),
+        ("Domain Age",   11),
+        ("LinkedIn",      9),
+        ("Jobs",          7),
+        ("Town",         16),
+        ("County",       16),
+        ("Incorporated", 12),
+        ("Directors",    34),
+        ("CH Link",      18),
+    ]
+    n = len(headers)
+
+    title_row(ws, 1, n, "COMPANY OVERVIEWS — Website-sourced intelligence per target company")
+    sub_row(ws, 2, n,
+            "About = homepage meta description · Services = SIC descriptions · "
+            "Sector Match = web keyword verification · Source: digital_health.py + Companies House")
+
+    ws.row_dimensions[3].height = 28
+    for ci, (label, width) in enumerate(headers, 1):
+        cell(ws, 3, ci, label, bg=NAVY, fg=WHITE, bold=True, align="center", wrap=True)
+        ws.column_dimensions[get_column_letter(ci)].width = width
+
+    sic_desc = _load_sic_descriptions()
+
+    sector_fill_map = {
+        "Confirmed":  fill("E2EFDA"),
+        "Likely":     fill("FFF2CC"),
+        "Uncertain":  fill("FFD6D6"),
+        "Unverified": fill("EEEEEE"),
+    }
+
+    for i, c in enumerate(companies, 1):
+        row = i + 3
+        bg  = ALT if i % 2 == 0 else None
+
+        dh       = c.get("digital_health") or {}
+        contacts = c.get("contacts") or {}
+        acq      = c.get("acquisition_score", 0)
+        grade    = c.get("acquisition_grade", "")
+
+        # ── Website / domain ──────────────────────────────────────────────────
+        domain   = dh.get("domain", "")
+        website  = contacts.get("website") or c.get("website") or (
+            f"https://{domain}" if domain else "")
+        website_live = dh.get("website_live", False)
+
+        # ── About text — prefer web description, fall back to SIC desc ────────
+        about = dh.get("website_description", "").strip()
+        if not about:
+            sic_labels = _sic_labels(
+                [str(s) for s in (c.get("sic_codes") or []) if s], sic_desc)
+            about = "  |  ".join(sic_labels) if sic_labels else ""
+
+        # ── Services (SIC descriptions) ───────────────────────────────────────
+        sic_labels = _sic_labels(
+            [str(s) for s in (c.get("sic_codes") or []) if s], sic_desc)
+        services_text = "  |  ".join(sic_labels) if sic_labels else "—"
+
+        # ── Revenue + employees ───────────────────────────────────────────────
+        rev_base = c.get("rev_base")
+        rev_str  = f"£{rev_base:,.0f}" if rev_base else "—"
+        emp      = c.get("estimated_employees")
+
+        # ── Sector match ──────────────────────────────────────────────────────
+        srl = dh.get("sector_relevance_label", "Unverified")
+        srs = dh.get("sector_relevance_score", 0)
+
+        # ── Directors list (names only, comma-separated) ──────────────────────
+        directors = c.get("directors") or []
+        dir_names = ", ".join(
+            d["name"].title() for d in directors
+            if d.get("name") and not d.get("resigned_on")
+        )[:120]
+
+        # ── Address ───────────────────────────────────────────────────────────
+        town   = c.get("town", "")
+        county = c.get("county", "")
+
+        # ── Col 1: Rank ───────────────────────────────────────────────────────
+        cell(ws, row, 1, i, bg=bg, align="center", bold=True)
+
+        # ── Col 2: Company name ───────────────────────────────────────────────
+        cx_name = ws.cell(row=row, column=2, value=c["company_name"])
+        cx_name.fill      = score_fill(acq)
+        cx_name.font      = Font(name="Arial", size=10, bold=True,
+                                 color=score_font_color(acq))
+        cx_name.alignment = Alignment(horizontal="left", vertical="center")
+        cx_name.border    = THIN
+
+        # ── Col 3: Website URL (clickable style if live) ──────────────────────
+        if website and website_live:
+            cx_web = ws.cell(row=row, column=3, value=website)
+            cx_web.font      = Font(name="Arial", size=8, color="0563C1", underline="single")
+            cx_web.alignment = Alignment(horizontal="left", vertical="center")
+            cx_web.border    = THIN
+            if bg:
+                cx_web.fill = bg
+        else:
+            cell(ws, row, 3, website or "—", bg=bg, fg="AAAAAA" if not website_live else None, size=8)
+
+        # ── Col 4: Acquisition grade ──────────────────────────────────────────
+        cx_grade = ws.cell(row=row, column=4, value=grade)
+        cx_grade.fill      = score_fill(acq)
+        cx_grade.font      = Font(name="Arial", size=9, bold=True,
+                                  color=score_font_color(acq))
+        cx_grade.alignment = Alignment(horizontal="center", vertical="center")
+        cx_grade.border    = THIN
+
+        # ── Col 5: Revenue estimate ───────────────────────────────────────────
+        cell(ws, row, 5, rev_str, bg=bg, align="right", size=9)
+
+        # ── Col 6: Employees ──────────────────────────────────────────────────
+        emp_src = c.get("estimated_employees_source", "")
+        emp_bg  = fill("E2EFDA") if emp_src.startswith("Tier 1") else (
+                  fill("FFF2CC") if emp else bg)
+        cell(ws, row, 6, emp if emp is not None else "—",
+             bg=emp_bg, align="center", size=9, bold=emp_src.startswith("Tier 1"))
+
+        # ── Col 7: About (web description) ────────────────────────────────────
+        about_bg = fill("EBF5FB") if dh.get("website_description") else bg
+        cell(ws, row, 7, about, bg=about_bg, size=8, wrap=True)
+
+        # ── Col 8: Services (SIC) ─────────────────────────────────────────────
+        cell(ws, row, 8, services_text, bg=bg, size=8, wrap=True)
+
+        # ── Col 9: Sector match ───────────────────────────────────────────────
+        cx_sm = ws.cell(row=row, column=9, value=srl)
+        cx_sm.fill      = sector_fill_map.get(srl, fill("EEEEEE"))
+        cx_sm.font      = Font(name="Arial", size=8, bold=True)
+        cx_sm.alignment = Alignment(horizontal="center", vertical="center")
+        cx_sm.border    = THIN
+        if srs:
+            cx_sm.comment = Comment(
+                f"Sector relevance score: {srs}/100\n"
+                + "\n".join(dh.get("sector_match_signals", [])),
+                "V² Overview")
+
+        # ── Col 10: Domain age ────────────────────────────────────────────────
+        da = dh.get("domain_age_years")
+        da_str = f"{da:.1f} yrs" if da else "—"
+        da_bg  = fill("E2EFDA") if (da or 0) >= 10 else (
+                 fill("FFF2CC") if (da or 0) >= 3 else bg)
+        cell(ws, row, 10, da_str, bg=da_bg, align="center", size=8)
+
+        # ── Col 11: LinkedIn ──────────────────────────────────────────────────
+        li  = dh.get("has_linkedin", False)
+        li_url = dh.get("linkedin_url") or contacts.get("linkedin_url") or ""
+        if li_url:
+            cx_li = ws.cell(row=row, column=11, value="✓ View")
+            cx_li.font      = Font(name="Arial", size=8, color="0563C1", underline="single")
+            cx_li.alignment = Alignment(horizontal="center", vertical="center")
+            cx_li.border    = THIN
+            cx_li.fill      = fill("E2EFDA")
+        else:
+            cell(ws, row, 11, "✓" if li else "—",
+                 bg=fill("E2EFDA") if li else bg, align="center", size=9)
+
+        # ── Col 12: Job postings ──────────────────────────────────────────────
+        jobs = dh.get("has_job_postings", False)
+        cell(ws, row, 12, "✓" if jobs else "—",
+             bg=fill("E2EFDA") if jobs else bg, align="center", size=9)
+
+        # ── Cols 13–16: Location + incorporation + directors ──────────────────
+        cell(ws, row, 13, town,   bg=bg, size=8)
+        cell(ws, row, 14, county, bg=bg, size=8)
+        cell(ws, row, 15, (c.get("date_of_creation") or "")[:7], bg=bg, align="center", size=8)
+        cell(ws, row, 16, dir_names, bg=bg, size=8, wrap=True)
+
+        # ── Col 17: CH link ───────────────────────────────────────────────────
+        ch_url = c.get("ch_url", "")
+        if ch_url:
+            cx_ch = ws.cell(row=row, column=17, value="View on CH")
+            cx_ch.font      = Font(name="Arial", size=8, color="0563C1", underline="single")
+            cx_ch.alignment = Alignment(horizontal="center", vertical="center")
+            cx_ch.border    = THIN
+            if bg:
+                cx_ch.fill = bg
+        else:
+            cell(ws, row, 17, "—", bg=bg, align="center", size=8)
+
+        # Row height — taller to show wrapped About text
+        ws.row_dimensions[row].height = max(30, min(90,
+            15 + (len(about) // 80) * 12))
+
+    ws.freeze_panes = "C4"
+    ws.auto_filter.ref = f"A3:{get_column_letter(n)}{len(companies)+3}"
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def run():
@@ -1437,6 +1647,7 @@ def run():
     wb = Workbook()
     build_pipeline(wb, companies)
     build_top30(wb, companies)
+    build_overview(wb, companies)
     build_contacts(wb, companies)
     build_financials(wb, companies)
     if bolt_on_data:
