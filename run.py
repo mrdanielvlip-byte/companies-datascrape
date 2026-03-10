@@ -186,15 +186,21 @@ def _build_reg_config(register_key: str):
     return cfg_mod
 
 
-def _run_register_discovery(register_key: str, reg_query: str, cfg) -> list:
+def _run_register_discovery(register_key: str, reg_query: str, cfg,
+                             merge_into_existing: bool = False) -> list:
     """
-    Step 1 (register-first mode): Query the regulatory register, cross-reference
-    with Companies House, write raw_companies.json and filtered_companies.json.
-    Returns the list of filtered companies.
-    """
-    from reg_sources import discover, REGISTER_CATALOGUE
+    Query a regulatory register, cross-reference with Companies House,
+    write (or merge into) filtered_companies.json.
 
-    api_key = load_api_key()
+    merge_into_existing=True  → append new register companies to the existing
+                                 filtered JSON (used in 'both' / combined mode).
+    merge_into_existing=False → overwrite filtered JSON with register results only.
+
+    Returns the final filtered list.
+    """
+    from reg_sources import discover
+
+    api_key  = load_api_key()
     companies = discover(
         register_key=register_key,
         keyword=reg_query,
@@ -202,25 +208,97 @@ def _run_register_discovery(register_key: str, reg_query: str, cfg) -> list:
     )
 
     if not companies:
-        print(f"\n  No companies found via {register_key}. Exiting.")
-        sys.exit(0)
+        print(f"\n  No companies found via {register_key}.")
+        if not merge_into_existing:
+            sys.exit(0)
+        return []
 
     os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
 
-    raw_path = os.path.join(cfg.OUTPUT_DIR, cfg.RAW_JSON)
-    with open(raw_path, "w") as f:
-        json.dump(companies, f, indent=2)
-    print(f"  Raw: {len(companies)} companies saved → {raw_path}")
-
-    # Filter (register-sourced companies are already pre-qualified; apply basic filter)
-    before   = len(companies)
-    filtered = [c for c in companies if _is_genuine(c.get("company_name", ""), cfg)]
     out_path = os.path.join(cfg.OUTPUT_DIR, cfg.FILTERED_JSON)
-    with open(out_path, "w") as f:
-        json.dump(filtered, f, indent=2)
-    print(f"  Filter: {before} → {len(filtered)} companies → {out_path}")
 
-    return filtered
+    if merge_into_existing and os.path.exists(out_path):
+        # Combine: add register companies not already present in filtered
+        with open(out_path) as f:
+            existing = json.load(f)
+        existing_nums = {c.get("company_number") for c in existing if c.get("company_number")}
+        filtered_reg = [c for c in companies if _is_genuine(c.get("company_name", ""), cfg)]
+        added = [c for c in filtered_reg if c.get("company_number") not in existing_nums]
+        merged = existing + added
+        with open(out_path, "w") as f:
+            json.dump(merged, f, indent=2)
+        print(f"  Register merge ({register_key}): +{len(added)} new companies "
+              f"= {len(merged)} total  → {out_path}")
+        return merged
+    else:
+        # Register-first: overwrite filtered JSON
+        raw_path = os.path.join(cfg.OUTPUT_DIR, cfg.RAW_JSON)
+        with open(raw_path, "w") as f:
+            json.dump(companies, f, indent=2)
+        print(f"  Raw: {len(companies)} companies saved → {raw_path}")
+
+        before   = len(companies)
+        filtered = [c for c in companies if _is_genuine(c.get("company_name", ""), cfg)]
+        with open(out_path, "w") as f:
+            json.dump(filtered, f, indent=2)
+        print(f"  Filter: {before} → {len(filtered)} companies → {out_path}")
+        return filtered
+
+
+def _apply_post_filters(cfg, args):
+    """
+    Apply optional post-discovery quality filters to filtered_companies.json:
+      --min-age N         remove companies incorporated less than N years ago
+      --clean-charges     remove companies with any outstanding charges
+      --exclude-sic CODE  remove companies whose primary SIC code matches CODE
+    Writes the result back to filtered_companies.json.
+    """
+    from datetime import date
+
+    min_age       = getattr(args, "min_age",       0)  or 0
+    clean_charges = getattr(args, "clean_charges", False)
+    excluded_sics = set(str(s).strip() for s in (getattr(args, "excluded_sics", []) or []))
+
+    if not any([min_age > 0, clean_charges, excluded_sics]):
+        return   # nothing to do
+
+    filtered_path = os.path.join(cfg.OUTPUT_DIR, cfg.FILTERED_JSON)
+    if not os.path.exists(filtered_path):
+        return
+
+    with open(filtered_path) as f:
+        companies = json.load(f)
+    before = len(companies)
+
+    if min_age > 0:
+        cutoff_year = date.today().year - min_age
+        def _old_enough(c):
+            doc = (c.get("date_of_creation") or c.get("incorporation_date") or "")[:4]
+            try:
+                return int(doc) <= cutoff_year
+            except (ValueError, TypeError):
+                return True   # unknown age → keep
+        companies = [c for c in companies if _old_enough(c)]
+        print(f"  [POST-FILTER] Min age {min_age}yr: {before} → {len(companies)} companies")
+        before = len(companies)
+
+    if clean_charges:
+        companies = [c for c in companies if (c.get("mortgages_outstanding") or 0) == 0]
+        print(f"  [POST-FILTER] Clean charges: {before} → {len(companies)} companies")
+        before = len(companies)
+
+    if excluded_sics:
+        def _keep_company(c):
+            sics = c.get("sic_codes") or []
+            if not sics:
+                return True   # no SIC info → keep
+            # Keep if the company has at least one SIC not in the excluded set
+            return any(str(s) not in excluded_sics for s in sics)
+        companies = [c for c in companies if _keep_company(c)]
+        print(f"  [POST-FILTER] Excluded SICs {excluded_sics}: {before} → {len(companies)} companies")
+
+    with open(filtered_path, "w") as f:
+        json.dump(companies, f, indent=2)
 
 
 def main():
@@ -253,14 +331,18 @@ Examples:
         metavar="MODULE",
         help="Config module path (default: config). Example: --config configs.plumbing_hvac",
     )
-    source_group.add_argument(
+
+    # --reg-source is now independent (can combine with --sector for merged mode)
+    parser.add_argument(
         "--reg-source",
         metavar="REGISTER",
-        help='Use a regulatory register as the primary discovery source instead of '
-             'SIC sweep. Example: --reg-source EA_WASTE. '
+        action="append",
+        dest="reg_sources",
+        default=[],
+        help='Regulatory register(s) to include in discovery. Repeatable: '
+             '--reg-source EA_WASTE --reg-source CQC. '
              'Use --list-registers to see all options.',
     )
-
     parser.add_argument(
         "--reg-query",
         metavar="KEYWORD",
@@ -269,9 +351,38 @@ Examples:
              'Example: --reg-query "drainage"',
     )
     parser.add_argument(
+        "--search-source",
+        choices=["sic", "register", "both"],
+        default="sic",
+        metavar="MODE",
+        help='Discovery source: "sic" (SIC codes only, default), '
+             '"register" (regulatory register only), or '
+             '"both" (SIC + register merged for broadest coverage).',
+    )
+    parser.add_argument(
         "--list-registers",
         action="store_true",
         help="List all available regulatory registers and exit",
+    )
+
+    # ── Post-filter / company quality flags ───────────────────────────────────
+    parser.add_argument(
+        "--min-age",
+        type=int, default=0, metavar="YEARS",
+        help="Exclude companies younger than YEARS years (based on incorporation date).",
+    )
+    parser.add_argument(
+        "--clean-charges",
+        action="store_true",
+        help="Exclude companies with any outstanding charges on the CH register.",
+    )
+    parser.add_argument(
+        "--exclude-sic",
+        metavar="CODE",
+        action="append",
+        dest="excluded_sics",
+        default=[],
+        help="Exclude companies whose primary SIC code matches CODE. Repeatable.",
     )
 
     # ── Step flags ────────────────────────────────────────────────────────────
@@ -365,9 +476,9 @@ Examples:
             from sic_discovery import save_config_file
             saved = save_config_file(cfg, args.save_config)
             print(f"\n  Config saved → {saved}")
-    elif args.reg_source:
-        # Register-first mode: build a minimal config from the register metadata
-        cfg = _build_reg_config(args.reg_source)
+    elif args.reg_sources:
+        # Register-first mode (no --sector): build config from first register metadata
+        cfg = _build_reg_config(args.reg_sources[0])
     elif args.smart and args.sector:
         cfg = load_discovered_config(args.sector, validate=False)
     else:
@@ -458,6 +569,15 @@ Examples:
 
     if not args.extras_only:
         # ── Steps 1–4: Discovery, filter, enrich, financials ──────────────────
+        search_src   = getattr(args, "search_source", "sic") or "sic"
+        reg_sources  = getattr(args, "reg_sources",   [])    or []
+        reg_query    = getattr(args, "reg_query",      "")   or ""
+
+        # Infer search_src from flags for backwards-compat:
+        # if --reg-source(s) set but --sector not set → register mode
+        if reg_sources and not args.sector:
+            search_src = "register"
+
         if args.smart:
             print(f"Step 1/13 — Smart Sector Search  ⚡")
             smart = reload("smart_search")
@@ -468,24 +588,48 @@ Examples:
             if not result:
                 return
             print("\nStep 2/13 — Filter (applied during smart search)")
-        elif args.reg_source:
-            reg_query = getattr(args, "reg_query", "")
-            print(f"Step 1/13 — Register Discovery ({args.reg_source}: '{reg_query}')")
-            _run_register_discovery(args.reg_source, reg_query, cfg)
-            print("\nStep 2/13 — Filter (applied during register discovery)")
-        elif args.local_db:
-            print("Step 1/13 — Local DB Search  ⚡ (SQLite, no API)")
-            local = reload("local_search")
-            local.run()
-            print("\nStep 2/13 — Filter (applied during local search)")
-        else:
-            print("Step 1/13 — Search (Companies House API)")
-            search = reload("ch_search")
-            search.run()
-            print("\nStep 2/13 — Filter")
-            filter_companies(cfg)
 
-        # ── Optional: cap company count after filtering ───────────────────────
+        else:
+            # ── SIC discovery (when source is 'sic' or 'both') ────────────────
+            if search_src in ("sic", "both"):
+                if args.local_db:
+                    print("Step 1/13 — Local DB Search  ⚡ (SQLite, no API)")
+                    local = reload("local_search")
+                    local.run()
+                    print("\nStep 2/13 — Filter (applied during local search)")
+                else:
+                    print("Step 1/13 — Search (Companies House API, SIC codes)")
+                    search = reload("ch_search")
+                    search.run()
+                    print("\nStep 2/13 — Filter")
+                    filter_companies(cfg)
+
+            # ── Register discovery (when source is 'register' or 'both') ──────
+            if search_src in ("register", "both") and reg_sources:
+                merge = (search_src == "both")
+                for i, reg_key in enumerate(reg_sources):
+                    print(f"\nStep {'1' if i == 0 and search_src == 'register' else '2b'}/13 "
+                          f"— Register Discovery ({reg_key}: '{reg_query}')")
+                    _run_register_discovery(
+                        reg_key, reg_query, cfg,
+                        merge_into_existing=merge,
+                    )
+                if search_src == "register":
+                    print("\nStep 2/13 — Filter (applied during register discovery)")
+                else:
+                    print("\nStep 2b/13 — Register results merged into SIC results")
+
+            elif search_src == "register" and not reg_sources:
+                print("\n  [WARNING] --search-source=register but no --reg-source specified. "
+                      "Falling back to SIC search.")
+                search = reload("ch_search")
+                search.run()
+                filter_companies(cfg)
+
+        # ── Post-filter 1: age / charges / SIC exclusion ─────────────────────
+        _apply_post_filters(cfg, args)
+
+        # ── Post-filter 2: cap company count ─────────────────────────────────
         max_n = getattr(args, "max_companies", 0) or 0
         if max_n > 0:
             filtered_path = os.path.join(cfg.OUTPUT_DIR, cfg.FILTERED_JSON)

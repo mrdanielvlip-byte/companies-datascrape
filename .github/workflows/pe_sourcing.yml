@@ -33,6 +33,38 @@ on:
         required: false
         default: ''
 
+      # ── Search universe ───────────────────────────────────────────────────
+      search_source:
+        description: 'Discovery method: sic (SIC codes only), register (regulatory only), or both (merged)'
+        required: false
+        default: 'sic'
+        type: choice
+        options: ['sic', 'register', 'both']
+      reg_sources:
+        description: 'Comma-separated regulatory register keys (e.g. EA_WASTE,CQC). Required when search_source is register or both.'
+        required: false
+        default: ''
+      reg_query:
+        description: 'Keyword to filter the regulatory register (leave blank for all entries)'
+        required: false
+        default: ''
+
+      # ── Company quality filters ───────────────────────────────────────────
+      min_age_years:
+        description: 'Minimum company age in years — excludes recently incorporated firms (0 = no filter)'
+        required: false
+        default: ''
+      clean_charges_only:
+        description: 'Exclude companies with outstanding charges on the CH register'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      excluded_sics:
+        description: 'Comma-separated SIC codes to exclude (e.g. 38110,38120)'
+        required: false
+        default: ''
+
       # ── Per-module toggles (true = run, false = skip) ─────────────────────
       run_ocr:
         description: 'Accounts OCR — actual P&L from filed CH PDFs (~30 min extra)'
@@ -132,6 +164,39 @@ jobs:
           # Company count cap (optional quick-test mode)
           if [ -n "${{ inputs.max_companies }}" ] && [ "${{ inputs.max_companies }}" != "0" ]; then
             FLAGS="$FLAGS --max-companies ${{ inputs.max_companies }}"
+          fi
+
+          # Search universe: register and combined modes
+          if [ "${{ inputs.search_source }}" = "register" ] || [ "${{ inputs.search_source }}" = "both" ]; then
+            FLAGS="$FLAGS --search-source ${{ inputs.search_source }}"
+            # Split comma-separated register keys and pass each as --reg-source
+            IFS=',' read -ra REGS <<< "${{ inputs.reg_sources }}"
+            for R in "${REGS[@]}"; do
+              R="$(echo "$R" | xargs)"   # trim whitespace
+              if [ -n "$R" ]; then
+                FLAGS="$FLAGS --reg-source $R"
+              fi
+            done
+            if [ -n "${{ inputs.reg_query }}" ]; then
+              FLAGS="$FLAGS --reg-query '${{ inputs.reg_query }}'"
+            fi
+          fi
+
+          # Company quality filters
+          if [ -n "${{ inputs.min_age_years }}" ] && [ "${{ inputs.min_age_years }}" != "0" ]; then
+            FLAGS="$FLAGS --min-age ${{ inputs.min_age_years }}"
+          fi
+          if [ "${{ inputs.clean_charges_only }}" = "true" ]; then
+            FLAGS="$FLAGS --clean-charges"
+          fi
+          if [ -n "${{ inputs.excluded_sics }}" ]; then
+            IFS=',' read -ra SICS <<< "${{ inputs.excluded_sics }}"
+            for S in "${SICS[@]}"; do
+              S="$(echo "$S" | xargs)"
+              if [ -n "$S" ]; then
+                FLAGS="$FLAGS --exclude-sic $S"
+              fi
+            done
           fi
 
           # Per-module skip flags (we skip when the input is 'false')

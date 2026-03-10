@@ -62,6 +62,20 @@ if "estimate_confirmed" not in st.session_state:
     st.session_state.estimate_confirmed = False # user pressed "Yes, run full search"
 if "_estimate_max_companies" not in st.session_state:
     st.session_state["_estimate_max_companies"] = 0  # 0 = all companies
+# Search universe state
+if "_estimate_search_source" not in st.session_state:
+    st.session_state["_estimate_search_source"] = "sic"
+if "_estimate_reg_sources" not in st.session_state:
+    st.session_state["_estimate_reg_sources"] = []
+if "_estimate_reg_query" not in st.session_state:
+    st.session_state["_estimate_reg_query"] = ""
+# Company quality filter state
+if "_estimate_min_age" not in st.session_state:
+    st.session_state["_estimate_min_age"] = 0
+if "_estimate_clean_charges" not in st.session_state:
+    st.session_state["_estimate_clean_charges"] = False
+if "_estimate_excluded_sics" not in st.session_state:
+    st.session_state["_estimate_excluded_sics"] = []
 
 
 # ── GitHub API helpers ─────────────────────────────────────────────────────────
@@ -534,12 +548,18 @@ tabs = st.tabs(tab_labels)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _reset_estimate():
-    st.session_state.estimate_triggered = False
-    st.session_state.estimate_run_id    = None
-    st.session_state.estimate_result    = None
-    st.session_state.estimate_sector    = ""
-    st.session_state.estimate_confirmed = False
-    st.session_state["_estimate_max_companies"] = 0
+    st.session_state.estimate_triggered  = False
+    st.session_state.estimate_run_id     = None
+    st.session_state.estimate_result     = None
+    st.session_state.estimate_sector     = ""
+    st.session_state.estimate_confirmed  = False
+    st.session_state["_estimate_max_companies"]  = 0
+    st.session_state["_estimate_search_source"]  = "sic"
+    st.session_state["_estimate_reg_sources"]    = []
+    st.session_state["_estimate_reg_query"]      = ""
+    st.session_state["_estimate_min_age"]        = 0
+    st.session_state["_estimate_clean_charges"]  = False
+    st.session_state["_estimate_excluded_sics"]  = []
 
 with tabs[0]:
     st.subheader("New Sector Search")
@@ -556,13 +576,25 @@ with tabs[0]:
         or st.session_state.estimate_confirmed
     )
 
+    # ── Discovery-capable regulatory registers ────────────────────────────────
+    _REG_OPTIONS = {
+        "EA_WASTE":      ("🌿", "EA Waste Operations",    "Landfill, transfer, treatment, MRF, skip hire — waste mgmt firms with permits"),
+        "EA_CARRIERS":   ("🚚", "EA Waste Carriers",      "Carriers, brokers and dealers of controlled waste — upper-tier registration"),
+        "EA_ABSTRACTION":("💧", "EA Water Abstraction",   "Water abstraction licences — utilities, agriculture, industrial"),
+        "EA_DISCHARGES": ("🏭", "EA Discharge Consents",  "Consents to discharge to watercourses — industrial, sewage, processing"),
+        "CQC":           ("🏥", "CQC Providers",          "Regulated care homes, homecare, hospitals, dentists, GPs"),
+        "FCA":           ("💼", "FCA Authorised Firms",   "Mortgage brokers, IFAs, insurers, consumer credit — FCA-regulated firms"),
+    }
+
     if not estimate_active:
         with st.form("new_search", clear_on_submit=False):
+
+            # ── Row 1: Sector + email ──────────────────────────────────────────
             col1, col2 = st.columns([2, 1])
             with col1:
                 sector = st.text_input(
                     "Sector description *",
-                    placeholder='e.g. "fire safety systems", "HVAC contractors", "pest control"',
+                    placeholder='e.g. "fire safety systems", "HVAC contractors", "waste management"',
                     help="Free text — the pipeline auto-discovers SIC codes using curated maps and fuzzy matching.",
                 )
             with col2:
@@ -572,23 +604,92 @@ with tabs[0]:
                     help="Email address to notify when this specific search finishes.",
                 )
 
+            # ── Search universe ────────────────────────────────────────────────
+            st.markdown("**Search universe** — where to look for companies")
+            src_col, reg_col = st.columns([1, 2])
+            with src_col:
+                search_source = st.radio(
+                    "Discover from",
+                    options=["sic", "register", "both"],
+                    format_func=lambda x: {
+                        "sic":      "📋  SIC codes  (all matching companies)",
+                        "register": "🏛  Regulatory register  (registered firms only)",
+                        "both":     "📋 + 🏛  SIC + register  (broadest coverage)",
+                    }[x],
+                    index=0,
+                    help=(
+                        "**SIC codes** — broadest. Finds every active UK company in the sector.\n\n"
+                        "**Regulatory register** — highest quality signal. Only firms registered "
+                        "with the relevant authority (EA, CQC, FCA, etc.).\n\n"
+                        "**Both** — runs SIC search first then merges in register results, "
+                        "deduplicating by company number."
+                    ),
+                )
+            with reg_col:
+                if search_source in ("register", "both"):
+                    st.caption("Select the register(s) relevant to this sector:")
+                    reg_cols = st.columns(3)
+                    reg_sources_sel = []
+                    for i, (key, (icon, name, desc)) in enumerate(_REG_OPTIONS.items()):
+                        with reg_cols[i % 3]:
+                            if st.checkbox(
+                                f"{icon} {name}",
+                                value=False,
+                                help=desc,
+                                key=f"reg_{key}",
+                            ):
+                                reg_sources_sel.append(key)
+                    reg_query = st.text_input(
+                        "Register keyword (optional)",
+                        placeholder='Leave blank for all entries, or enter e.g. "drainage"',
+                        help="Filter the register by keyword before cross-referencing with Companies House.",
+                    )
+                else:
+                    reg_sources_sel = []
+                    reg_query       = ""
+
+            # ── Advanced filters ──────────────────────────────────────────────
             with st.expander("Advanced filters (optional)"):
                 fc1, fc2 = st.columns(2)
                 with fc1:
-                    region = st.selectbox("Region", [
+                    region = st.selectbox("UK region", [
                         "", "London", "South East", "South West", "East of England",
                         "East Midlands", "West Midlands", "Yorkshire and The Humber",
                         "North West", "North East", "Wales", "Scotland", "Northern Ireland",
                     ], index=0, help="Leave blank for all UK.")
                 with fc2:
-                    min_revenue = st.selectbox("Minimum revenue",
+                    min_revenue = st.selectbox("Minimum estimated revenue",
                         ["", "250000", "500000", "1000000", "2000000", "5000000"],
                         format_func=lambda x: "No minimum" if x == "" else f"£{int(x):,}",
                         index=0)
 
-            # ── Enrichment module checkboxes ──────────────────────────────────
+                st.markdown("**Company quality filters**")
+                qf1, qf2, qf3 = st.columns(3)
+                with qf1:
+                    min_age_sel = st.selectbox(
+                        "Minimum company age",
+                        options=["Any age", "3+ years", "5+ years", "10+ years", "15+ years"],
+                        index=0,
+                        help="Exclude recently incorporated companies. Useful for sectors where new entrants are less likely PE targets.",
+                    )
+                    _MIN_AGE_MAP = {"Any age": 0, "3+ years": 3, "5+ years": 5, "10+ years": 10, "15+ years": 15}
+                    min_age_yrs = _MIN_AGE_MAP[min_age_sel]
+                with qf2:
+                    clean_charges = st.checkbox(
+                        "Clean charges register only",
+                        value=False,
+                        help="Only include companies with zero outstanding charges on the CH register — "
+                             "a strong dealability signal.",
+                    )
+                with qf3:
+                    st.caption(
+                        "Further SIC refinement available after preview — "
+                        "untick individual SIC codes before confirming the full run."
+                    )
+
+            # ── Enrichment modules ────────────────────────────────────────────
             st.markdown("**Enrichment modules** — tick what to include in this run")
-            st.caption("Core pipeline (search → filter → enrich → financials) always runs. Untick modules to speed up the search.")
+            st.caption("Core pipeline (search → filter → enrich → financials) always runs. Untick modules to speed up.")
 
             MODULES = [
                 ("run_ocr",            "📄 Accounts OCR",      "Actual P&L figures from filed CH PDFs",               "~30 min", True),
@@ -601,7 +702,6 @@ with tabs[0]:
             ]
 
             module_vals = {}
-            # Display 4 columns of checkboxes
             mod_cols = st.columns(4)
             for i, (key, label, tip, est_time, default) in enumerate(MODULES):
                 with mod_cols[i % 4]:
@@ -631,12 +731,14 @@ with tabs[0]:
             with preview_col:
                 preview_clicked = st.form_submit_button(
                     "🔍 Preview Companies", use_container_width=True,
-                    help="Run a quick ~2 min estimate to see company count and SIC accuracy before committing to a full search."
+                    help="Run a quick ~2 min estimate to see company count and SIC accuracy before committing.",
                 )
 
         if preview_clicked:
             if not sector.strip():
                 st.error("Please enter a sector description.")
+            elif search_source in ("register", "both") and not reg_sources_sel:
+                st.error("Please select at least one regulatory register, or switch to 'SIC codes' mode.")
             else:
                 st.session_state.estimate_triggered  = True
                 st.session_state.estimate_sector     = sector.strip()
@@ -645,6 +747,11 @@ with tabs[0]:
                 st.session_state._estimate_rev       = min_revenue
                 st.session_state._estimate_deep      = run_deep
                 st.session_state._estimate_modules   = dict(module_vals)
+                st.session_state["_estimate_search_source"] = search_source
+                st.session_state["_estimate_reg_sources"]   = reg_sources_sel
+                st.session_state["_estimate_reg_query"]     = reg_query
+                st.session_state["_estimate_min_age"]       = min_age_yrs
+                st.session_state["_estimate_clean_charges"] = clean_charges
                 ok = trigger_workflow(WORKFLOW_ESTIMATE, {"sector": sector.strip()})
                 if not ok:
                     _reset_estimate()
@@ -754,75 +861,99 @@ with tabs[0]:
         st.caption(f"{acc_colour} {acc_lbl}")
         st.divider()
 
-        # ── SIC code breakdown ─────────────────────────────────────────────────
-        st.markdown("**Matched SIC codes**")
-        for s in sic_bkd:
-            pct_of_total = (s["count"] / total * 100) if total else 0
-            bar = "█" * int(pct_of_total / 5)   # rough bar, max 20 chars at 100%
-            st.markdown(
-                f"`{s['code']}` &nbsp; {s['description']} &nbsp; "
-                f"— **{s['count']:,}** companies &nbsp; `{bar}` {pct_of_total:.0f}%"
-            )
+        # ── SIC code breakdown + interactive exclusion form ───────────────────
+        # Everything interactive (SIC exclusion + confirm) goes in one form so
+        # all checkbox values are captured atomically on submission.
+        with st.form("phase3_confirm"):
+            if sic_bkd:
+                st.markdown(
+                    "**Matched SIC codes** — untick any to exclude from the search"
+                )
+                st.caption(
+                    "Each SIC code was identified as part of this sector. "
+                    "Untick codes that don't belong — e.g. if a broad SIC is pulling in "
+                    "unrelated businesses."
+                )
+                sic_cols = st.columns(2)
+                for i, s in enumerate(sic_bkd):
+                    pct_of_total = (s["count"] / total * 100) if total else 0
+                    with sic_cols[i % 2]:
+                        st.checkbox(
+                            f"`{s['code']}` {s['description']}  —  "
+                            f"**{s['count']:,}** cos ({pct_of_total:.0f}%)",
+                            value=True,
+                            key=f"sic_keep_{s['code']}",
+                        )
+            else:
+                st.info("No SIC breakdown available for this search.")
 
-        # ── Sample companies ───────────────────────────────────────────────────
-        if samples:
+            if samples:
+                st.markdown("**Sample companies found**")
+                st.caption("  ·  ".join(samples[:10]))
+
             st.divider()
-            st.markdown("**Sample companies found**")
-            st.caption("  ·  ".join(samples[:10]))
+            st.markdown("**Confirm and customise your search**")
 
-        st.divider()
+            # ── Company count limiter ──────────────────────────────────────────
+            _COUNT_OPTIONS = {
+                "All companies":          0,
+                "Top 25  (quick test)":  25,
+                "Top 50  (quick test)":  50,
+                "Top 100":              100,
+                "Top 250":              250,
+                "Top 500":              500,
+            }
+            if total > 500:
+                _default_lbl = "Top 250"
+            elif total > 100:
+                _default_lbl = "Top 100"
+            else:
+                _default_lbl = "All companies"
 
-        # ── Confirm / restart ─────────────────────────────────────────────────
-        st.markdown("**Would you like to run a full search on this sector?**")
-
-        # ── Company count limiter ──────────────────────────────────────────────
-        _COUNT_OPTIONS = {
-            "All companies":              0,
-            "Top 25  (quick test)":      25,
-            "Top 50  (quick test)":      50,
-            "Top 100":                  100,
-            "Top 250":                  250,
-            "Top 500":                  500,
-        }
-        # Suggest sensible default: cap at 250 for very large result sets
-        if total > 500:
-            _default_lbl = "Top 250"
-        elif total > 100:
-            _default_lbl = "Top 100"
-        else:
-            _default_lbl = "All companies"
-
-        _selected_lbl = st.selectbox(
-            "How many companies to process?",
-            options=list(_COUNT_OPTIONS.keys()),
-            index=list(_COUNT_OPTIONS.keys()).index(_default_lbl),
-            help=(
-                "Limit the number of companies enriched in this run. "
-                "Choose a smaller number for a quick test — you can always "
-                "re-run the remaining companies afterwards."
-            ),
-        )
-        _max_n = _COUNT_OPTIONS[_selected_lbl]
-
-        if _max_n and _max_n < total:
-            st.caption(
-                f"ℹ️ Will process the first **{_max_n:,}** of ~{total:,} estimated companies "
-                f"(≈ {_max_n / total * 100:.0f}% of the dataset). "
-                "You can top-up the rest later using the re-enrichment panel."
+            _selected_lbl = st.selectbox(
+                "How many companies to process?",
+                options=list(_COUNT_OPTIONS.keys()),
+                index=list(_COUNT_OPTIONS.keys()).index(_default_lbl),
+                help=(
+                    "Limit the number of companies enriched in this run. "
+                    "Choose a smaller number for a quick test — you can always "
+                    "top up the rest afterwards using the Re-Enrich panel."
+                ),
             )
-        else:
-            st.caption(f"ℹ️ Will process all ~{total:,} estimated companies.")
+            _max_n = _COUNT_OPTIONS[_selected_lbl]
 
-        yes_col, no_col = st.columns([1, 1])
-        with yes_col:
-            if st.button("✅ Yes — Run Full Search", type="primary", use_container_width=True):
-                st.session_state["_estimate_max_companies"] = _max_n
-                st.session_state.estimate_confirmed = True
-                st.rerun()
-        with no_col:
-            if st.button("✏️ No — Change Sector", use_container_width=True):
-                _reset_estimate()
-                st.rerun()
+            if _max_n and _max_n < total:
+                st.caption(
+                    f"ℹ️ Will process the first **{_max_n:,}** of ~{total:,} estimated "
+                    f"companies (≈ {_max_n / total * 100:.0f}% of the dataset)."
+                )
+            else:
+                st.caption(f"ℹ️ Will process all ~{total:,} estimated companies.")
+
+            # ── Submit buttons ─────────────────────────────────────────────────
+            yes_col, no_col = st.columns([1, 1])
+            with yes_col:
+                yes_clicked = st.form_submit_button(
+                    "✅ Yes — Run Full Search", type="primary", use_container_width=True,
+                )
+            with no_col:
+                no_clicked = st.form_submit_button(
+                    "✏️ No — Change Sector", use_container_width=True,
+                )
+
+        if yes_clicked:
+            # Capture excluded SICs from form state
+            _excl = [
+                s["code"] for s in sic_bkd
+                if not st.session_state.get(f"sic_keep_{s['code']}", True)
+            ]
+            st.session_state["_estimate_excluded_sics"]  = _excl
+            st.session_state["_estimate_max_companies"]  = _max_n
+            st.session_state.estimate_confirmed = True
+            st.rerun()
+        if no_clicked:
+            _reset_estimate()
+            st.rerun()
 
     # ── PHASE 4: Confirmed — trigger the real pipeline ─────────────────────────
     elif st.session_state.estimate_confirmed:
@@ -832,6 +963,12 @@ with tabs[0]:
         min_revenue   = st.session_state.get("_estimate_rev", "")
         run_deep      = st.session_state.get("_estimate_deep", False)
         max_companies = st.session_state.get("_estimate_max_companies", 0)
+        search_source = st.session_state.get("_estimate_search_source", "sic")
+        reg_sources   = st.session_state.get("_estimate_reg_sources", [])
+        reg_query     = st.session_state.get("_estimate_reg_query", "")
+        min_age       = st.session_state.get("_estimate_min_age", 0)
+        clean_charges = st.session_state.get("_estimate_clean_charges", False)
+        excluded_sics = st.session_state.get("_estimate_excluded_sics", [])
         modules       = st.session_state.get("_estimate_modules", {k: True for k, *_ in [
             ("run_ocr",), ("run_contacts",), ("run_sell_signals",),
             ("run_contracts",), ("run_digital",), ("run_accreditations",), ("run_competitor_map",),
@@ -851,12 +988,18 @@ with tabs[0]:
                 }
             else:
                 workflow_inputs = {
-                    "sector":        sector,
-                    "region":        region,
-                    "min_revenue":   min_revenue,
-                    "notify_email":  notify_email,
-                    "extras_only":   "false",
-                    "max_companies": str(max_companies) if max_companies else "",
+                    "sector":             sector,
+                    "region":             region,
+                    "min_revenue":        min_revenue,
+                    "notify_email":       notify_email,
+                    "extras_only":        "false",
+                    "max_companies":      str(max_companies) if max_companies else "",
+                    "search_source":      search_source,
+                    "reg_sources":        ",".join(reg_sources) if reg_sources else "",
+                    "reg_query":          reg_query or "",
+                    "min_age_years":      str(min_age) if min_age else "",
+                    "clean_charges_only": "true" if clean_charges else "false",
+                    "excluded_sics":      ",".join(excluded_sics) if excluded_sics else "",
                     **{k: "true" if v else "false" for k, v in modules.items()},
                 }
                 ok = trigger_workflow(WORKFLOW_QUICK, workflow_inputs)
@@ -865,6 +1008,8 @@ with tabs[0]:
                     "sector": sector, "region": region, "min_revenue": min_revenue,
                     "notify_email": notify_email, "is_deep": False,
                     "modules": modules,
+                    "search_source": search_source,
+                    "reg_sources": reg_sources,
                     "triggered_at": datetime.now(timezone.utc).isoformat(),
                 }
 
