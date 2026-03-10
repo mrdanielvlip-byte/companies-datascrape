@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: ch_intel_postgres
+    environment:
+      POSTGRES_USER: chuser
+      POSTGRES_PASSWORD: chpass
+      POSTGRES_DB: ch_intel
+      POSTGRES_INITDB_ARGS: "-c max_connections=200 -c shared_buffers=256MB"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chuser -d ch_intel"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ch_intel_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: ch_intel_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --appendfsync everysec
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ch_intel_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  ch_intel_network:
+    driver: bridge

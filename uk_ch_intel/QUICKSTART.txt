@@ -1,0 +1,280 @@
+================================================================================
+QUICK START - UK COMPANIES HOUSE INTELLIGENCE PLATFORM
+================================================================================
+
+STEP 1: Prepare Environment (2 minutes)
+--------
+
+  cd /sessions/vibrant-modest-einstein/ch-pe-sourcing/uk_ch_intel
+  cp .env.example .env
+
+  # Edit .env file and replace:
+  # CH_API_KEY=your-companies-house-api-key-here
+  # 
+  # Get your API key from: https://developer.companieshouse.gov.uk/
+
+STEP 2: Start Services (1 minute)
+--------
+
+  docker-compose up -d
+
+  # Verify services are healthy:
+  docker-compose ps
+  
+  # Should show: postgres [healthy], redis [healthy]
+
+STEP 3: Setup Python Environment (2 minutes)
+--------
+
+  python -m venv venv
+  source venv/bin/activate  # On Windows: venv\Scripts\activate
+  pip install -r requirements.txt
+
+  # Verify installation:
+  python -c "import sqlalchemy; import requests; print('OK')"
+
+STEP 4: Initialize Database (1 minute)
+--------
+
+  python -m scripts.bootstrap create-tables
+
+  # Verify tables were created:
+  psql -h localhost -U chuser -d ch_intel -c "\dt"
+
+STEP 5: Download Bulk Data (30 minutes)
+--------
+
+  # Download companies data (500MB+)
+  python -m scripts.bootstrap download-bulk-companies
+
+  # Download PSC data (100MB+)
+  python -m scripts.bootstrap download-bulk-psc
+
+  # Note: You can skip these and ingest from existing files:
+  # python -m scripts.bootstrap ingest-companies --csv-path /path/to/existing.csv
+
+STEP 6: Ingest Data into Database (1 hour)
+--------
+
+  # Ingest companies data into database
+  python -m scripts.bootstrap ingest-companies
+
+  # Ingest PSC data
+  python -m scripts.bootstrap ingest-psc
+
+  # Verify data was ingested:
+  psql -h localhost -U chuser -d ch_intel \
+    -c "SELECT COUNT(*) as company_count FROM companies;"
+
+STEP 7: Queue Initial Enrichment (2 minutes)
+--------
+
+  # Option A: Enrich high-potential sellers (recommended for testing)
+  python scripts/refresh_targets.py high-potential-sellers --count 100
+
+  # Option B: Enrich all companies in a sector by SIC code
+  python scripts/refresh_targets.py by-sic-codes --sic-codes "62010" --count 100
+
+  # Option C: Enrich specific company numbers
+  python scripts/refresh_targets.py by-company-numbers \
+    --company-numbers "00000191" --company-numbers "02009155"
+
+STEP 8: Process Enrichment Jobs (10+ minutes)
+--------
+
+  # Process pending jobs (enriches companies with API data)
+  python -c "from app.workers.queue_worker import process_pending_jobs; \
+             process_pending_jobs(100)"
+
+  # Monitor progress:
+  psql -h localhost -U chuser -d ch_intel \
+    -c "SELECT status, COUNT(*) as count FROM enrichment_jobs GROUP BY status;"
+
+STEP 9: Compute Seller Signals (5 minutes)
+--------
+
+  # Compute signals for all enriched companies
+  python -c "from app.signals.seller_signals import compute_all_signals; \
+             compute_all_signals()"
+
+  # Verify signals were computed:
+  psql -h localhost -U chuser -d ch_intel \
+    -c "SELECT COUNT(DISTINCT signal_type) as signal_types FROM company_signals;"
+
+STEP 10: Query Results! (1 minute)
+--------
+
+  # Find high-potential seller companies
+  psql -h localhost -U chuser -d ch_intel << SQL
+  SELECT company_name, postal_code, seller_score
+  FROM v_likely_sellers
+  WHERE seller_score >= 70
+  ORDER BY seller_score DESC
+  LIMIT 20;
+  SQL
+
+  # Find aging founders
+  psql -h localhost -U chuser -d ch_intel << SQL
+  SELECT company_name, officer_name, estimated_age, postal_code
+  FROM v_aging_founders
+  WHERE estimated_age >= 60
+  ORDER BY estimated_age DESC
+  LIMIT 10;
+  SQL
+
+  # Find succession risk opportunities
+  psql -h localhost -U chuser -d ch_intel << SQL
+  SELECT company_name, sole_director, years_old, postal_code
+  FROM v_succession_risk
+  ORDER BY years_old DESC
+  LIMIT 20;
+  SQL
+
+================================================================================
+COMMON OPERATIONS
+================================================================================
+
+Process More Enrichment Jobs:
+  python -c "from app.workers.queue_worker import process_pending_jobs; \
+             process_pending_jobs(500)"
+
+Export Targets for External System:
+  python scripts/refresh_targets.py export-targets \
+    --output-file targets.json \
+    --min-seller-score 70
+
+Check Queue Status:
+  psql -c "SELECT status, COUNT(*) FROM enrichment_jobs GROUP BY status;"
+
+View Failed Jobs:
+  psql -c "SELECT job_id, company_number, last_error \
+           FROM enrichment_jobs \
+           WHERE status = 'failed' LIMIT 10;"
+
+Refresh Materialized Views:
+  psql -c "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_likely_sellers_materialized;"
+
+View Docker Logs:
+  docker-compose logs -f postgres
+  docker-compose logs -f redis
+
+Stop Services:
+  docker-compose down
+
+Clean Up (WARNING: REMOVES DATA):
+  docker-compose down -v
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+Database Connection Failed:
+  1. Verify Docker containers are running: docker-compose ps
+  2. Check logs: docker-compose logs postgres
+  3. Wait 30 seconds for database to be ready
+  4. Try: psql -h localhost -U chuser -d ch_intel -c "SELECT 1"
+
+Out of Memory During Bulk Ingest:
+  1. Reduce chunk size in bulk_companies.py (line ~150)
+  2. Change: for chunk in pd.read_csv(..., chunksize=50000):
+
+API Rate Limiting (429 errors):
+  1. Reduce MAX_WORKERS in .env (currently 4)
+  2. Wait 60 seconds and retry
+  3. Check queue: psql -c "SELECT * FROM enrichment_jobs WHERE status = 'failed';"
+
+Python Import Errors:
+  1. Activate venv: source venv/bin/activate
+  2. Reinstall: pip install -r requirements.txt
+  3. Check version: python --version (should be 3.11+)
+
+================================================================================
+MONITORING DASHBOARD (SIMPLE SQL QUERIES)
+================================================================================
+
+Queue Health:
+  SELECT status, job_type, COUNT(*) as count
+  FROM enrichment_jobs
+  GROUP BY status, job_type
+  ORDER BY status, job_type;
+
+Seller Opportunity Distribution:
+  SELECT
+    ROUND(signal_score / 10) * 10 as score_bucket,
+    COUNT(*) as company_count
+  FROM company_signals
+  WHERE signal_type = 'seller_score'
+  GROUP BY score_bucket
+  ORDER BY score_bucket DESC;
+
+Top Sectors (by avg seller score):
+  SELECT
+    sic_codes[1] as primary_sic,
+    COUNT(*) as company_count,
+    ROUND(AVG(cs.signal_score)::numeric, 2) as avg_seller_score
+  FROM companies c
+  LEFT JOIN company_signals cs ON c.company_number = cs.company_number
+    AND cs.signal_type = 'seller_score'
+  WHERE c.sic_codes IS NOT NULL
+    AND ARRAY_LENGTH(c.sic_codes, 1) > 0
+  GROUP BY sic_codes[1]
+  HAVING COUNT(*) > 10
+  ORDER BY avg_seller_score DESC
+  LIMIT 20;
+
+Ingest Performance:
+  SELECT
+    ingest_type,
+    COUNT(*) as runs,
+    AVG(rows_processed) as avg_rows,
+    MAX(rows_processed) as max_rows,
+    AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) as avg_duration_sec
+  FROM ingest_runs
+  GROUP BY ingest_type;
+
+================================================================================
+INTEGRATION WITH EXISTING PIPELINE
+================================================================================
+
+The platform exposes data via:
+
+1. SQL Views (query directly):
+   - v_likely_sellers
+   - v_aging_founders
+   - v_succession_risk
+   - v_serial_operators
+   - v_sector_map
+   - v_family_clusters
+
+2. JSON Export:
+   python scripts/refresh_targets.py export-targets --output-file targets.json
+
+3. CSV Export:
+   psql -c "COPY (SELECT * FROM v_likely_sellers) TO '/tmp/sellers.csv' WITH (FORMAT CSV, HEADER);"
+
+4. Direct Database Access:
+   psql -h localhost -U chuser -d ch_intel
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+1. Read README.md for complete documentation
+2. Read ARCHITECTURE.md for technical deep-dive
+3. Read DEPLOYMENT.md for production deployment
+4. Customize seller_signals.py for your business logic
+5. Extend v_likely_sellers view with your own criteria
+6. Integrate with your existing PE sourcing system
+
+================================================================================
+SUPPORT
+================================================================================
+
+All documentation is included in the platform directory:
+- README.md (getting started + operations)
+- ARCHITECTURE.md (technical design + scalability)
+- DEPLOYMENT.md (production deployment + troubleshooting)
+
+No external documentation is needed.
+
+================================================================================
