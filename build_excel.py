@@ -571,11 +571,21 @@ def build_top30(wb, companies):
             dh.alignment = Alignment(horizontal="left", vertical="center")
             row += 1
             for d in dirs[:6]:
-                age_str = f"Age ~{d['age']}" if d.get("age") else "Age unknown"
+                age_val = d.get("age") or d.get("age_est")
+                age_str = f"Age ~{age_val}" if age_val else "Age unknown"
+                # years_active: use stored value, or derive from appointed date
+                yrs_active = d.get("years_active")
+                if yrs_active is None:
+                    appt = (d.get("appointed") or "")[:4]
+                    try:
+                        yrs_active = round(2026 - int(appt), 1) if len(appt) == 4 else 0
+                    except (ValueError, TypeError):
+                        yrs_active = 0
+                occupation = (d.get("occupation") or d.get("role") or "")[:40]
                 txt = (f"  {d['name'].title()}  |  {age_str}  "
                        f"|  Appointed: {(d.get('appointed') or '')[:7]}  "
-                       f"|  Tenure: {d.get('years_active',0):.1f} yrs  "
-                       f"|  {(d.get('occupation') or '')[:40]}")
+                       f"|  Tenure: {yrs_active:.1f} yrs  "
+                       f"|  {occupation}")
                 ws.merge_cells(f"A{row}:{get_column_letter(n)}{row}")
                 dc = ws.cell(row=row, column=1, value=txt)
                 dc.font      = Font(name="Arial", size=8)
@@ -617,28 +627,50 @@ def build_contacts(wb, companies):
         contacts = c.get("contacts", {})
         dir_contacts = contacts.get("director_contacts", [])
         website = contacts.get("website", {})
-        site_url = website.get("website_url", "") or ""
+        site_url = (website.get("website_url", "") or
+                    c.get("website_url", "") or
+                    c.get("digital_health", {}).get("website_url", "") or "")
 
+        # ── Fallback: build lightweight rows from raw directors list ──────────
         if not dir_contacts:
-            # Still show the company row even without contact data
-            bg = ALT if rank % 2 == 0 else None
-            cell(ws, row, 1, rank,              bg=bg, align="center")
-            cell(ws, row, 2, c["company_name"], bg=bg)
-            cell(ws, row, 3, "No contact data enriched", bg=bg, fg="888888")
-            cell(ws, row, 9, site_url,          bg=bg)
-            row += 1
+            raw_dirs = c.get("directors", [])
+            if raw_dirs:
+                for di, d in enumerate(raw_dirs[:6]):
+                    bg = ALT if rank % 2 == 0 else None
+                    age_val = d.get("age") or d.get("age_est")
+                    age_disp = str(age_val) if age_val else "-"
+                    cell(ws, row, 1, rank if di == 0 else "",        bg=bg, align="center")
+                    cell(ws, row, 2, c["company_name"] if di == 0 else "", bg=bg)
+                    cell(ws, row, 3, (d.get("name") or "").title(),  bg=bg)
+                    cell(ws, row, 4, d.get("role", ""),              bg=bg)
+                    cell(ws, row, 5, age_disp,                       bg=bg, align="center")
+                    cell(ws, row, 6, "",                             bg=bg)          # email — not enriched
+                    cell(ws, row, 7, "—",                            bg=bg, align="center")
+                    cell(ws, row, 8, "",                             bg=bg)
+                    cell(ws, row, 9, site_url if di == 0 else "",    bg=bg)
+                    cell(ws, row, 10, "Raw CH data — no email enrichment", bg=bg, size=8)
+                    row += 1
+            else:
+                bg = ALT if rank % 2 == 0 else None
+                cell(ws, row, 1, rank,              bg=bg, align="center")
+                cell(ws, row, 2, c["company_name"], bg=bg)
+                cell(ws, row, 3, "No director data available", bg=bg, fg="888888")
+                cell(ws, row, 9, site_url,          bg=bg)
+                row += 1
             continue
 
         for di, d in enumerate(dir_contacts):
             bg = ALT if rank % 2 == 0 else None
             conf = d.get("email_confidence", "None")
             conf_bg = GREEN if conf == "High" else (AMBER if conf == "Medium" else (RED if conf == "Low" else bg))
+            age_val = d.get("age") or d.get("age_est")
+            age_disp = str(age_val) if age_val else "-"
 
             cell(ws, row, 1, rank if di == 0 else "",  bg=bg, align="center")
             cell(ws, row, 2, c["company_name"] if di == 0 else "", bg=bg)
             cell(ws, row, 3, d.get("name", ""),        bg=bg)
             cell(ws, row, 4, d.get("role", ""),        bg=bg)
-            cell(ws, row, 5, d.get("age") or "-",      bg=bg, align="center")
+            cell(ws, row, 5, age_disp,                 bg=bg, align="center")
             cell(ws, row, 6, d.get("best_email", ""),  bg=conf_bg)
             cell(ws, row, 7, conf,                     bg=conf_bg, align="center", bold=True)
             patterns = d.get("email_patterns", [])
