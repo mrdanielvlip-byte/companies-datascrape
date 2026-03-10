@@ -1,5 +1,5 @@
 """
-PE Deal Sourcing Intelligence Platform — Streamlit Web App
+V Squared Sector Search Analysis — Streamlit Web App
 
 Features:
 - Multiple concurrent searches, each in its own tab
@@ -17,8 +17,8 @@ from datetime import datetime, timezone
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="PE Deal Sourcing",
-    page_icon="🏢",
+    page_title="V Squared Sector Search Analysis",
+    page_icon="🔍",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -168,7 +168,7 @@ for rid in st.session_state.pinned_runs:
 # ── Header ─────────────────────────────────────────────────────────────────────
 
 st.markdown("""
-<h1 style='margin-bottom:0'>🏢 PE Deal Sourcing</h1>
+<h1 style='margin-bottom:0'>🔍 V Squared Sector Search Analysis</h1>
 <p style='color:gray;margin-top:4px'>UK SME Acquisition Intelligence Platform &nbsp;·&nbsp; Searches run on GitHub — closing this browser never stops them</p>
 """, unsafe_allow_html=True)
 
