@@ -1,13 +1,17 @@
-name: Lift Maintenance — OCR Batch + Intelligence Rebuild
+name: Deep OCR Batch + Intelligence Rebuild
 
 # Trigger manually from the GitHub Actions tab
 on:
   workflow_dispatch:
     inputs:
       sector:
-        description: 'Sector name (for logging)'
+        description: 'Sector name'
         required: false
         default: 'lift_maintenance'
+      notify_email:
+        description: 'Email address to notify on completion'
+        required: false
+        default: 'daniellipinski@mac.com'
 
 jobs:
   ocr-batch:
@@ -111,12 +115,15 @@ jobs:
           status   = "${{ job.status }}"
           run_url  = f"https://github.com/{repo}/actions/runs/{run_id}"
 
+          sector = "${{ inputs.sector }}" or "lift_maintenance"
+          to_email = "${{ inputs.notify_email }}" or "daniellipinski@mac.com"
+
           payload = {
               "from":    "PE Deal Sourcing <onboarding@resend.dev>",
-              "to":      ["daniellipinski@mac.com"],
-              "subject": f"✅ Lift Maintenance Deal Sourcing — Excel Ready ({status})",
+              "to":      [to_email],
+              "subject": f"✅ {sector} Deep OCR — Excel Ready ({status})",
               "text": (
-                  f"Your UK Lift Maintenance intelligence report has finished.\n\n"
+                  f"Your {sector} intelligence report has finished.\n\n"
                   f"Status: {status}\n\n"
                   f"DOWNLOAD YOUR EXCEL:\n{run_url}\n\n"
                   f"→ Open the link → scroll to bottom → click 'lift-maintenance-excel'\n\n"

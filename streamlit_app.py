@@ -243,18 +243,21 @@ with tabs[0]:
         st.divider()
         deep_col, run_col = st.columns([1, 2])
         with deep_col:
-            run_deep = st.checkbox("Deep OCR run (Lift Maintenance only, ~5.5 hrs)")
+            run_deep = st.checkbox("Deep OCR run (~5.5 hrs, most thorough)")
         with run_col:
             submitted = st.form_submit_button("🚀 Run Pipeline", type="primary", use_container_width=True)
 
     if submitted:
-        if not sector.strip() and not run_deep:
+        if not sector.strip():
             st.error("Please enter a sector description.")
         else:
             with st.spinner("Triggering pipeline on GitHub…"):
                 if run_deep:
-                    ok = trigger_workflow(WORKFLOW_DEEP, {})
-                    label = "Lift Maintenance Deep OCR"
+                    ok = trigger_workflow(WORKFLOW_DEEP, {
+                        "sector":       sector.strip(),
+                        "notify_email": notify_email,
+                    })
+                    label = f"{sector.strip()} (Deep OCR)"
                 else:
                     ok = trigger_workflow(WORKFLOW_QUICK, {
                         "sector":       sector.strip(),
