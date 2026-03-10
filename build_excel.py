@@ -377,7 +377,7 @@ PIPELINE_COLS = [
     # ── Financial intelligence ────────────────────────────────────────────────
     ("Employees", 11), ("Emp. Source", 22),
     ("Rev. Low £", 13), ("Rev. Base £", 13), ("Rev. High £", 13),
-    ("Rev. Trend", 12), ("EBITDA £", 13), ("Rev. Conf.", 10),
+    ("Rev. Trend", 12), ("EBITDA £", 13), ("EBITDA %", 12), ("Rev. Conf.", 10),
     ("Yr1 Period", 11), ("Yr1 Accts", 20),
     ("Yr2 Period", 11), ("Yr2 Accts", 20),
     ("Yr3 Period", 11), ("Yr3 Accts", 20),
@@ -479,6 +479,11 @@ PIPELINE_COL_NOTES = [
     "  Derived from net assets trend across the last 3 annual filings.",
     "EBITDA £: Estimated EBITDA at base revenue.\n"
     "  Source: Sector-average EBITDA margin applied to Rev. Base.",
+    "EBITDA %: EBITDA as a percentage of revenue.\n"
+    "  Actual   = Margin computed from OCR-extracted turnover + profit (Tier 1 CH filing).\n"
+    "  Est.     = Sector-benchmark margin applied to estimated revenue (Tier 4 formula).\n"
+    "  Green background = Actual data from filed accounts.\n"
+    "  Amber background = Estimated using sector benchmarks.",
     "Rev. Conf.: Revenue estimate confidence level.\n"
     "  HIGH = 3+ financial models available (actual accounts data).\n"
     "  MEDIUM = 2 models.  LOW = 1 model (estimates only).",
@@ -704,15 +709,29 @@ def build_pipeline(wb, companies):
         # Col 40 — EBITDA estimate
         cell(ws, row, 40, rev_str(ebitda), bg=bg, align="right", size=9)
 
-        # Col 41 — Revenue confidence
+        # Col 41 — EBITDA %
+        # "Actual (Tier 1)" means OCR found real turnover in filed accounts; otherwise estimated.
+        is_actual = (conf == "Actual (Tier 1)" or
+                     (c.get("rev_source") or "").startswith("Tier 1"))
+        if ebitda and rev_base and rev_base > 0:
+            margin_pct = ebitda / rev_base * 100
+            label_suffix = " (Actual)" if is_actual else " (Est.)"
+            ebitda_pct_str = f"{margin_pct:.1f}%{label_suffix}"
+        else:
+            ebitda_pct_str = "-"
+        ebitda_pct_bg = fill("E2EFDA") if is_actual else fill("FFF2CC") if ebitda_pct_str != "-" else bg
+        cell(ws, row, 41, ebitda_pct_str, bg=ebitda_pct_bg, align="center", size=8,
+             bold=is_actual, fg="1A5C2C" if is_actual else "7B5B00" if ebitda_pct_str != "-" else "000000")
+
+        # Col 42 — Revenue confidence
         conf_bg = fill("E2EFDA") if conf == "HIGH" else (
                   fill("FFF2CC") if conf == "MEDIUM" else
                   fill("FFD6D6") if conf == "LOW" else bg)
-        cell(ws, row, 41, conf, bg=conf_bg, align="center", size=8, bold=(conf == "HIGH"))
+        cell(ws, row, 42, conf, bg=conf_bg, align="center", size=8, bold=(conf == "HIGH"))
 
-        # Cols 42–47 — Last 3 years of accounts filings (period + type)
+        # Cols 43–48 — Last 3 years of accounts filings (period + type)
         for yr_idx in range(3):
-            base_col = 42 + yr_idx * 2
+            base_col = 43 + yr_idx * 2
             if yr_idx < len(hist):
                 h = hist[yr_idx]
                 period = (h.get("period_end") or "")[:7]   # YYYY-MM
@@ -945,7 +964,7 @@ def build_contacts(wb, companies):
 
 def build_financials(wb, companies):
     ws = wb.create_sheet("Financial Estimates")
-    n  = 14
+    n  = 15
 
     title_row(ws, 1, n, "FINANCIAL ESTIMATION — PE Triangulation Revenue Model")
     sub_row(ws, 2, n,
@@ -956,9 +975,9 @@ def build_financials(wb, companies):
 
     headers = ["Rank", "Company", "Accts Type", "Period End",
                "Rev Low (£)", "Rev Base (£)", "Rev High (£)", "Confidence",
-               "EBITDA Low", "EBITDA Base", "EBITDA High",
+               "EBITDA Low", "EBITDA Base", "EBITDA High", "EBITDA %",
                "Net Assets", "Charges", "Formula / Source"]
-    widths  = [6, 42, 18, 12, 14, 14, 14, 12, 13, 13, 13, 14, 9, 45]
+    widths  = [6, 42, 18, 12, 14, 14, 14, 12, 13, 13, 13, 12, 14, 9, 45]
 
     ws.row_dimensions[3].height = 20
     for ci, (h, w) in enumerate(zip(headers, widths), 1):
@@ -1000,12 +1019,29 @@ def build_financials(wb, companies):
         cell(ws, row, 9,  fmt(eb_low),                           bg=bg, align="right")
         cell(ws, row, 10, fmt(eb_base),                          bg=bg, align="right", bold=True)
         cell(ws, row, 11, fmt(eb_high),                          bg=bg, align="right")
-        cell(ws, row, 12, fmt(ratios.get("net_assets") or bs.get("net_assets")), bg=bg, align="right")
-        cell(ws, row, 13, ch.get("outstanding_charges") if ch.get("outstanding_charges") is not None else "-",
+
+        # Col 12 — EBITDA %
+        _conf     = rev.get("confidence") or c.get("confidence", "")
+        _rev_base = rev.get("revenue_base") or c.get("rev_base")
+        _is_actual = (_conf == "Actual (Tier 1)" or
+                      (c.get("rev_source") or "").startswith("Tier 1"))
+        if eb_base and _rev_base and _rev_base > 0:
+            _margin_pct    = eb_base / _rev_base * 100
+            _margin_suffix = " (Actual)" if _is_actual else " (Est.)"
+            _margin_str    = f"{_margin_pct:.1f}%{_margin_suffix}"
+        else:
+            _margin_str    = "-"
+        _margin_bg = (fill("E2EFDA") if _is_actual else
+                      fill("FFF2CC") if _margin_str != "-" else bg)
+        cell(ws, row, 12, _margin_str, bg=_margin_bg, align="center", bold=_is_actual,
+             fg="1A5C2C" if _is_actual else "7B5B00" if _margin_str != "-" else "000000")
+
+        cell(ws, row, 13, fmt(ratios.get("net_assets") or bs.get("net_assets")), bg=bg, align="right")
+        cell(ws, row, 14, ch.get("outstanding_charges") if ch.get("outstanding_charges") is not None else "-",
              bg=bg, align="center")
         formula_str = rev.get("formula") or (
             "Tier 4 — " + ", ".join(c.get("models_used", [])) if c.get("models_used") else "")
-        cell(ws, row, 14, formula_str, bg=bg, size=8)
+        cell(ws, row, 15, formula_str, bg=bg, size=8)
         row += 1
 
     ws.freeze_panes = "A4"
