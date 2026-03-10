@@ -132,6 +132,36 @@ ACCREDITATION_PATTERNS = [
 ]
 
 
+def extract_meta_description(html: str) -> str:
+    """
+    Extract a plain-English description of the company from the page HTML.
+    Priority: og:description → meta description → first non-trivial <h1> text.
+    Returns empty string if nothing useful found.
+    """
+    if not html:
+        return ""
+    # og:description (often the richest)
+    m = re.search(r'<meta[^>]+property=["\']og:description["\'][^>]+content=["\']([^"\']{20,300})["\']',
+                  html, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+    # Standard meta description
+    m = re.search(r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']{20,300})["\']',
+                  html, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+    # Reverse attribute order variant
+    m = re.search(r'<meta[^>]+content=["\']([^"\']{20,300})["\'][^>]+name=["\']description["\']',
+                  html, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+    # Fallback: first <h1> text
+    m = re.search(r'<h1[^>]*>([^<]{15,120})</h1>', html, re.IGNORECASE)
+    if m:
+        return re.sub(r'\s+', ' ', m.group(1)).strip()
+    return ""
+
+
 def extract_social_signals(html: str) -> dict:
     """Parse HTML for social media links and job signals."""
     html_lower = html.lower()
@@ -380,10 +410,14 @@ def enrich_digital(company: dict) -> dict:
         exclude_terms = getattr(cfg, "EXCLUDE_TERMS",  []),
     )
 
+    # Extract plain-English description from homepage (zero extra HTTP cost)
+    website_desc = extract_meta_description(html) if html else ""
+
     return {
         "domain":               domain,
         "domain_age_years":     domain_age,
         "website_live":         website_live,
+        "website_description":  website_desc,
         **social,
         **dhs,
         **srs,

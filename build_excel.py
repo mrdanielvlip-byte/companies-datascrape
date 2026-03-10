@@ -1260,8 +1260,14 @@ def build_competitors(wb, companies):
             cell(ws, row, 14, si_score if si_score is not None else "-",
                               bg=row_bg, align="center", size=8)
 
-            # Competitor services — all their SIC descriptions
-            services_text = "  |  ".join(comp_services) if comp_services else "-"
+            # Competitor services — prefer web-sourced description, fall back to SIC labels
+            web_desc = comp.get("services_description", "")
+            if web_desc and len(web_desc) >= 20:
+                services_text = web_desc
+            elif comp_services:
+                services_text = "  |  ".join(comp_services)
+            else:
+                services_text = "-"
             cell(ws, row, 15, services_text, bg=row_bg, size=8, wrap=True)
 
             # Gap services — what competitor does that target does NOT

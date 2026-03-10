@@ -594,6 +594,13 @@ def run(companies: Optional[list[dict]] = None, enriched_path: Optional[str] = N
             top_n=10,
         )
 
+    # ── Enrich competitor service descriptions via web search ─────────────────
+    try:
+        from competitor_services import enrich_all_competitor_services
+        companies = enrich_all_competitor_services(companies, verbose=True)
+    except Exception as e:
+        print(f"  [WARN] competitor_services enrichment skipped: {e}")
+
     # Write back
     if enriched_path:
         with open(enriched_path, "w") as f:
