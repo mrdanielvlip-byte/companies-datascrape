@@ -171,7 +171,7 @@ def fmt_duration(started, completed=None):
 
 
 def run_display_name(run):
-    name = run.get("display_title") or run.get("name") or f"Run {run['id']}"
+    name = run.get("display_title") or run.get("name") or f"Run {run.get('id', '?')}"
     return name[:50]
 
 
@@ -562,6 +562,14 @@ for tab_idx, run_id in enumerate(pinned):
         if run.get("status") != "completed":
             run = get_run(run_id)
             run_lookup[run_id] = run
+
+        # Guard against API error dicts
+        if run.get("_error") or "created_at" not in run:
+            st.error(f"Could not load run data (ID {run_id}). GitHub API may be temporarily unavailable.")
+            if st.button("Remove tab", key=f"rm_{run_id}"):
+                st.session_state.pinned_runs.remove(run_id)
+                st.rerun()
+            continue
 
         status  = run.get("status", "unknown")
         conc    = run.get("conclusion")
