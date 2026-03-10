@@ -538,6 +538,42 @@ Examples:
     print(f"  Output: {out}")
     print(f"{'='*65}\n")
 
+    # ── Email notification ────────────────────────────────────────────────────
+    # Sends completion email with Excel attached (≤10 MB) or as a path reference.
+    # Requires MAIL_USERNAME + MAIL_PASSWORD env vars or .mail_config file.
+    # Silently skips if credentials not configured.
+    try:
+        from notify import send_completion_email
+        import json, pathlib
+
+        # Build a basic summary from enriched JSON if available
+        summary = {}
+        enriched_path = pathlib.Path("data/sectors") / f"{cfg.SECTOR_SLUG}_enriched.json"
+        if enriched_path.exists():
+            try:
+                companies = json.loads(enriched_path.read_text())
+                from acquisition_score import TIER_LABELS
+                tier1 = sum(1 for c in companies if c.get("acquisition_score", {}).get("tier") == "Tier 1")
+                tier2 = sum(1 for c in companies if c.get("acquisition_score", {}).get("tier") == "Tier 2")
+                summary = {
+                    "total":     len(companies),
+                    "tier1":     tier1,
+                    "tier2":     tier2,
+                    "family":    sum(1 for c in companies if c.get("family_business") or c.get("is_family_company")),
+                    "directors": sum(len(c.get("directors", [])) for c in companies),
+                }
+            except Exception:
+                pass
+
+        sector_label = getattr(cfg, "SECTOR_LABEL", getattr(cfg, "SECTOR_SLUG", "Unknown Sector")).replace("_", " ").title()
+        send_completion_email(
+            excel_path=out,
+            sector=sector_label,
+            summary=summary,
+        )
+    except Exception as e:
+        print(f"[notify] Email step failed (non-fatal): {e}")
+
 
 if __name__ == "__main__":
     main()

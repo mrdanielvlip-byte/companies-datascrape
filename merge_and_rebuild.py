@@ -680,3 +680,22 @@ print(f"  High Seller Lhood:  {sum(1 for r in data if (r.get('sell_intent') or {
 print(f"  Strong Sell Intent: {sum(1 for r in data if (r.get('sell_intent') or {}).get('sell_intent_band') == 'Strong')}")
 print(f"{'='*60}")
 print(f"\n  Output: {OUT_PATH}")
+
+# ── Email notification ──────────────────────────────────────────────────────────
+# Sends completion email with Excel attached. Requires MAIL_USERNAME + MAIL_PASSWORD
+# env vars or a .mail_config file. Silently skips if credentials not configured.
+try:
+    from notify import send_completion_email
+    send_completion_email(
+        excel_path=OUT_PATH,
+        sector="UK Lift Maintenance",
+        summary={
+            "total":     len(data),
+            "tier1":     tier_counts.get("Tier 1", 0),
+            "tier2":     tier_counts.get("Tier 2", 0),
+            "family":    len(fam),
+            "directors": sum(len(r.get("directors", [])) for r in data),
+        },
+    )
+except Exception as e:
+    print(f"[notify] Email step failed (non-fatal): {e}")
