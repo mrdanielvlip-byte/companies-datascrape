@@ -115,6 +115,7 @@ PIPELINE_COLS = [
     ("Scale", 7), ("Market", 7), ("Own./Succ.", 10), ("Dealability", 11),
     ("Charges", 8), ("Contracts", 9), ("Digital", 9), ("Accreds", 8), ("SIC", 22),
     ("Director", 28), ("Email", 36), ("Email Conf.", 12), ("Director LinkedIn", 40),
+    ("Nearest Competitor", 35), ("Competitor 2", 32), ("Competitor 3", 32),
 ]
 
 # Column header tooltips — explain the formula or data source for each column
@@ -191,6 +192,11 @@ PIPELINE_COL_NOTES = [
     "  Source: ch_contacts.py",
     "Director LinkedIn: LinkedIn profile URL of the director or company page.\n"
     "  Source: ch_contacts.py + digital_health.py (website scrape for LinkedIn links).",
+    "Nearest Competitor: Closest competitor company name with distance in miles.\n"
+    "  Format: COMPANY NAME (X.X mi)  — sorted by haversine distance from registered postcode.\n"
+    "  Source: competitor_map.py + pgeocode lat/lon lookup.",
+    "Competitor 2: Second-nearest competitor company name with distance in miles.",
+    "Competitor 3: Third-nearest competitor company name with distance in miles.",
 ]
 
 def build_pipeline(wb, companies):
@@ -329,6 +335,20 @@ def build_pipeline(wb, companies):
         cell(ws, row, 28, best_email,  bg=email_bg, size=8)
         cell(ws, row, 29, email_conf,  bg=email_bg, align="center", size=8)
         cell(ws, row, 30, dir_linkedin, bg=bg, size=8)
+
+        # ── Cols 31–33: Nearest 3 competitors ─────────────────────────────────
+        comp_map = (c.get("competitor_analysis") or {}).get("competitor_map", [])
+        for ci_off, comp_entry in enumerate(comp_map[:3]):
+            cname = comp_entry.get("company_name", "")
+            miles = comp_entry.get("distance_miles")
+            if miles is not None:
+                label = f"{cname} ({miles:.1f} mi)"
+            else:
+                band = comp_entry.get("distance_band", "")
+                label = f"{cname} ({band})" if cname else ""
+            is_pe = comp_entry.get("is_pe_backed", False)
+            comp_bg = fill("FFD6D6") if is_pe else (ALT if i % 2 == 0 else None)
+            cell(ws, row, 31 + ci_off, label, bg=comp_bg, size=8, wrap=False)
 
     ws.freeze_panes = "E4"   # freeze cols A-D (Rank, Reg, Name, Sector ✓)
     ws.auto_filter.ref = f"A3:{get_column_letter(n)}{len(companies)+3}"
@@ -1067,6 +1087,142 @@ def build_summary(wb, companies):
     ws.column_dimensions["B"].width = 12
 
 
+# ── Sheet 11: Competitor Map ──────────────────────────────────────────────────
+
+def build_competitors(wb, companies):
+    """
+    One row per competitor per target company.
+    Shows: target name, competitor name, distance in miles, band, revenue, PE-backed, fit.
+    """
+    ws = wb.create_sheet("Competitor Map")
+    headers = [
+        ("Rank",          5),
+        ("Target Company", 40),
+        ("#", 4),
+        ("Competitor Name", 40),
+        ("Reg. No.", 12),
+        ("Postcode", 10),
+        ("Distance (mi)", 13),
+        ("Band", 15),
+        ("Est. Revenue £", 14),
+        ("Accts Type", 12),
+        ("PE-backed", 9),
+        ("Group", 7),
+        ("Acq. Fit", 9),
+        ("Sell Intent", 10),
+        ("SIC Codes", 24),
+    ]
+    n = len(headers)
+
+    title_row(ws, 1, n, "COMPETITOR MAP — Nearest competitors per target company  (sorted by distance)")
+    sub_row(ws, 2, n,
+            "Distance = haversine miles between registered postcodes  ·  "
+            "Local ≤15mi  ·  Regional 15–50mi  ·  Adjacent Region 50–100mi  ·  National >100mi  ·  "
+            "Red = PE-backed or group-owned competitor")
+
+    ws.row_dimensions[3].height = 24
+    for ci, (label, width) in enumerate(headers, 1):
+        cell(ws, 3, ci, label, bg=NAVY, fg=WHITE, bold=True, align="center")
+        ws.column_dimensions[get_column_letter(ci)].width = width
+
+    row = 4
+    for rank, c in enumerate(companies, 1):
+        comp_analysis = c.get("competitor_analysis") or {}
+        comp_map = comp_analysis.get("competitor_map", [])
+
+        if not comp_map:
+            bg = ALT if rank % 2 == 0 else None
+            cell(ws, row, 1, rank, bg=bg, align="center")
+            cell(ws, row, 2, c["company_name"], bg=bg)
+            cell(ws, row, 3, "-", bg=bg, align="center")
+            cell(ws, row, 4, "No competitor data", bg=bg, fg="888888")
+            for ci in range(5, n + 1):
+                cell(ws, row, ci, "", bg=bg)
+            row += 1
+            continue
+
+        for comp_idx, comp in enumerate(comp_map, 1):
+            bg = ALT if rank % 2 == 0 else None
+
+            # Flag PE-backed/group competitors in red
+            is_pe  = comp.get("is_pe_backed", False)
+            is_grp = comp.get("is_group_owned", False)
+            row_bg = fill("FFD6D6") if (is_pe or is_grp) else bg
+
+            miles     = comp.get("distance_miles")
+            band      = comp.get("distance_band", "")
+            acq_fit   = comp.get("acquisition_fit", "")
+            rev       = comp.get("estimated_revenue_gbp", 0)
+            si_score  = comp.get("sell_intent_score")
+
+            # Band fill colour
+            band_fill_map = {
+                "Local":           fill("E2EFDA"),
+                "Regional":        fill("FFF2CC"),
+                "Adjacent Region": fill("FFE0B2"),
+                "National":        fill("D9D9D9"),
+            }
+
+            # Acquisition fit fill
+            fit_fill_map = {
+                "High":   fill("E2EFDA"),
+                "Medium": fill("FFF2CC"),
+                "Low":    fill("FFD6D6"),
+            }
+
+            cell(ws, row, 1,  rank,                         bg=bg, align="center")
+            cell(ws, row, 2,  c["company_name"] if comp_idx == 1 else "",
+                                                             bg=bg, size=8)
+            cell(ws, row, 3,  comp_idx,                     bg=bg, align="center", size=8)
+            cell(ws, row, 4,  comp.get("company_name", ""), bg=row_bg, bold=is_pe or is_grp, size=8)
+            cell(ws, row, 5,  comp.get("company_number", ""), bg=row_bg, size=8)
+            cell(ws, row, 6,  comp.get("postcode", ""),     bg=row_bg, size=8)
+
+            # Distance cell
+            dist_val  = f"{miles:.1f}" if miles is not None else "N/A"
+            cx_dist = ws.cell(row=row, column=7, value=dist_val)
+            cx_dist.fill      = band_fill_map.get(band, fill("D9D9D9"))
+            cx_dist.font      = Font(name="Arial", size=9, bold=True)
+            cx_dist.alignment = Alignment(horizontal="center", vertical="center")
+            cx_dist.border    = THIN
+
+            # Band cell
+            cx_band = ws.cell(row=row, column=8, value=band)
+            cx_band.fill      = band_fill_map.get(band, fill("D9D9D9"))
+            cx_band.font      = Font(name="Arial", size=9)
+            cx_band.alignment = Alignment(horizontal="center", vertical="center")
+            cx_band.border    = THIN
+
+            # Revenue
+            rev_str = f"£{rev:,.0f}" if rev else "-"
+            cell(ws, row, 9,  rev_str, bg=row_bg, align="right", size=8)
+            cell(ws, row, 10, comp.get("accounts_type", ""), bg=row_bg, size=8, align="center")
+            cell(ws, row, 11, "⚠ PE" if is_pe else ("Grp" if is_grp else "-"),
+                 bg=fill("FFD6D6") if is_pe else row_bg, align="center", size=8)
+            cell(ws, row, 12, "✓" if is_grp else "-", bg=row_bg, align="center", size=8)
+
+            # Acquisition fit
+            cx_fit = ws.cell(row=row, column=13, value=acq_fit)
+            cx_fit.fill      = fit_fill_map.get(acq_fit, fill("D9D9D9"))
+            cx_fit.font      = Font(name="Arial", size=9, bold=(acq_fit == "High"))
+            cx_fit.alignment = Alignment(horizontal="center", vertical="center")
+            cx_fit.border    = THIN
+
+            cell(ws, row, 14, si_score if si_score is not None else "-",
+                 bg=row_bg, align="center", size=8)
+            cell(ws, row, 15, ", ".join(comp.get("sic_codes", [])),
+                 bg=row_bg, size=7)
+
+            row += 1
+
+        # Spacer row between targets
+        ws.row_dimensions[row].height = 4
+        row += 1
+
+    ws.freeze_panes = "C4"
+    ws.auto_filter.ref = f"A3:{get_column_letter(n)}3"
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def run():
@@ -1091,6 +1247,7 @@ def run():
     build_contracts(wb, companies)
     build_digital_health(wb, companies)
     build_regulatory(wb, companies)
+    build_competitors(wb, companies)
     build_summary(wb, companies)
 
     out_path = os.path.join(cfg.OUTPUT_DIR, cfg.EXCEL_OUTPUT)

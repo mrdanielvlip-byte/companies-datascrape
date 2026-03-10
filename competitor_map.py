@@ -4,17 +4,19 @@ competitor_map.py — Geographic & Operational Competitor Mapping
 For each company in the enriched dataset, identifies the 10 closest
 competitors in the same sector by geographic proximity and operational overlap.
 
-Proximity scoring:
-  Exact postcode district match (AA11)  → distance score 100
-  Same postcode area (AA)               → distance score 70
-  Adjacent area (educated guess)        → distance score 40
-  National (no geographic overlap)      → distance score 10
+Proximity scoring (real haversine distance via pgeocode):
+  ≤ 15 miles  → Local          (score 100)
+  15–50 miles → Regional       (score  70)
+  50–100 miles→ Adjacent Region(score  40)
+  > 100 miles → National       (score  10)
+  Falls back to postcode prefix matching if lat/lon unavailable.
 
 Competitor dimensions returned per match:
   - competitor_name
   - company_number
   - postcode
-  - distance_band (Local / Regional / National)
+  - distance_miles (actual haversine distance, or None if lookup failed)
+  - distance_band (Local / Regional / Adjacent Region / National)
   - sic_codes
   - accounts_type
   - estimated_revenue_gbp (from enriched JSON or estimated from employees)
@@ -32,13 +34,14 @@ Output:
   Each company dict gets:
     competitor_map: [list of up to 10 closest competitors]
     pe_backed_competitors: [subset with PE/group signals]
-    competitor_count_local: int (within same postcode district)
-    competitor_count_regional: int (within same postcode area)
+    competitor_count_local: int (within ≤ 15 miles)
+    competitor_count_regional: int (within ≤ 50 miles)
     competitor_market_concentration: float (HHI proxy — top 3 share of local market)
     fragmentation_score: 1–10 (10 = highly fragmented)
 """
 
 import json
+import math
 import os
 import re
 import sqlite3
@@ -50,7 +53,104 @@ import config as cfg
 DATA_DIR = Path(__file__).parent / "data"
 DB_PATH  = DATA_DIR / "companies_house.db"
 
-# SIC codes associated with lift maintenance and adjacent verticals
+
+# ── Postcode → lat/lon via pgeocode (cached per run) ──────────────────────────
+
+_LATLON_CACHE: dict[str, Optional[tuple[float, float]]] = {}
+_nomi = None          # pgeocode.Nominatim('GB') instance, lazy-loaded
+_nomi_tried = False   # True once we've attempted to import pgeocode
+
+
+def _get_nomi():
+    """Lazy-load pgeocode Nominatim; returns None if pgeocode not available."""
+    global _nomi, _nomi_tried
+    if _nomi_tried:
+        return _nomi
+    _nomi_tried = True
+    try:
+        import pgeocode
+        _nomi = pgeocode.Nominatim("GB")
+    except Exception:
+        _nomi = None
+    return _nomi
+
+
+def _postcode_latlon(pc: str) -> Optional[tuple[float, float]]:
+    """
+    Return (lat, lon) for a UK postcode using pgeocode GeoNames data.
+    Results are cached for the lifetime of the process.
+    Returns None if the postcode is blank or not found.
+    """
+    if not pc:
+        return None
+    key = pc.strip().upper()
+    if key in _LATLON_CACHE:
+        return _LATLON_CACHE[key]
+
+    nomi = _get_nomi()
+    if nomi is not None:
+        try:
+            import math as _math
+            r = nomi.query_postal_code(key)
+            lat = r.get("latitude") if hasattr(r, "get") else getattr(r, "latitude", None)
+            lon = r.get("longitude") if hasattr(r, "get") else getattr(r, "longitude", None)
+            if lat is not None and lon is not None:
+                # NaN check (pgeocode returns NaN for unknown postcodes)
+                try:
+                    lat, lon = float(lat), float(lon)
+                    if not (_math.isnan(lat) or _math.isnan(lon)):
+                        _LATLON_CACHE[key] = (lat, lon)
+                        return (lat, lon)
+                except (TypeError, ValueError):
+                    pass
+        except Exception:
+            pass
+
+    _LATLON_CACHE[key] = None
+    return None
+
+
+def haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in miles between two lat/lon points."""
+    R = 3958.8  # Earth mean radius in miles
+    φ1, φ2 = math.radians(lat1), math.radians(lat2)
+    Δφ = math.radians(lat2 - lat1)
+    Δλ = math.radians(lon2 - lon1)
+    a = math.sin(Δφ / 2) ** 2 + math.cos(φ1) * math.cos(φ2) * math.sin(Δλ / 2) ** 2
+    return R * 2 * math.asin(min(1.0, math.sqrt(a)))
+
+
+# Mile thresholds for distance bands
+_BAND_THRESHOLDS = [
+    (15,  "Local",           100),
+    (50,  "Regional",         70),
+    (100, "Adjacent Region",  40),
+]
+
+
+def distance_and_band(pc_a: str, pc_b: str) -> tuple[Optional[float], str, int]:
+    """
+    Calculate real haversine distance in miles between two UK postcodes.
+    Returns (distance_miles_or_None, band_label, proximity_score).
+
+    Falls back to postcode prefix matching if lat/lon lookup unavailable.
+    """
+    pos_a = _postcode_latlon(pc_a)
+    pos_b = _postcode_latlon(pc_b)
+
+    if pos_a and pos_b:
+        miles = haversine_miles(pos_a[0], pos_a[1], pos_b[0], pos_b[1])
+        for threshold, band, score in _BAND_THRESHOLDS:
+            if miles <= threshold:
+                return (round(miles, 1), band, score)
+        return (round(miles, 1), "National", 10)
+
+    # Fallback to postcode prefix matching
+    band, score = proximity_band(pc_a, pc_b)
+    return (None, band, score)
+
+
+# ── SIC codes associated with lift maintenance and adjacent verticals ──────────
 LIFT_SICS = {
     "43999",  # other specialised construction
     "33120",  # repair of machinery
@@ -382,7 +482,7 @@ def build_competitor_map(
             continue  # skip self
 
         comp_pc = comp.get("postcode") or comp.get("registered_office_address", {}).get("postal_code", "")
-        band, score = proximity_band(target_pc, comp_pc)
+        dist_miles, band, score = distance_and_band(target_pc, comp_pc)
 
         comp_rev  = _rev_proxy(comp)
         acq_fit   = _acquisition_fit(target_rev, comp_rev)
@@ -405,6 +505,7 @@ def build_competitor_map(
             "company_number":         comp.get("company_number", ""),
             "postcode":               comp_pc,
             "town":                   comp.get("registered_office_address", {}).get("locality") or comp.get("address_town", ""),
+            "distance_miles":         dist_miles,
             "distance_band":          band,
             "proximity_score":        score,
             "analysis_score":         analysis_score,
@@ -418,8 +519,12 @@ def build_competitor_map(
             "sell_intent_band":       (comp.get("sell_intent") or {}).get("sell_intent_band"),
         })
 
-    # Sort: analysis_score desc, then revenue desc
-    scored.sort(key=lambda x: (-x["analysis_score"], -x["estimated_revenue_gbp"]))
+    # Sort: by actual distance (asc) where available, then analysis_score (desc), then revenue (desc)
+    scored.sort(key=lambda x: (
+        x["distance_miles"] if x["distance_miles"] is not None else 9999,
+        -x["analysis_score"],
+        -x["estimated_revenue_gbp"],
+    ))
     top = scored[:top_n]
 
     # Summary stats
@@ -443,7 +548,7 @@ def build_competitor_map(
         "fragmentation_score":         frag_score,
         "largest_local_competitor":    largest_local,
         "total_sector_competitors":    len(all_companies) - 1,
-        "data_tier":                   "Tier 1 — Companies House sector DB + Tier 4 proximity heuristics",
+        "data_tier":                   "Tier 1 — Companies House sector DB + haversine distance via pgeocode",
     }
 
 

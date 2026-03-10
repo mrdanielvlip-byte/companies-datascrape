@@ -44,7 +44,7 @@ jobs:
       - name: Install Python packages
         run: |
           pip install --upgrade pip
-          pip install requests openpyxl python-dateutil PyMuPDF
+          pip install requests openpyxl python-dateutil PyMuPDF pgeocode
 
       # ── 3. Write API keys ────────────────────────────────────────────────────
       - name: Write API keys
