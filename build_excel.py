@@ -223,6 +223,60 @@ def _normalise(c: dict) -> dict:
                 c["estimated_employees"]        = max(1, round(rev / 80_000))
                 c["estimated_employees_source"] = "Tier 4 — revenue ÷ £80k"
 
+    # ── EBITDA low / high (derive from base using sector margins) ──────────────
+    # Only needed when we have an ebitda_base but no range (typical for batch data)
+    if c.get("ebitda_base") and not c.get("ebitda_low"):
+        try:
+            import config as _cfg
+            margin_low  = getattr(_cfg, "EBITDA_MARGIN_LOW",  0.10)
+            margin_base = getattr(_cfg, "EBITDA_MARGIN_BASE", 0.15)
+            margin_high = getattr(_cfg, "EBITDA_MARGIN_HIGH", 0.20)
+            eb = c["ebitda_base"]
+            # Scale low/high relative to how base relates to its margin
+            # (preserves ratio even when base came from a different model)
+            if margin_base > 0:
+                rev_implied = eb / margin_base
+                c["ebitda_low"]  = round(rev_implied * margin_low)
+                c["ebitda_high"] = round(rev_implied * margin_high)
+            else:
+                c["ebitda_low"]  = round(eb * 0.70)
+                c["ebitda_high"] = round(eb * 1.35)
+        except Exception:
+            c["ebitda_low"]  = round(c["ebitda_base"] * 0.70)
+            c["ebitda_high"] = round(c["ebitda_base"] * 1.35)
+
+    # ── Normalise financials dict so build_financials() sheet can read it ──────
+    # build_financials() reads c["financials"]["revenue_estimate"] etc.
+    # For batch data these live at the top level — promote them.
+    if not c.get("financials"):
+        bs_raw = c.get("bs") or {}
+        c["financials"] = {
+            "revenue_estimate": {
+                "revenue_low":    c.get("rev_low"),
+                "revenue_base":   c.get("rev_base"),
+                "revenue_high":   c.get("rev_high"),
+                "confidence":     c.get("confidence", ""),
+                "formula":        "Tier 4 — " + ", ".join(c.get("models_used", ["Location Model"])),
+            },
+            "ebitda_estimate": {
+                "ebitda_low":  c.get("ebitda_low"),
+                "ebitda_base": c.get("ebitda_base"),
+                "ebitda_high": c.get("ebitda_high"),
+            },
+            "balance_sheet": {
+                "accounts_type":  bs_raw.get("accounts_type", ""),
+                "period_end":     bs_raw.get("period_end", ""),
+                "net_assets":     bs_raw.get("net_assets"),
+                "total_assets":   bs_raw.get("total_assets"),
+                "total_employees":bs_raw.get("total_employees"),
+                "staff_costs":    bs_raw.get("staff_costs"),
+            },
+            "balance_sheet_ratios": {
+                "net_assets": bs_raw.get("net_assets"),
+            },
+            "charges": c.get("charges", {}),
+        }
+
     return c
 
 # ── Colour palette ─────────────────────────────────────────────────────────
@@ -917,27 +971,41 @@ def build_financials(wb, companies):
     row = 4
     for rank, c in enumerate(companies, 1):
         bg  = ALT if rank % 2 == 0 else None
-        fin = c.get("financials", {})
-        rev = fin.get("revenue_estimate", {})
-        ebitda = fin.get("ebitda_estimate", {})
-        bs  = fin.get("balance_sheet", {})
-        ch  = c.get("charges", fin.get("charges", {}))
-        ratios = fin.get("balance_sheet_ratios", {})
+        fin    = c.get("financials") or {}
+        rev    = fin.get("revenue_estimate") or {}
+        ebitda = fin.get("ebitda_estimate") or {}
+        bs     = fin.get("balance_sheet") or c.get("bs") or {}
+        ch     = c.get("charges") or fin.get("charges") or {}
+        ratios = fin.get("balance_sheet_ratios") or {}
 
-        cell(ws, row, 1,  rank,                          bg=bg, align="center")
-        cell(ws, row, 2,  c["company_name"],             bg=bg)
-        cell(ws, row, 3,  bs.get("accounts_type","N/A"), bg=bg, size=8)
-        cell(ws, row, 4,  bs.get("period_end","")[:7],  bg=bg, align="center")
-        cell(ws, row, 5,  fmt(rev.get("revenue_low")),  bg=bg, align="right")
-        cell(ws, row, 6,  fmt(rev.get("revenue_base")), bg=bg, align="right", bold=True)
-        cell(ws, row, 7,  fmt(rev.get("revenue_high")), bg=bg, align="right")
-        cell(ws, row, 8,  rev.get("confidence","None"), bg=bg, align="center")
-        cell(ws, row, 9,  fmt(ebitda.get("ebitda_low")),  bg=bg, align="right")
-        cell(ws, row, 10, fmt(ebitda.get("ebitda_base")), bg=bg, align="right", bold=True)
-        cell(ws, row, 11, fmt(ebitda.get("ebitda_high")), bg=bg, align="right")
-        cell(ws, row, 12, fmt(ratios.get("net_assets")),  bg=bg, align="right")
-        cell(ws, row, 13, ch.get("outstanding_charges","-"), bg=bg, align="center")
-        cell(ws, row, 14, rev.get("formula",""), bg=bg, size=8)
+        # Confidence colouring
+        conf = rev.get("confidence") or c.get("confidence", "")
+        conf_bg = (fill("E2EFDA") if conf == "HIGH" else
+                   fill("FFF2CC") if conf == "MEDIUM" else
+                   fill("FFD6D6") if conf == "LOW" else bg)
+
+        # EBITDA — use estimate dict first, then fall back to top-level scalar
+        eb_low  = ebitda.get("ebitda_low")  or c.get("ebitda_low")
+        eb_base = ebitda.get("ebitda_base") or c.get("ebitda_base")
+        eb_high = ebitda.get("ebitda_high") or c.get("ebitda_high")
+
+        cell(ws, row, 1,  rank,                                  bg=bg, align="center")
+        cell(ws, row, 2,  c["company_name"],                     bg=bg)
+        cell(ws, row, 3,  bs.get("accounts_type") or "N/A",     bg=bg, size=8)
+        cell(ws, row, 4,  (bs.get("period_end") or "")[:7],     bg=bg, align="center")
+        cell(ws, row, 5,  fmt(rev.get("revenue_low")  or c.get("rev_low")),  bg=bg, align="right")
+        cell(ws, row, 6,  fmt(rev.get("revenue_base") or c.get("rev_base")), bg=bg, align="right", bold=True)
+        cell(ws, row, 7,  fmt(rev.get("revenue_high") or c.get("rev_high")), bg=bg, align="right")
+        cell(ws, row, 8,  conf,                                  bg=conf_bg, align="center", bold=True)
+        cell(ws, row, 9,  fmt(eb_low),                           bg=bg, align="right")
+        cell(ws, row, 10, fmt(eb_base),                          bg=bg, align="right", bold=True)
+        cell(ws, row, 11, fmt(eb_high),                          bg=bg, align="right")
+        cell(ws, row, 12, fmt(ratios.get("net_assets") or bs.get("net_assets")), bg=bg, align="right")
+        cell(ws, row, 13, ch.get("outstanding_charges") if ch.get("outstanding_charges") is not None else "-",
+             bg=bg, align="center")
+        formula_str = rev.get("formula") or (
+            "Tier 4 — " + ", ".join(c.get("models_used", [])) if c.get("models_used") else "")
+        cell(ws, row, 14, formula_str, bg=bg, size=8)
         row += 1
 
     ws.freeze_panes = "A4"
