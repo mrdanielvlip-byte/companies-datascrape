@@ -1,118 +1,119 @@
 """
 PE Deal Sourcing Intelligence Platform — Streamlit Web App
 
-Lets you search any UK sector, configure filters, trigger the pipeline
-on GitHub Actions, monitor progress, and download the Excel report.
-
-Setup (Streamlit Cloud):
-  1. Fork / connect your GitHub repo at share.streamlit.io
-  2. Add secrets in the Streamlit Cloud dashboard:
-       GITHUB_TOKEN  = ghp_xxxx   (your GitHub personal access token)
-       GITHUB_REPO   = mrdanielvlip-byte/companies-datascrape
-       RESEND_API_KEY = re_xxxx   (optional — already in GitHub secrets)
-
-Local dev:
-  pip install streamlit requests
-  Create .streamlit/secrets.toml:
-    GITHUB_TOKEN   = "ghp_xxxx"
-    GITHUB_REPO    = "mrdanielvlip-byte/companies-datascrape"
-  streamlit run streamlit_app.py
+Features:
+- Multiple concurrent searches, each in its own tab
+- Runs persist on GitHub Actions — closing the browser never stops a search
+- Run history reloaded from GitHub API on every page open (nothing lost)
+- Per-search email notification address
+- Auto-refresh while runs are active
 """
 
 import time
-import base64
+import json
 import streamlit as st
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="PE Deal Sourcing",
     page_icon="🏢",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
-# ── Config from Streamlit secrets ─────────────────────────────────────────────
-GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", "")
-GITHUB_REPO  = st.secrets.get("GITHUB_REPO", "mrdanielvlip-byte/companies-datascrape")
-API_BASE     = "https://api.github.com"
-HEADERS      = {
-    "Authorization": f"token {GITHUB_TOKEN}",
-    "Accept":        "application/vnd.github+json",
-}
+# ── Config ─────────────────────────────────────────────────────────────────────
+GITHUB_TOKEN   = st.secrets.get("GITHUB_TOKEN", "")
+GITHUB_REPO    = st.secrets.get("GITHUB_REPO", "mrdanielvlip-byte/companies-datascrape")
+API_BASE       = "https://api.github.com"
+HEADERS        = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github+json"}
+WORKFLOW_QUICK = "pe_sourcing.yml"
+WORKFLOW_DEEP  = "lift_maintenance_ocr.yml"
+DEFAULT_EMAIL  = "daniellipinski@mac.com"
 
-# Workflow file names
-WORKFLOW_QUICK  = "pe_sourcing.yml"          # Generic sector search (quick/full, ~15-90 min)
-WORKFLOW_DEEP   = "lift_maintenance_ocr.yml" # Deep OCR run for lift maintenance (~5.5 hr)
-
-# ── Session state init ─────────────────────────────────────────────────────────
-if "active_runs" not in st.session_state:
-    st.session_state.active_runs = []   # list of run dicts {id, sector, started, workflow}
-if "last_refresh" not in st.session_state:
-    st.session_state.last_refresh = 0
+# ── Session state ──────────────────────────────────────────────────────────────
+if "pinned_runs" not in st.session_state:
+    # List of run_ids the user has explicitly pinned as tabs
+    st.session_state.pinned_runs = []
+if "active_tab" not in st.session_state:
+    st.session_state.active_tab = 0
+if "cached_runs" not in st.session_state:
+    st.session_state.cached_runs = {}   # run_id → run dict, avoids re-fetching
+if "last_fetch" not in st.session_state:
+    st.session_state.last_fetch = 0
 
 
 # ── GitHub API helpers ─────────────────────────────────────────────────────────
 
-def gh_get(path: str) -> dict | list | None:
+def gh(path, method="GET", body=None):
+    url = f"{API_BASE}{path}"
     try:
-        r = requests.get(f"{API_BASE}{path}", headers=HEADERS, timeout=15)
+        if method == "POST":
+            r = requests.post(url, headers=HEADERS, json=body, timeout=15)
+        elif method == "PATCH":
+            r = requests.patch(url, headers=HEADERS, json=body, timeout=15)
+        else:
+            r = requests.get(url, headers=HEADERS, timeout=15)
+        if r.status_code == 204:
+            return {}
         r.raise_for_status()
         return r.json()
     except Exception as e:
-        st.error(f"GitHub API error: {e}")
-        return None
+        return {"_error": str(e)}
 
 
-def trigger_workflow(workflow_file: str, inputs: dict) -> bool:
-    url  = f"{API_BASE}/repos/{GITHUB_REPO}/actions/workflows/{workflow_file}/dispatches"
-    body = {"ref": "main", "inputs": inputs}
-    try:
-        r = requests.post(url, headers=HEADERS, json=body, timeout=15)
-        return r.status_code == 204
-    except Exception as e:
-        st.error(f"Failed to trigger workflow: {e}")
-        return False
+def trigger_workflow(workflow_file, inputs):
+    result = gh(f"/repos/{GITHUB_REPO}/actions/workflows/{workflow_file}/dispatches",
+                method="POST", body={"ref": "main", "inputs": inputs})
+    return "_error" not in result
 
 
-def get_recent_runs(workflow_file: str, limit: int = 10) -> list:
-    data = gh_get(f"/repos/{GITHUB_REPO}/actions/workflows/{workflow_file}/runs?per_page={limit}")
-    return data.get("workflow_runs", []) if data else []
+def get_recent_runs(limit=20):
+    """Fetch recent runs from both workflows, merged and sorted by date."""
+    runs = []
+    for wf in (WORKFLOW_QUICK, WORKFLOW_DEEP):
+        data = gh(f"/repos/{GITHUB_REPO}/actions/workflows/{wf}/runs?per_page={limit}")
+        for r in data.get("workflow_runs", []):
+            r["_workflow_label"] = "Sector Search" if wf == WORKFLOW_QUICK else "Deep OCR"
+            runs.append(r)
+    runs.sort(key=lambda r: r["created_at"], reverse=True)
+    return runs[:limit]
 
 
-def get_run(run_id: int) -> dict | None:
-    return gh_get(f"/repos/{GITHUB_REPO}/actions/runs/{run_id}")
+def get_run(run_id):
+    cached = st.session_state.cached_runs.get(run_id)
+    if cached and cached.get("status") == "completed":
+        return cached   # completed runs don't change
+    data = gh(f"/repos/{GITHUB_REPO}/actions/runs/{run_id}")
+    if "_error" not in data:
+        st.session_state.cached_runs[run_id] = data
+    return data
 
 
-def get_artifacts(run_id: int) -> list:
-    data = gh_get(f"/repos/{GITHUB_REPO}/actions/runs/{run_id}/artifacts")
-    return data.get("artifacts", []) if data else []
+def get_artifacts(run_id):
+    data = gh(f"/repos/{GITHUB_REPO}/actions/runs/{run_id}/artifacts")
+    return [a for a in data.get("artifacts", []) if not a.get("expired")]
 
 
-def download_artifact(artifact_id: int) -> bytes | None:
-    """Download artifact zip via GitHub API — returns raw bytes."""
+def download_artifact(artifact_id):
     url = f"{API_BASE}/repos/{GITHUB_REPO}/actions/artifacts/{artifact_id}/zip"
     try:
         r = requests.get(url, headers=HEADERS, allow_redirects=True, timeout=60)
         r.raise_for_status()
         return r.content
-    except Exception as e:
-        st.error(f"Download failed: {e}")
+    except Exception:
         return None
 
 
-def cancel_run(run_id: int) -> bool:
-    url = f"{API_BASE}/repos/{GITHUB_REPO}/actions/runs/{run_id}/cancel"
-    try:
-        r = requests.post(url, headers=HEADERS, timeout=15)
-        return r.status_code == 202
-    except Exception:
-        return False
+def cancel_run(run_id):
+    gh(f"/repos/{GITHUB_REPO}/actions/runs/{run_id}/cancel", method="POST")
 
 
-def status_icon(status: str, conclusion: str | None) -> str:
-    if status == "in_progress" or status == "queued":
+# ── Formatting helpers ─────────────────────────────────────────────────────────
+
+def status_icon(status, conclusion):
+    if status in ("queued", "in_progress"):
         return "⏳"
     if conclusion == "success":
         return "✅"
@@ -123,214 +124,292 @@ def status_icon(status: str, conclusion: str | None) -> str:
     return "❓"
 
 
-def fmt_duration(started: str, completed: str | None) -> str:
+def fmt_duration(started, completed=None):
     try:
-        start = datetime.strptime(started, "%Y-%m-%dT%H:%M:%SZ")
-        end   = datetime.strptime(completed, "%Y-%m-%dT%H:%M:%SZ") if completed else datetime.utcnow()
-        secs  = int((end - start).total_seconds())
-        if secs < 60:
-            return f"{secs}s"
-        if secs < 3600:
-            return f"{secs // 60}m {secs % 60}s"
-        return f"{secs // 3600}h {(secs % 3600) // 60}m"
+        start = datetime.strptime(started, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        end   = (datetime.strptime(completed, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                 if completed else datetime.now(timezone.utc))
+        s = int((end - start).total_seconds())
+        if s < 60:   return f"{s}s"
+        if s < 3600: return f"{s//60}m {s%60}s"
+        return f"{s//3600}h {(s%3600)//60}m"
     except Exception:
         return "—"
 
 
-# ── Sidebar ────────────────────────────────────────────────────────────────────
-
-with st.sidebar:
-    st.title("🏢 PE Deal Sourcing")
-    st.caption("UK SME Acquisition Intelligence")
-    st.divider()
-
-    if not GITHUB_TOKEN:
-        st.error("⚠️ GitHub token not configured.\nAdd GITHUB_TOKEN to Streamlit secrets.")
-    else:
-        st.success("✓ Connected to GitHub")
-        st.caption(f"`{GITHUB_REPO}`")
-
-    st.divider()
-    st.markdown("**How it works**")
-    st.markdown(
-        "1. Enter a sector below\n"
-        "2. Set your filters\n"
-        "3. Hit **Run Pipeline**\n"
-        "4. Get emailed when done\n"
-        "5. Download Excel report"
-    )
-    st.divider()
-    st.markdown("**Deep OCR Run** (Lift Maintenance only)")
-    st.caption("Full 542-company OCR batch with actual P&L from filed accounts. Takes up to 5.5 hours.")
-    if st.button("🔬 Run Deep OCR", use_container_width=True, disabled=not GITHUB_TOKEN):
-        ok = trigger_workflow(WORKFLOW_DEEP, {})
-        if ok:
-            st.success("Deep OCR run triggered!")
-        else:
-            st.error("Failed to trigger.")
+def run_display_name(run):
+    name = run.get("display_title") or run.get("name") or f"Run {run['id']}"
+    return name[:50]
 
 
-# ── Main layout ────────────────────────────────────────────────────────────────
+# ── Load all recent runs (auto-pin any active ones) ───────────────────────────
 
-st.header("New Sector Search")
+@st.cache_data(ttl=30)
+def load_all_runs():
+    return get_recent_runs(20)
 
-with st.form("search_form"):
-    col1, col2 = st.columns([2, 1])
 
-    with col1:
-        sector = st.text_input(
-            "Sector description",
-            placeholder='e.g. "fire safety systems", "HVAC contractors", "pest control"',
-            help="Free text — the pipeline auto-discovers relevant SIC codes.",
-        )
-        notify_email = st.text_input(
-            "Notify email",
-            value="daniellipinski@mac.com",
-            help="Email address to send results to when the run completes.",
-        )
+all_runs = load_all_runs()
 
-    with col2:
-        mode = st.radio(
-            "Report depth",
-            options=["quick", "full"],
-            index=0,
-            help="Quick: search + enrich + financials (~10 min). Full: adds sell signals, contracts, digital health (~60 min).",
-        )
+# Auto-pin any runs that are currently active (queued/in_progress)
+for r in all_runs:
+    if r["status"] in ("queued", "in_progress") and r["id"] not in st.session_state.pinned_runs:
+        st.session_state.pinned_runs.append(r["id"])
 
-    with st.expander("Advanced filters (optional)"):
-        fcol1, fcol2 = st.columns(2)
-        with fcol1:
-            region = st.selectbox(
-                "Region",
-                options=[
+# Build the run lookup dict
+run_lookup = {r["id"]: r for r in all_runs}
+for rid in st.session_state.pinned_runs:
+    if rid not in run_lookup:
+        fetched = get_run(rid)
+        if "_error" not in fetched:
+            run_lookup[rid] = fetched
+
+
+# ── Header ─────────────────────────────────────────────────────────────────────
+
+st.markdown("""
+<h1 style='margin-bottom:0'>🏢 PE Deal Sourcing</h1>
+<p style='color:gray;margin-top:4px'>UK SME Acquisition Intelligence Platform &nbsp;·&nbsp; Searches run on GitHub — closing this browser never stops them</p>
+""", unsafe_allow_html=True)
+
+if not GITHUB_TOKEN:
+    st.error("⚠️ GITHUB_TOKEN not configured in Streamlit secrets.")
+    st.stop()
+
+st.divider()
+
+
+# ── Build tab list: New Search + one tab per pinned run ────────────────────────
+
+pinned = st.session_state.pinned_runs  # ordered list of run_ids
+
+tab_labels = ["➕ New Search"]
+for rid in pinned:
+    run = run_lookup.get(rid, {})
+    icon = status_icon(run.get("status", ""), run.get("conclusion"))
+    name = run_display_name(run) if run else f"Run {rid}"
+    tab_labels.append(f"{icon} {name[:30]}")
+
+tabs = st.tabs(tab_labels)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 0 — New Search
+# ══════════════════════════════════════════════════════════════════════════════
+
+with tabs[0]:
+    st.subheader("New Sector Search")
+    st.caption("Each search runs independently on GitHub — you can start multiple and close this window at any time.")
+
+    with st.form("new_search", clear_on_submit=True):
+        col1, col2 = st.columns([2, 1])
+
+        with col1:
+            sector = st.text_input(
+                "Sector description *",
+                placeholder='e.g. "fire safety systems", "HVAC contractors", "pest control"',
+                help="Free text — the pipeline auto-discovers SIC codes from your description.",
+            )
+        with col2:
+            notify_email = st.text_input(
+                "Send results to",
+                value=DEFAULT_EMAIL,
+                help="Email address to notify when this specific search finishes.",
+            )
+
+        col3, col4 = st.columns([1, 2])
+        with col3:
+            mode = st.radio(
+                "Report depth",
+                ["quick", "full"],
+                captions=["~10 min · search + enrich + financials", "~60 min · adds sell signals, contracts, digital health"],
+                index=0,
+            )
+
+        with st.expander("Advanced filters (optional)"):
+            fc1, fc2 = st.columns(2)
+            with fc1:
+                region = st.selectbox("Region", [
                     "", "London", "South East", "South West", "East of England",
                     "East Midlands", "West Midlands", "Yorkshire and The Humber",
                     "North West", "North East", "Wales", "Scotland", "Northern Ireland",
-                ],
-                index=0,
-                help="Leave blank for all UK.",
-            )
-        with fcol2:
-            min_revenue = st.selectbox(
-                "Minimum revenue",
-                options=["", "250000", "500000", "1000000", "2000000", "5000000"],
-                format_func=lambda x: "No minimum" if x == "" else f"£{int(x):,}",
-                index=0,
-            )
+                ], index=0, help="Leave blank for all UK.")
+            with fc2:
+                min_revenue = st.selectbox("Minimum revenue",
+                    ["", "250000", "500000", "1000000", "2000000", "5000000"],
+                    format_func=lambda x: "No minimum" if x == "" else f"£{int(x):,}",
+                    index=0)
 
-    submitted = st.form_submit_button(
-        "🚀 Run Pipeline",
-        use_container_width=True,
-        type="primary",
-        disabled=not GITHUB_TOKEN,
-    )
+        st.divider()
+        deep_col, run_col = st.columns([1, 2])
+        with deep_col:
+            run_deep = st.checkbox("Deep OCR run (Lift Maintenance only, ~5.5 hrs)")
+        with run_col:
+            submitted = st.form_submit_button("🚀 Run Pipeline", type="primary", use_container_width=True)
 
-if submitted:
-    if not sector.strip():
-        st.error("Please enter a sector description.")
-    else:
-        with st.spinner(f"Triggering pipeline for **{sector}**…"):
-            inputs = {
-                "sector":        sector.strip(),
-                "mode":          mode,
-                "region":        region,
-                "min_revenue":   min_revenue,
-                "notify_email":  notify_email,
-            }
-            ok = trigger_workflow(WORKFLOW_QUICK, inputs)
-        if ok:
-            st.success(f"✅ Pipeline triggered for **{sector}** ({mode} mode). You'll get an email at {notify_email} when it's done.")
-            time.sleep(3)   # give GitHub a moment to register the run
-            st.rerun()
+    if submitted:
+        if not sector.strip() and not run_deep:
+            st.error("Please enter a sector description.")
         else:
-            st.error("Failed to trigger pipeline. Check your GitHub token.")
+            with st.spinner("Triggering pipeline on GitHub…"):
+                if run_deep:
+                    ok = trigger_workflow(WORKFLOW_DEEP, {})
+                    label = "Lift Maintenance Deep OCR"
+                else:
+                    ok = trigger_workflow(WORKFLOW_QUICK, {
+                        "sector":       sector.strip(),
+                        "mode":         mode,
+                        "region":       region,
+                        "min_revenue":  min_revenue,
+                        "notify_email": notify_email,
+                    })
+                    label = sector.strip()
+
+            if ok:
+                st.success(f"✅ Pipeline triggered for **{label}**. A new tab will appear shortly — refresh the page.")
+                st.info("📧 You'll get an email at **" + notify_email + "** when it's done. You can safely close this window.")
+                time.sleep(4)
+                st.cache_data.clear()
+                st.rerun()
+            else:
+                st.error("Failed to trigger. Check your GitHub token in secrets.")
+
+    # ── Recent runs summary table ──────────────────────────────────────────────
+    st.divider()
+    st.subheader("All Runs")
+    st.caption("Click **Pin as tab** to open a run in its own tab for detailed status and download.")
+
+    if not all_runs:
+        st.info("No runs yet — trigger one above.")
+    else:
+        for run in all_runs[:15]:
+            rid     = run["id"]
+            status  = run["status"]
+            conc    = run.get("conclusion")
+            icon    = status_icon(status, conc)
+            name    = run_display_name(run)
+            label   = run.get("_workflow_label", "")
+            date    = run["created_at"][:10]
+            dur     = fmt_duration(run["created_at"], run.get("updated_at") if status == "completed" else None)
+
+            c1, c2, c3 = st.columns([5, 1, 1])
+            with c1:
+                st.markdown(f"**{icon} {name}** &nbsp; `{label}` &nbsp; {date} · {dur}")
+            with c2:
+                if rid not in st.session_state.pinned_runs:
+                    if st.button("Pin tab", key=f"pin_{rid}", use_container_width=True):
+                        st.session_state.pinned_runs.insert(0, rid)
+                        st.rerun()
+                else:
+                    st.caption("✓ Pinned")
+            with c3:
+                st.markdown(f"[GitHub ↗]({run['html_url']})")
 
 
-# ── Recent Runs ────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# TABS 1+ — Individual run tabs
+# ══════════════════════════════════════════════════════════════════════════════
 
-st.divider()
-st.header("Recent Runs")
+for tab_idx, run_id in enumerate(pinned):
+    with tabs[tab_idx + 1]:
 
-col_refresh, col_spacer = st.columns([1, 5])
-with col_refresh:
-    if st.button("🔄 Refresh", use_container_width=True):
-        st.rerun()
+        run = run_lookup.get(run_id)
+        if not run:
+            st.warning(f"Could not load run {run_id}")
+            continue
 
-# Load runs from both workflows
-runs_quick = get_recent_runs(WORKFLOW_QUICK, limit=8)
-runs_deep  = get_recent_runs(WORKFLOW_DEEP,  limit=4)
+        # Refresh live run data
+        if run.get("status") != "completed":
+            run = get_run(run_id)
+            run_lookup[run_id] = run
 
-# Tag them
-for r in runs_quick:
-    r["_workflow_label"] = "Sector Search"
-for r in runs_deep:
-    r["_workflow_label"] = "Deep OCR"
+        status  = run.get("status", "unknown")
+        conc    = run.get("conclusion")
+        icon    = status_icon(status, conc)
+        name    = run_display_name(run)
+        label   = run.get("_workflow_label", "Run")
+        dur     = fmt_duration(run["created_at"], run.get("updated_at") if status == "completed" else None)
+        run_url = run.get("html_url", "")
 
-all_runs = sorted(runs_quick + runs_deep, key=lambda r: r["created_at"], reverse=True)[:12]
+        # ── Run header ─────────────────────────────────────────────────────────
+        hcol1, hcol2, hcol3 = st.columns([5, 1, 1])
+        with hcol1:
+            st.subheader(f"{icon} {name}")
+            st.caption(f"{label} · {run['created_at'][:10]} · {dur} · {conc or status}")
+        with hcol2:
+            st.link_button("View on GitHub", run_url, use_container_width=True)
+        with hcol3:
+            if st.button("✕ Close tab", key=f"close_{run_id}", use_container_width=True):
+                st.session_state.pinned_runs.remove(run_id)
+                st.rerun()
 
-if not all_runs:
-    st.info("No runs yet. Trigger a pipeline above.")
-else:
-    for run in all_runs:
-        run_id     = run["id"]
-        status     = run["status"]
-        conclusion = run.get("conclusion")
-        icon       = status_icon(status, conclusion)
-        label      = run.get("_workflow_label", "")
-        created    = run["created_at"][:10]
-        duration   = fmt_duration(run["created_at"], run.get("updated_at"))
-        run_url    = run["html_url"]
+        st.divider()
 
-        # Try to get sector name from run inputs (available via API)
-        display_name = run.get("display_title") or run.get("name") or f"Run {run_id}"
+        # ── Status card ────────────────────────────────────────────────────────
+        if status == "completed" and conc == "success":
+            st.success("✅ Run completed successfully")
 
-        with st.container(border=True):
-            head_col, action_col = st.columns([4, 1])
+            artifacts = get_artifacts(run_id)
+            excel_arts = [a for a in artifacts if a["name"] in ("pe-sourcing-results", "lift-maintenance-excel")]
 
-            with head_col:
-                st.markdown(f"**{icon} {display_name}**  `{label}`")
-                status_text = conclusion or status
-                st.caption(f"{created}  ·  {duration}  ·  {status_text}")
+            if excel_arts:
+                art = excel_arts[0]
+                size_kb = art["size_in_bytes"] // 1024
+                st.markdown(f"**📊 Excel report ready** — {art['name']} ({size_kb} KB)")
+                if st.button(f"⬇ Download Excel", key=f"dl_{run_id}", type="primary"):
+                    with st.spinner("Downloading from GitHub…"):
+                        data = download_artifact(art["id"])
+                    if data:
+                        st.download_button(
+                            label="💾 Save to your computer",
+                            data=data,
+                            file_name=f"PE_Sourcing_{run['created_at'][:10]}.zip",
+                            mime="application/zip",
+                            key=f"save_{run_id}",
+                        )
+            else:
+                st.info("No Excel artifact found — it may have expired (30-day retention).")
 
-            with action_col:
-                # Cancel button for in-progress runs
-                if status in ("in_progress", "queued"):
-                    if st.button("Cancel", key=f"cancel_{run_id}", use_container_width=True):
-                        if cancel_run(run_id):
-                            st.success("Cancelling…")
-                            time.sleep(2)
-                            st.rerun()
+        elif status == "completed" and conc in ("failure", "timed_out"):
+            st.error(f"❌ Run failed ({conc}). [Check logs on GitHub →]({run_url})")
+            st.info("GitHub Actions logs will show what went wrong. You can re-trigger from New Search.")
 
-                # Download button for successful runs
-                if status == "completed" and conclusion == "success":
-                    artifacts = get_artifacts(run_id)
-                    excel_artifacts = [a for a in artifacts if not a["expired"] and
-                                       a["name"] in ("pe-sourcing-results", "lift-maintenance-excel")]
-                    if excel_artifacts:
-                        art = excel_artifacts[0]
-                        if st.button("⬇ Download", key=f"dl_{run_id}", use_container_width=True, type="primary"):
-                            with st.spinner("Downloading…"):
-                                data = download_artifact(art["id"])
-                            if data:
-                                st.download_button(
-                                    label="💾 Save Excel",
-                                    data=data,
-                                    file_name=f"PE_Sourcing_{created}.zip",
-                                    mime="application/zip",
-                                    key=f"save_{run_id}",
-                                )
+        elif status == "completed" and conc == "cancelled":
+            st.warning("🚫 Run was cancelled.")
 
-            # Progress bar for running jobs
-            if status == "in_progress":
-                st.progress(0.0, text="Running… (auto-refresh to update)")
+        elif status in ("queued", "in_progress"):
+            st.info(f"⏳ Run is **{status}** — this window auto-refreshes every 30s.")
+            st.progress(0.0, text="Running on GitHub's servers in the background…")
+            st.markdown(f"[Watch live logs on GitHub →]({run_url})")
 
-            # GitHub link
-            st.markdown(f"[View on GitHub →]({run_url})")
+            # Cancel button
+            if st.button("🛑 Cancel this run", key=f"cancel_{run_id}"):
+                cancel_run(run_id)
+                st.warning("Cancellation requested…")
+                time.sleep(3)
+                st.cache_data.clear()
+                st.rerun()
+
+        # ── Run metadata ───────────────────────────────────────────────────────
+        with st.expander("Run details"):
+            st.json({
+                "run_id":     run_id,
+                "status":     status,
+                "conclusion": conc,
+                "started":    run.get("created_at"),
+                "updated":    run.get("updated_at"),
+                "duration":   dur,
+                "github_url": run_url,
+                "workflow":   run.get("_workflow_label", ""),
+            })
 
 
-# ── Auto-refresh for active runs ───────────────────────────────────────────────
-has_active = any(r["status"] in ("in_progress", "queued") for r in all_runs)
+# ── Auto-refresh if any run is still active ────────────────────────────────────
+has_active = any(
+    run_lookup.get(rid, {}).get("status") in ("queued", "in_progress")
+    for rid in pinned
+)
 if has_active:
-    st.info("⏳ A run is in progress. This page will refresh automatically every 30 seconds.")
     time.sleep(30)
+    st.cache_data.clear()
     st.rerun()
