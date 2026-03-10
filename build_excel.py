@@ -1142,6 +1142,7 @@ def build_competitors(wb, companies):
         ("Group",                  7),
         ("Acq. Fit",               9),
         ("Sell Intent",           10),
+        ("Website",               32),
         ("Competitor Services",   52),
         ("Services Not in Target", 52),
     ]
@@ -1260,7 +1261,19 @@ def build_competitors(wb, companies):
             cell(ws, row, 14, si_score if si_score is not None else "-",
                               bg=row_bg, align="center", size=8)
 
-            # Competitor services — prefer web-sourced description, fall back to SIC labels
+            # Website URL (col 15)
+            website_url = comp.get("website_url", "")
+            if website_url:
+                cx_web = ws.cell(row=row, column=15, value=website_url)
+                cx_web.font      = Font(name="Arial", size=8, color="0563C1", underline="single")
+                cx_web.alignment = Alignment(horizontal="left", vertical="center")
+                cx_web.border    = THIN
+                if row_bg:
+                    cx_web.fill = row_bg
+            else:
+                cell(ws, row, 15, "—", bg=row_bg, fg="888888", align="center", size=8)
+
+            # Competitor services (col 16) — prefer web-sourced description, fall back to SIC labels
             web_desc = comp.get("services_description", "")
             if web_desc and len(web_desc) >= 20:
                 services_text = web_desc
@@ -1268,19 +1281,19 @@ def build_competitors(wb, companies):
                 services_text = "  |  ".join(comp_services)
             else:
                 services_text = "-"
-            cell(ws, row, 15, services_text, bg=row_bg, size=8, wrap=True)
+            cell(ws, row, 16, services_text, bg=row_bg, size=8, wrap=True)
 
-            # Gap services — what competitor does that target does NOT
+            # Gap services (col 17) — what competitor does that target does NOT
             if gap_labels:
                 gap_text = "  |  ".join(gap_labels)
-                cx_gap = ws.cell(row=row, column=16, value=gap_text)
+                cx_gap = ws.cell(row=row, column=17, value=gap_text)
                 cx_gap.fill      = fill("FFE0B2")   # orange — highlights opportunity/threat
                 cx_gap.font      = Font(name="Arial", size=8, bold=True, color="7B3F00")
                 cx_gap.alignment = Alignment(horizontal="left", vertical="center",
                                              wrap_text=True)
                 cx_gap.border    = THIN
             else:
-                cell(ws, row, 16, "—  same services", bg=row_bg, fg="888888",
+                cell(ws, row, 17, "—  same services", bg=row_bg, fg="888888",
                      size=8, align="center")
 
             # Auto-height for wrapped rows
