@@ -23,6 +23,208 @@ from openpyxl.comments import Comment
 
 import config as cfg
 
+# ── Lazy module imports (only loaded when needed by _normalise) ───────────────
+_ch_enrich    = None
+_sell_signals = None
+
+def _lazy_ch_enrich():
+    global _ch_enrich
+    if _ch_enrich is None:
+        try:
+            import ch_enrich as _m
+            _ch_enrich = _m
+        except Exception:
+            pass
+    return _ch_enrich
+
+def _lazy_sell_signals():
+    global _sell_signals
+    if _sell_signals is None:
+        try:
+            import sell_signals as _m
+            _sell_signals = _m
+        except Exception:
+            pass
+    return _sell_signals
+
+
+# ── Schema normaliser — adapts enrich_batch and live pipeline dicts ───────────
+
+def _normalise(c: dict) -> dict:
+    """
+    Ensure every company dict has the fields that build_*() functions expect,
+    regardless of whether it came from enrich_batch.py (sector OCR runs) or
+    the live run.py pipeline.
+
+    enrich_batch stores:  age_years, incorporation_date, family_business,
+                          sic1, age_est, succession_score (top-level), rev_base …
+    live pipeline stores: company_age_years, date_of_creation, is_family,
+                          sic_codes [], succession {dict}, sell_intent {dict} …
+    """
+    c = dict(c)  # shallow copy — don't mutate the original
+
+    # ── Basic field aliases ────────────────────────────────────────────────────
+    if not c.get("company_age_years"):
+        c["company_age_years"] = c.get("age_years", 0)
+    if not c.get("date_of_creation"):
+        c["date_of_creation"] = c.get("incorporation_date", "")
+    if c.get("is_family") is None:
+        c["is_family"] = bool(c.get("family_business", False))
+    if not c.get("sic_codes"):
+        sic1 = c.get("sic1")
+        c["sic_codes"] = [sic1] if sic1 else []
+    if not c.get("ch_url"):
+        cn = c.get("company_number", "")
+        if cn:
+            c["ch_url"] = (
+                f"https://find-and-update.company-information.service.gov.uk/company/{cn}"
+            )
+    # Ensure director_count is consistent with the directors list
+    if not c.get("director_count") and c.get("directors"):
+        c["director_count"] = len(c["directors"])
+
+    # ── Normalise director dicts ───────────────────────────────────────────────
+    # enrich_batch uses age_est (not age) and has no years_active / occupation
+    raw_dirs = c.get("directors", [])
+    norm_dirs = []
+    for d in raw_dirs:
+        nd = dict(d)
+        if nd.get("age") is None:
+            nd["age"] = nd.get("age_est")
+        if nd.get("years_active") is None:
+            appt_year = (nd.get("appointed") or "")[:4]
+            try:
+                nd["years_active"] = round(2026 - int(appt_year), 1) if len(appt_year) == 4 else 0
+            except (ValueError, TypeError):
+                nd["years_active"] = 0
+        if not nd.get("occupation"):
+            nd["occupation"] = nd.get("role", "")
+        norm_dirs.append(nd)
+    c["directors"] = norm_dirs
+
+    # ── Succession dict ────────────────────────────────────────────────────────
+    if not c.get("succession"):
+        che = _lazy_ch_enrich()
+        if che:
+            try:
+                ss = che.succession_score(norm_dirs)
+                c["succession"] = ss
+            except Exception:
+                pass
+        if not c.get("succession"):
+            # Minimal fallback from batch top-level fields
+            oldest = c.get("oldest_director_age") or max(
+                (d["age"] for d in norm_dirs if d.get("age")), default=0
+            )
+            avg = oldest  # rough proxy
+            c["succession"] = {
+                "total":   c.get("succession_score", 0),
+                "max_age": oldest or None,
+                "avg_age": avg or None,
+            }
+
+    # ── Dealability ────────────────────────────────────────────────────────────
+    if not c.get("dealability"):
+        charges = c.get("charges", {})
+        outstanding = charges.get("outstanding_charges", 0)
+        sc = 0
+        # Clean charge register signal
+        if outstanding == 0:
+            sc += 3
+        elif outstanding <= 2:
+            sc += 1
+        # Governance hire proxy: any director with a known occupation/role
+        if any(d.get("occupation") or d.get("role") for d in norm_dirs):
+            sc += 1
+        c["dealability"] = {
+            "score":        min(sc, 20),
+            "signals":      [],
+            "signal_count": 0,
+            "data_tier":    "Tier 4 — derived from charges",
+        }
+
+    # ── Acquisition score ──────────────────────────────────────────────────────
+    if c.get("acquisition_score") is None:
+        che = _lazy_ch_enrich()
+        if che:
+            try:
+                pe  = bool(c.get("pe_backed"))
+                acq = che.acquisition_score(
+                    int(c.get("company_age_years", 0)),
+                    c["succession"],
+                    pe,
+                    c["dealability"],
+                    c.get("charges", {}),
+                )
+                c["acquisition_score"] = acq["total"]
+                c["acquisition_grade"] = che.grade(acq["total"])
+                c["acq_components"]    = acq
+            except Exception:
+                pass
+        if c.get("acquisition_score") is None:
+            c["acquisition_score"] = 0
+            c["acquisition_grade"] = ""
+            c["acq_components"]    = {}
+
+    # ── Sell Intent (offline — no API calls) ───────────────────────────────────
+    if not c.get("sell_intent"):
+        _ss = _lazy_sell_signals()
+        if _ss:
+            try:
+                a = _ss.age_tenure_score(norm_dirs)
+                b = _ss.structure_score(norm_dirs)
+                d = _ss.maturity_score(int(c.get("company_age_years", 0)))
+                # Operational stress proxy: use outstanding charges (no API)
+                outstanding = c.get("charges", {}).get("outstanding_charges", 0)
+                stress_sc = min(15, outstanding * 5)
+                total = min(a["score"] + b["score"] + stress_sc + d["score"], 100)
+                if   total >= 70: band = "Strong"
+                elif total >= 50: band = "Moderate"
+                elif total >= 30: band = "Weak"
+                else:             band = "Low"
+                e = _ss.seller_likelihood_score(c, c.get("company_number", ""))
+                c["sell_intent"] = {
+                    "sell_intent_score":       total,
+                    "sell_intent_band":        band,
+                    "sell_signals":            a["signals"] + b["signals"] + d["signals"],
+                    "signal_count":            len(a["signals"]) + len(b["signals"]) + len(d["signals"]),
+                    "seller_likelihood":       e.get("seller_likelihood", "Low"),
+                    "seller_likelihood_score": e.get("seller_likelihood_score", 0),
+                    "seller_signals":          e.get("seller_signals", []),
+                    "components": {
+                        "age_tenure":         a,
+                        "business_structure": b,
+                        "company_maturity":   d,
+                        "operational_stress": {"score": stress_sc, "signals": [], "data_tier": "Tier 4 — charges proxy"},
+                        "seller_likelihood":  e,
+                    },
+                    "data_tier": "Tier 4 — offline derived (no operational-stress API call)",
+                }
+            except Exception:
+                c["sell_intent"] = {}
+        else:
+            c["sell_intent"] = {}
+
+    # ── Estimated employees ────────────────────────────────────────────────────
+    if c.get("estimated_employees") is None:
+        bs  = c.get("bs") or c.get("financials", {}).get("balance_sheet", {}) or {}
+        fin = c.get("financials") or {}
+        rev = (fin.get("revenue_estimate") or {}).get("revenue_base") or c.get("rev_base")
+        emp = bs.get("total_employees")
+        if emp and emp > 0:
+            c["estimated_employees"]        = int(emp)
+            c["estimated_employees_source"] = "Tier 1 — filed accounts"
+        else:
+            sc = bs.get("staff_costs")
+            if sc and sc > 0:
+                c["estimated_employees"]        = max(1, round(sc / 35_000))
+                c["estimated_employees_source"] = "Tier 4 — staff costs ÷ £35k"
+            elif rev and rev > 0:
+                c["estimated_employees"]        = max(1, round(rev / 80_000))
+                c["estimated_employees_source"] = "Tier 4 — revenue ÷ £80k"
+
+    return c
+
 # ── Colour palette ─────────────────────────────────────────────────────────
 NAVY   = "1F3864"
 BLUE   = "2E75B6"
@@ -80,8 +282,10 @@ def cell(ws, row, col, value, bg=None, fg="000000", bold=False,
          align="left", wrap=False, size=9, border=True):
     c = ws.cell(row=row, column=col, value=value)
     if bg:
-        c.fill = fill(bg)
-    c.font = Font(name="Arial", size=size, bold=bold, color=fg)
+        # bg may already be a PatternFill object (e.g. from sell_intent_fill)
+        # or a plain hex string — handle both
+        c.fill = bg if isinstance(bg, PatternFill) else fill(bg)
+    c.font = Font(name="Arial", size=size, bold=bold, color=fg or "000000")
     c.alignment = Alignment(horizontal=align, vertical="center", wrap_text=wrap)
     if border:
         c.border = THIN
@@ -275,7 +479,7 @@ def build_pipeline(wb, companies):
         srl = dh.get("sector_relevance_label", "Unverified")
         srs = dh.get("sector_relevance_score", 0)
         sector_fill_map = {
-            "Confirmed":  GREEN,
+            "Confirmed":  fill(GREEN),
             "Likely":     fill("FFF2CC"),
             "Uncertain":  fill("FFD6D6"),
             "Unverified": fill("EEEEEE"),
@@ -433,11 +637,12 @@ def build_pipeline(wb, companies):
                     trend_symbol = "→"
         trend_bg = fill("E2EFDA") if trend_symbol == "↑" else (
                    fill("FFD6D6") if trend_symbol == "↓" else
-                   fill("FFF2CC") if trend_symbol == "→" else bg)
+                   fill("FFF2CC") if trend_symbol == "→" else
+                   (fill(bg) if isinstance(bg, str) else bg) if bg else fill("EEEEEE"))
         trend_color = "1A5C2C" if trend_symbol == "↑" else (
                       "7B0000" if trend_symbol == "↓" else "7B5B00")
         cx_tr = ws.cell(row=row, column=39, value=trend_symbol)
-        cx_tr.fill      = trend_bg or fill("EEEEEE")
+        cx_tr.fill      = trend_bg if trend_bg else fill("EEEEEE")
         cx_tr.font      = Font(name="Arial", size=12, bold=True, color=trend_color)
         cx_tr.alignment = Alignment(horizontal="center", vertical="center")
         cx_tr.border    = THIN
@@ -1025,7 +1230,7 @@ def build_digital_health(wb, companies):
 
         # Colour-code the sector match label
         match_fill = {
-            "Confirmed":  GREEN,
+            "Confirmed":  fill(GREEN),
             "Likely":     fill("FFF2CC"),   # soft yellow
             "Uncertain":  fill("FFD6D6"),   # light red
             "Unverified": fill("EEEEEE"),   # grey
@@ -1415,7 +1620,7 @@ def build_competitors(wb, companies):
                 cx_web.alignment = Alignment(horizontal="left", vertical="center")
                 cx_web.border    = THIN
                 if row_bg:
-                    cx_web.fill = row_bg
+                    if row_bg: cx_web.fill = row_bg if isinstance(row_bg, PatternFill) else fill(row_bg)
             else:
                 cell(ws, row, 15, "—", bg=row_bg, fg="888888", align="center", size=8)
 
@@ -1578,7 +1783,7 @@ def build_overview(wb, companies):
             cx_web.alignment = Alignment(horizontal="left", vertical="center")
             cx_web.border    = THIN
             if bg:
-                cx_web.fill = bg
+                if bg: cx_web.fill = bg if isinstance(bg, PatternFill) else fill(bg)
         else:
             cell(ws, row, 3, website or "—", bg=bg, fg="AAAAAA" if not website_live else None, size=8)
 
@@ -1658,7 +1863,7 @@ def build_overview(wb, companies):
             cx_ch.alignment = Alignment(horizontal="center", vertical="center")
             cx_ch.border    = THIN
             if bg:
-                cx_ch.fill = bg
+                if bg: cx_ch.fill = bg if isinstance(bg, PatternFill) else fill(bg)
         else:
             cell(ws, row, 17, "—", bg=bg, align="center", size=8)
 
@@ -1676,6 +1881,15 @@ def run():
     enriched_path = os.path.join(cfg.OUTPUT_DIR, cfg.ENRICHED_JSON)
     with open(enriched_path) as f:
         companies = json.load(f)
+
+    # Normalise all company records to a consistent schema before building
+    # sheets.  This fills in computed fields (succession, sell_intent,
+    # acquisition_score, estimated_employees …) for records that came from
+    # enrich_batch.py (sector OCR runs) which only carry raw CH data.
+    companies = [_normalise(c) for c in companies]
+
+    # Re-sort by acquisition_score now that every company has one
+    companies.sort(key=lambda x: x.get("acquisition_score", 0), reverse=True)
 
     bolt_on_path = os.path.join(cfg.OUTPUT_DIR, "bolt_on_analysis.json")
     bolt_on_data = {}
