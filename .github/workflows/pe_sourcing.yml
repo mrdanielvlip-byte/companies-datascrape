@@ -1,0 +1,129 @@
+name: PE Deal Sourcing — Sector Search
+
+on:
+  workflow_dispatch:
+    inputs:
+      sector:
+        description: 'Sector description (e.g. "fire safety", "HVAC contractors", "pest control")'
+        required: true
+        default: 'lift maintenance'
+      mode:
+        description: 'Report depth'
+        required: false
+        default: 'quick'
+        type: choice
+        options:
+          - quick
+          - full
+      region:
+        description: 'UK region filter (leave blank for all UK)'
+        required: false
+        default: ''
+      min_revenue:
+        description: 'Minimum estimated revenue (e.g. 500000)'
+        required: false
+        default: ''
+      notify_email:
+        description: 'Email address to send results to'
+        required: false
+        default: 'daniellipinski@mac.com'
+
+jobs:
+  pe-search:
+    name: PE Sector Search — ${{ inputs.sector }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      # ── 1. Checkout ───────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Python dependencies ────────────────────────────────────────────────
+      - name: Install Python packages
+        run: |
+          pip install --upgrade pip
+          pip install requests openpyxl python-dateutil PyMuPDF
+
+      # ── 3. Write CH API key ───────────────────────────────────────────────────
+      - name: Write API key
+        run: echo "COMPANIES_HOUSE_API_KEY=${{ secrets.CH_API_KEY }}" > .ch_api_key
+
+      # ── 4. Build output directory ─────────────────────────────────────────────
+      - name: Prepare output directory
+        run: mkdir -p output
+
+      # ── 5. Run pipeline ───────────────────────────────────────────────────────
+      - name: Run PE sourcing pipeline
+        env:
+          COMPANIES_HOUSE_API_KEY: ${{ secrets.CH_API_KEY }}
+          SECTOR_REGION: ${{ inputs.region }}
+          SECTOR_MIN_REVENUE: ${{ inputs.min_revenue }}
+        run: |
+          MODE_FLAG="--${{ inputs.mode }}"
+          SECTOR="${{ inputs.sector }}"
+
+          echo "Running pipeline for: $SECTOR (mode: ${{ inputs.mode }})"
+          python3 run.py --sector "$SECTOR" $MODE_FLAG
+
+      # ── 6. Upload Excel artifact ──────────────────────────────────────────────
+      - name: Upload Excel output
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pe-sourcing-results
+          path: output/*.xlsx
+          retention-days: 30
+          overwrite: true
+
+      # ── 7. Send completion email via Resend ───────────────────────────────────
+      - name: Send completion email
+        if: always()
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          python3 - <<'EOF'
+          import os, json, urllib.request, urllib.error
+
+          api_key      = os.environ.get("RESEND_API_KEY", "")
+          notify_email = "${{ inputs.notify_email }}" or "daniellipinski@mac.com"
+
+          if not api_key:
+              print("[notify] RESEND_API_KEY not set — skipping email")
+              raise SystemExit(0)
+
+          run_id  = "${{ github.run_id }}"
+          repo    = "${{ github.repository }}"
+          sector  = "${{ inputs.sector }}"
+          mode    = "${{ inputs.mode }}"
+          status  = "${{ job.status }}"
+          run_url = f"https://github.com/{repo}/actions/runs/{run_id}"
+
+          payload = {
+              "from":    "PE Deal Sourcing <onboarding@resend.dev>",
+              "to":      [notify_email],
+              "subject": f"✅ {sector.title()} — Deal Sourcing Report Ready ({status})",
+              "text": (
+                  f"Your {sector} intelligence report has finished.\n\n"
+                  f"Mode: {mode}  |  Status: {status}\n\n"
+                  f"DOWNLOAD YOUR EXCEL:\n{run_url}\n\n"
+                  f"→ Open the link → scroll to bottom → click 'pe-sourcing-results'\n\n"
+                  f"Run ID: {run_id}\n"
+                  f"— PE Deal Sourcing Pipeline\n"
+              ),
+          }
+
+          data = json.dumps(payload).encode()
+          req  = urllib.request.Request(
+              "https://api.resend.com/emails",
+              data=data,
+              headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+              method="POST",
+          )
+          try:
+              resp = urllib.request.urlopen(req, timeout=30)
+              body = json.loads(resp.read())
+              print(f"[notify] ✅ Email sent to {notify_email}  (id: {body.get('id')})")
+          except urllib.error.HTTPError as e:
+              print(f"[notify] ❌ Resend error {e.code}: {e.read().decode()}")
+          EOF
