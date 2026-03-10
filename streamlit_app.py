@@ -381,9 +381,32 @@ for tab_idx, run_id in enumerate(pinned):
             st.warning("🚫 Run was cancelled.")
 
         elif status in ("queued", "in_progress"):
-            st.info(f"⏳ Run is **{status}** — this window auto-refreshes every 30s.")
-            st.progress(0.0, text="Running on GitHub's servers in the background…")
-            st.markdown(f"[Watch live logs on GitHub →]({run_url})")
+            # ── Estimated progress bar ─────────────────────────────────────────
+            is_deep   = run.get("_workflow_label", "") == "Deep OCR"
+            est_mins  = 330 if is_deep else 90          # expected total minutes
+            est_secs  = est_mins * 60
+
+            started_str = run.get("run_started_at") or run.get("created_at", "")
+            if started_str and status == "in_progress":
+                try:
+                    started_dt  = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
+                    elapsed_sec = (datetime.now(timezone.utc) - started_dt).total_seconds()
+                    progress    = min(elapsed_sec / est_secs, 0.97)   # cap at 97% until done
+                    elapsed_min = int(elapsed_sec // 60)
+                    remain_min  = max(0, int((est_secs - elapsed_sec) // 60))
+                    bar_text    = (
+                        f"~{elapsed_min} min elapsed · ~{remain_min} min remaining "
+                        f"(estimated {est_mins} min total)"
+                    )
+                except Exception:
+                    progress, bar_text = 0.05, "Starting up…"
+            elif status == "queued":
+                progress, bar_text = 0.02, "Queued — waiting for a GitHub Actions runner…"
+            else:
+                progress, bar_text = 0.05, "Starting up…"
+
+            st.progress(progress, text=bar_text)
+            st.caption(f"Auto-refreshes every 30 s &nbsp;·&nbsp; [Watch live logs on GitHub →]({run_url})")
 
             # Cancel button
             if st.button("🛑 Cancel this run", key=f"cancel_{run_id}"):
