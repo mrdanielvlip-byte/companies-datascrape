@@ -27,6 +27,8 @@ extracted/
 
 # Database files
 *.db
+*.duckdb
+*.duckdb.wal
 *.sqlite
 *.sqlite3
 
