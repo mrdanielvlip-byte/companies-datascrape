@@ -490,7 +490,7 @@ def enrich_financials(company: dict) -> dict:
     # ── PE triangulation model (sector-aware, multi-signal) ──────────────────
     pe_input = {
         "company_name":    company.get("company_name", ""),
-        "sic1":            company.get("sic1") or company.get("sic_codes", [None])[0],
+        "sic1":            company.get("sic1") or (company.get("sic_codes") or [None])[0],
         "employees":       employees,
         "total_assets":    bs.get("total_assets"),
         "net_assets":      (bs.get("total_assets") or 0) - (bs.get("total_liabilities") or 0)
