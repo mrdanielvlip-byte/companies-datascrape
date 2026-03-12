@@ -411,7 +411,7 @@ PIPELINE_COLS = [
     ("Age", 7), ("Dirs", 5), ("Max Age", 8), ("Avg Age", 8),
     ("Succ.", 7), ("Deal.", 7), ("Acq. Score", 10), ("Grade", 10),
     ("Sell Intent", 10), ("SI Band", 10),
-    ("PE", 5), ("Family", 6),
+    ("Corp. Owner", 10), ("Owner Name", 35), ("PE Likelihood", 12), ("Family", 6),
     ("Scale", 7), ("Market", 7), ("Own./Succ.", 10), ("Dealability", 11),
     ("Charges", 8), ("Contracts", 9), ("Digital", 9), ("Accreds", 8), ("SIC", 22),
     ("Director", 28), ("Email", 36), ("Email Conf.", 12), ("Director LinkedIn", 40),
@@ -462,8 +462,18 @@ PIPELINE_COL_NOTES = [
     "  Source: sell_signals.py → sell_intent_score()",
     "SI Band: Sell Intent banding.\n"
     "  Hot = 70–100 | Warm = 45–69 | Watchlist = 25–44 | Cold = <25",
-    "PE: ✓ if company shows signs of PE backing (investor in name, group structure).\n"
-    "  PE-backed companies are deprioritised as acquisition targets.",
+    "Corp. Owner: Yes if the company is owned by a corporate entity (not just individuals).\n"
+    "  Source: Companies House PSC (Persons with Significant Control) register.\n"
+    "  Corporate ownership may indicate group structure, PE, or holding company.",
+    "Owner Name: Name of the corporate entity that controls this company.\n"
+    "  Source: Companies House PSC register. Shows the first corporate PSC.\n"
+    "  The holding company is also looked up on CH to check its own PSC chain.",
+    "PE Likelihood: Probability of PE/VC ownership.\n"
+    "  High (red) = Strong PE indicators (fund name, LP structure, upstream PE).\n"
+    "  Medium (amber) = Moderate indicators (investment co, capital in name).\n"
+    "  Low (blue) = Weak signals (holdings, generic investment terms).\n"
+    "  None = No PE signals detected.\n"
+    "  Analysis: PSC name patterns + holding co CH lookup + holding co SIC codes + OCR text scan.",
     "Family: ✓ if likely family-owned (shared surname directors, long tenures, small board).\n"
     "  Family businesses score higher on succession dimension.",
     "Scale (weighted 0–30): Scale & Financial dimension of Acquisition Score.\n"
@@ -641,28 +651,45 @@ def build_pipeline(wb, companies):
             cx.alignment = Alignment(horizontal="center", vertical="center")
             cx.border    = THIN
 
-        cell(ws, row, 16, "⚠" if c.get("pe_backed") else "-",
-             bg=RED if c.get("pe_backed") else bg, align="center")
-        cell(ws, row, 17, "✓" if c.get("is_family") else "-",
+        # Col 16 — Corporate Owner (Yes/No)
+        corp_owner = c.get("corporate_owner", False)
+        cell(ws, row, 16, "Yes" if corp_owner else "No",
+             bg=fill("FFF2CC") if corp_owner else bg, align="center", size=9)
+
+        # Col 17 — Owner Name
+        owner_name = c.get("owner_name") or "-"
+        cell(ws, row, 17, owner_name, bg=bg, size=8, wrap=True)
+
+        # Col 18 — PE Likelihood (High/Medium/Low/None)
+        pe_like = c.get("pe_likelihood", "None")
+        pe_bg = RED if pe_like == "High" else (
+                fill("FFF2CC") if pe_like == "Medium" else
+                fill("E8F4FD") if pe_like == "Low" else bg)
+        pe_fg = "FFFFFF" if pe_like == "High" else ("7B5B00" if pe_like == "Medium" else "000000")
+        cell(ws, row, 18, pe_like, bg=pe_bg, align="center", size=9,
+             bold=(pe_like in ("High", "Medium")), fg=pe_fg)
+
+        # Col 19 — Family
+        cell(ws, row, 19, "✓" if c.get("is_family") else "-",
              bg=GREEN if c.get("is_family") else bg, align="center")
 
-        cell(ws, row, 18, comp.get("scale_financial", 0),       bg=bg, align="center")
-        cell(ws, row, 19, comp.get("market_attractiveness", 0), bg=bg, align="center")
-        cell(ws, row, 20, comp.get("ownership_succession", 0),  bg=bg, align="center")
-        cell(ws, row, 21, comp.get("dealability", 0),           bg=bg, align="center")
-        cell(ws, row, 22, ch.get("outstanding_charges", "-"),   bg=bg, align="center")
+        cell(ws, row, 20, comp.get("scale_financial", 0),       bg=bg, align="center")
+        cell(ws, row, 21, comp.get("market_attractiveness", 0), bg=bg, align="center")
+        cell(ws, row, 22, comp.get("ownership_succession", 0),  bg=bg, align="center")
+        cell(ws, row, 23, comp.get("dealability", 0),           bg=bg, align="center")
+        cell(ws, row, 24, ch.get("outstanding_charges", "-"),   bg=bg, align="center")
         # Contracts found
         cf = gc.get("contracts_found")
-        cell(ws, row, 23, cf if cf is not None else "-",        bg=GREEN if cf else bg, align="center")
+        cell(ws, row, 25, cf if cf is not None else "-",        bg=GREEN if cf else bg, align="center")
         # Digital score
         ds = dh.get("digital_health_score")
-        cell(ws, row, 24, ds if ds is not None else "-",        bg=bg, align="center")
+        cell(ws, row, 26, ds if ds is not None else "-",        bg=bg, align="center")
         # Accreditation count
         ac_n = ac.get("accreditation_count")
-        cell(ws, row, 25, ac_n if ac_n is not None else "-",    bg=GREEN if ac_n else bg, align="center")
-        cell(ws, row, 26, ", ".join(c.get("sic_codes", [])),    bg=bg, size=8)
+        cell(ws, row, 27, ac_n if ac_n is not None else "-",    bg=GREEN if ac_n else bg, align="center")
+        cell(ws, row, 28, ", ".join(c.get("sic_codes", [])),    bg=bg, size=8)
 
-        # ── Director email + LinkedIn (cols 27–29) ────────────────────────────
+        # ── Director email + LinkedIn (cols 29–32) ────────────────────────────
         contacts  = c.get("contacts", {})
         directors = c.get("directors", [])
 
@@ -687,12 +714,12 @@ def build_pipeline(wb, companies):
 
         # Email cell — green if DNS-verified, amber if inferred, grey if missing
         email_bg = GREEN if email_verified else (fill("FFF2CC") if best_email else fill("EEEEEE"))
-        cell(ws, row, 27, dir_name,    bg=bg, size=8)
-        cell(ws, row, 28, best_email,  bg=email_bg, size=8)
-        cell(ws, row, 29, email_conf,  bg=email_bg, align="center", size=8)
-        cell(ws, row, 30, dir_linkedin, bg=bg, size=8)
+        cell(ws, row, 29, dir_name,    bg=bg, size=8)
+        cell(ws, row, 30, best_email,  bg=email_bg, size=8)
+        cell(ws, row, 31, email_conf,  bg=email_bg, align="center", size=8)
+        cell(ws, row, 32, dir_linkedin, bg=bg, size=8)
 
-        # ── Cols 31–33: Nearest 3 competitors ─────────────────────────────────
+        # ── Cols 33–35: Nearest 3 competitors ─────────────────────────────────
         comp_map = (c.get("competitor_analysis") or {}).get("competitor_map", [])
         for ci_off, comp_entry in enumerate(comp_map[:3]):
             cname = comp_entry.get("company_name", "")
@@ -704,9 +731,9 @@ def build_pipeline(wb, companies):
                 label = f"{cname} ({band})" if cname else ""
             is_pe = comp_entry.get("is_pe_backed", False)
             comp_bg = fill("FFD6D6") if is_pe else (ALT if i % 2 == 0 else None)
-            cell(ws, row, 31 + ci_off, label, bg=comp_bg, size=8, wrap=False)
+            cell(ws, row, 33 + ci_off, label, bg=comp_bg, size=8, wrap=False)
 
-        # ── Cols 34–46: Financial intelligence ────────────────────────────────
+        # ── Cols 36+: Financial intelligence ─────────────────────────────────
         emp       = c.get("estimated_employees")
         emp_src   = c.get("estimated_employees_source", "")
         # Revenue: try nested financials dict first (live pipeline),
@@ -721,42 +748,41 @@ def build_pipeline(wb, companies):
         conf      = rev_est.get("confidence") or c.get("confidence", "")
         hist      = c.get("accounts_history") or fin.get("accounts_history") or []
 
-        # Col 34 — Employees (green if Tier 1, amber if estimated)
+        # Col 36 — Employees (green if Tier 1, amber if estimated)
         emp_bg = GREEN if emp_src.startswith("Tier 1") else (fill("FFF2CC") if emp else bg)
-        cell(ws, row, 34, emp if emp is not None else "-", bg=emp_bg, align="center", size=9,
+        cell(ws, row, 36, emp if emp is not None else "-", bg=emp_bg, align="center", size=9,
              bold=emp_src.startswith("Tier 1"))
 
-        # Col 35 — Employee source
-        cell(ws, row, 35, emp_src, bg=bg, size=7)
+        # Col 37 — Employee source
+        cell(ws, row, 37, emp_src, bg=bg, size=7)
 
-        # Col 36 — Employee delta (3-year change: +5, -3, etc.)
+        # Col 38 — Employee delta (3-year change: +5, -3, etc.)
         emp_delta_label = c.get("employee_delta_label")
         emp_delta_val   = c.get("employee_delta")
         if emp_delta_label:
             delta_bg = fill("E2EFDA") if emp_delta_val > 0 else (
                        fill("FFD6D6") if emp_delta_val < 0 else bg)
-            cell(ws, row, 36, emp_delta_label, bg=delta_bg, align="center", size=9, bold=True)
+            cell(ws, row, 38, emp_delta_label, bg=delta_bg, align="center", size=9, bold=True)
         else:
-            cell(ws, row, 36, "-", bg=bg, align="center", size=9)
+            cell(ws, row, 38, "-", bg=bg, align="center", size=9)
 
-        # Cols 37–39 — Revenue Low / Base / High
+        # Cols 39–41 — Revenue Low / Base / High
         def rev_str(v):
             return f"£{v:,.0f}" if v else "-"
-        cell(ws, row, 37, rev_str(rev_low),  bg=bg, align="right", size=9)
-        cx_rev = ws.cell(row=row, column=38, value=rev_str(rev_base))
+        cell(ws, row, 39, rev_str(rev_low),  bg=bg, align="right", size=9)
+        cx_rev = ws.cell(row=row, column=40, value=rev_str(rev_base))
         cx_rev.font      = Font(name="Arial", size=9, bold=True)
         cx_rev.alignment = Alignment(horizontal="right", vertical="center")
         cx_rev.border    = THIN
         cx_rev.fill      = fill("E8F4FD") if rev_base else (bg or fill("FFFFFF"))
-        cell(ws, row, 39, rev_str(rev_high), bg=bg, align="right", size=9)
+        cell(ws, row, 41, rev_str(rev_high), bg=bg, align="right", size=9)
 
-        # Col 40 — Revenue trend (derived from accounts history net_assets if available,
-        #           otherwise from est revenue confidence direction indicator)
+        # Col 42 — Revenue trend
         trend_symbol = "?"
         if len(hist) >= 2:
             na_vals = [h.get("net_assets") for h in hist if h.get("net_assets") is not None]
             if len(na_vals) >= 2:
-                diff = na_vals[0] - na_vals[-1]   # most recent vs oldest
+                diff = na_vals[0] - na_vals[-1]
                 pct  = diff / abs(na_vals[-1]) * 100 if na_vals[-1] else 0
                 if pct > 5:
                     trend_symbol = "↑"
@@ -770,17 +796,16 @@ def build_pipeline(wb, companies):
                    (fill(bg) if isinstance(bg, str) else bg) if bg else fill("EEEEEE"))
         trend_color = "1A5C2C" if trend_symbol == "↑" else (
                       "7B0000" if trend_symbol == "↓" else "7B5B00")
-        cx_tr = ws.cell(row=row, column=40, value=trend_symbol)
+        cx_tr = ws.cell(row=row, column=42, value=trend_symbol)
         cx_tr.fill      = trend_bg if trend_bg else fill("EEEEEE")
         cx_tr.font      = Font(name="Arial", size=12, bold=True, color=trend_color)
         cx_tr.alignment = Alignment(horizontal="center", vertical="center")
         cx_tr.border    = THIN
 
-        # Col 41 — EBITDA estimate
-        cell(ws, row, 41, rev_str(ebitda), bg=bg, align="right", size=9)
+        # Col 43 — EBITDA estimate
+        cell(ws, row, 43, rev_str(ebitda), bg=bg, align="right", size=9)
 
-        # Col 42 — EBITDA %
-        # "Actual (Tier 1)" means OCR found real turnover in filed accounts; otherwise estimated.
+        # Col 44 — EBITDA %
         is_actual = (conf == "Actual (Tier 1)" or
                      (c.get("rev_source") or "").startswith("Tier 1"))
         if ebitda and rev_base and rev_base > 0:
@@ -790,31 +815,31 @@ def build_pipeline(wb, companies):
         else:
             ebitda_pct_str = "-"
         ebitda_pct_bg = fill("E2EFDA") if is_actual else fill("FFF2CC") if ebitda_pct_str != "-" else bg
-        cell(ws, row, 42, ebitda_pct_str, bg=ebitda_pct_bg, align="center", size=8,
+        cell(ws, row, 44, ebitda_pct_str, bg=ebitda_pct_bg, align="center", size=8,
              bold=is_actual, fg="1A5C2C" if is_actual else "7B5B00" if ebitda_pct_str != "-" else "000000")
 
-        # Col 43 — Revenue confidence
+        # Col 45 — Revenue confidence
         conf_bg = fill("E2EFDA") if conf == "HIGH" else (
                   fill("FFF2CC") if conf == "MEDIUM" else
                   fill("FFD6D6") if conf == "LOW" else bg)
-        cell(ws, row, 43, conf, bg=conf_bg, align="center", size=8, bold=(conf == "HIGH"))
+        cell(ws, row, 45, conf, bg=conf_bg, align="center", size=8, bold=(conf == "HIGH"))
 
         # ── 3-year financial history from XBRL ──────────────────────────────
         rev_hist = c.get("revenue_history") or []
 
-        # Col 44 — Revenue growth % over 3 years
+        # Col 46 — Revenue growth % over 3 years
         rev_growth_label = c.get("revenue_growth_label")
         rev_growth_pct   = c.get("revenue_growth_pct")
         if rev_growth_label:
             rg_bg = fill("E2EFDA") if rev_growth_pct > 0 else (
                     fill("FFD6D6") if rev_growth_pct < 0 else bg)
             rg_fg = "1A5C2C" if rev_growth_pct > 0 else ("7B0000" if rev_growth_pct < 0 else "000000")
-            cell(ws, row, 44, rev_growth_label, bg=rg_bg, align="center", size=9, bold=True, fg=rg_fg)
+            cell(ws, row, 46, rev_growth_label, bg=rg_bg, align="center", size=9, bold=True, fg=rg_fg)
         else:
-            cell(ws, row, 44, "-", bg=bg, align="center", size=9)
+            cell(ws, row, 46, "-", bg=bg, align="center", size=9)
 
-        # Cols 45–47 — EBITDA £ for Yr1, Yr2, Yr3
-        for yi, col_off in enumerate([45, 46, 47]):
+        # Cols 47–49 — EBITDA £ for Yr1, Yr2, Yr3
+        for yi, col_off in enumerate([47, 48, 49]):
             if yi < len(rev_hist) and rev_hist[yi].get("ebitda") is not None:
                 ev = rev_hist[yi]["ebitda"]
                 e_label = f"£{ev:,.0f}" if ev >= 0 else f"-£{abs(ev):,.0f}"
@@ -823,8 +848,8 @@ def build_pipeline(wb, companies):
             else:
                 cell(ws, row, col_off, "-", bg=bg, align="center", size=8, fg="AAAAAA")
 
-        # Cols 48–50 — EBITDA % for Yr1, Yr2, Yr3
-        for yi, col_off in enumerate([48, 49, 50]):
+        # Cols 50–52 — EBITDA % for Yr1, Yr2, Yr3
+        for yi, col_off in enumerate([50, 51, 52]):
             if yi < len(rev_hist) and rev_hist[yi].get("ebitda_pct") is not None:
                 ep = rev_hist[yi]["ebitda_pct"]
                 ep_label = f"{ep:.1f}%"
@@ -834,9 +859,9 @@ def build_pipeline(wb, companies):
             else:
                 cell(ws, row, col_off, "-", bg=bg, align="center", size=8, fg="AAAAAA")
 
-        # Cols 51–56 — Last 3 years of accounts filings (period + type)
+        # Cols 53–58 — Last 3 years of accounts filings (period + type)
         for yr_idx in range(3):
-            base_col = 51 + yr_idx * 2
+            base_col = 53 + yr_idx * 2
             if yr_idx < len(hist):
                 h = hist[yr_idx]
                 period = (h.get("period_end") or "")[:7]   # YYYY-MM

@@ -117,24 +117,185 @@ def get_psc(company_number: str) -> list[dict]:
     return result
 
 
-# ── PE detection ──────────────────────────────────────────────────────────────
+# ── Ownership & PE detection ──────────────────────────────────────────────────
 
-PE_INDICATORS = [
-    "limited partnership", "l.p.", "llp", "holdings", "investment",
-    "equity", "capital", "fund", "partners", "venture", "finance",
-    "asset management", "private equity", "buyout",
+# Strong PE indicators — names that very likely indicate PE/VC ownership
+PE_STRONG = [
+    "private equity", "buyout", "venture capital", "leveraged",
+    "mezzanine", "growth equity", "secondary fund",
 ]
+# Moderate PE indicators — could be PE, could be a family holding company
+PE_MODERATE = [
+    "limited partnership", "l.p.", " lp,", " lp ", "fund", "capital partners",
+    "equity partners", "investment partners", "venture partners",
+]
+# Weak indicators — often PE but also common in non-PE corporate structures
+PE_WEAK = [
+    "holdings", "investment", "equity", "capital", "partners",
+    "finance", "asset management",
+]
+# Corporate entity PSC kinds (not an individual person)
 CORPORATE_PSC_KINDS = {
     "corporate-entity-person-with-significant-control",
     "legal-person-person-with-significant-control",
 }
+# OCR text patterns that suggest PE/group ownership
+PE_OCR_PATTERNS = [
+    "private equity", "venture capital", "buyout", "portfolio company",
+    "acquired by", "acquisition by", "backed by", "owned by",
+    "subsidiary of", "wholly owned subsidiary", "parent company",
+    "ultimate parent", "group undertaking", "controlling party",
+    "immediate parent", "ultimate controlling",
+]
+
 
 def is_pe_backed(psc_list: list[dict]) -> bool:
-    return any(
-        p.get("kind") in CORPORATE_PSC_KINDS
-        and any(pi in (p.get("name") or "").lower() for pi in PE_INDICATORS)
-        for p in psc_list
-    )
+    """Legacy compat — simple boolean check."""
+    ownership = analyse_ownership(psc_list)
+    return ownership["pe_likelihood"] in ("High", "Medium")
+
+
+def analyse_ownership(psc_list: list[dict], ocr_text: str = "") -> dict:
+    """
+    Deep ownership analysis:
+      1. Identify corporate entity owners from PSC register
+      2. Look up the holding company on Companies House (check ITS PSC too)
+      3. Score PE likelihood from name patterns + holding company structure
+      4. Scan OCR text for ownership/PE mentions
+
+    Returns dict with:
+      corporate_owner        — True/False
+      owner_name             — name of the corporate entity (or None)
+      owner_company_number   — CH number of holding co if found
+      pe_likelihood          — "High" / "Medium" / "Low" / "None"
+      pe_signals             — list of reasons for the PE score
+      owner_psc_chain        — PSC of the holding company (if looked up)
+    """
+    result = {
+        "corporate_owner":       False,
+        "owner_name":            None,
+        "owner_company_number":  None,
+        "pe_likelihood":         "None",
+        "pe_signals":            [],
+        "owner_psc_chain":       [],
+    }
+
+    # ── Step 1: Find corporate entity owners in PSC ──────────────────────────
+    corp_owners = [
+        p for p in psc_list
+        if p.get("kind") in CORPORATE_PSC_KINDS
+    ]
+
+    if not corp_owners:
+        # Check OCR for ownership clues even with no corporate PSC
+        if ocr_text:
+            _scan_ocr_for_pe(ocr_text, result)
+        return result
+
+    # Take the first (usually primary) corporate owner
+    owner = corp_owners[0]
+    owner_name = owner.get("name", "").strip()
+    result["corporate_owner"] = True
+    result["owner_name"] = owner_name
+
+    signals = []
+    name_lower = owner_name.lower()
+
+    # ── Step 2: Score PE likelihood from owner name ──────────────────────────
+    for pat in PE_STRONG:
+        if pat in name_lower:
+            signals.append(f"Strong: '{pat}' in owner name")
+
+    for pat in PE_MODERATE:
+        if pat in name_lower:
+            signals.append(f"Moderate: '{pat}' in owner name")
+
+    for pat in PE_WEAK:
+        if pat in name_lower:
+            signals.append(f"Weak: '{pat}' in owner name")
+
+    # ── Step 3: Look up holding company on Companies House ───────────────────
+    try:
+        # Search CH for the holding company by exact name
+        search_q = owner_name.replace(" LIMITED", "").replace(" LTD", "").strip()
+        search_data = get(f"/search/companies?q={requests.utils.quote(search_q)}&items_per_page=5")
+        matches = search_data.get("items", [])
+
+        # Try to find an exact or close match
+        holding_co = None
+        for m in matches:
+            m_name = (m.get("title") or "").upper()
+            if m_name == owner_name.upper() or m_name.replace("LIMITED", "LTD") == owner_name.upper().replace("LIMITED", "LTD"):
+                holding_co = m
+                break
+
+        if holding_co:
+            hc_number = holding_co.get("company_number", "")
+            result["owner_company_number"] = hc_number
+
+            # Get PSC of the holding company — check for PE one level up
+            hc_psc_data = get(f"/company/{hc_number}/persons-with-significant-control?items_per_page=50")
+            hc_psc = [p for p in hc_psc_data.get("items", []) if not p.get("ceased_on")]
+            result["owner_psc_chain"] = [
+                {"name": p.get("name", ""), "kind": p.get("kind", "")}
+                for p in hc_psc[:5]
+            ]
+
+            # Check if the holding company is itself owned by a PE entity
+            for p in hc_psc:
+                if p.get("kind") in CORPORATE_PSC_KINDS:
+                    pn = (p.get("name") or "").lower()
+                    for pat in PE_STRONG + PE_MODERATE:
+                        if pat in pn:
+                            signals.append(f"Upstream: '{pat}' in holding co PSC: {p.get('name', '')}")
+
+            # Check holding company SIC codes for investment/holding patterns
+            hc_profile = get(f"/company/{hc_number}")
+            hc_sics = hc_profile.get("sic_codes", [])
+            # 64205 = Activities of financial services holding companies
+            # 64209 = Activities of other holding companies
+            # 64301 = Activities of venture and development capital companies
+            # 64302 = Activities of open-ended investment companies
+            pe_sics = {"64205", "64209", "64301", "64302", "64303", "64910", "66300"}
+            if set(hc_sics) & pe_sics:
+                signals.append(f"Holding co SIC: {', '.join(set(hc_sics) & pe_sics)}")
+            time.sleep(0.1)
+
+    except Exception:
+        pass   # holding company lookup failed — proceed with name-only analysis
+
+    # ── Step 4: Scan OCR text for ownership/PE clues ─────────────────────────
+    if ocr_text:
+        _scan_ocr_for_pe(ocr_text, result, signals)
+
+    # ── Compute final PE likelihood ──────────────────────────────────────────
+    result["pe_signals"] = signals
+    strong_count   = sum(1 for s in signals if s.startswith("Strong") or s.startswith("Upstream"))
+    moderate_count = sum(1 for s in signals if s.startswith("Moderate") or s.startswith("Holding"))
+    weak_count     = sum(1 for s in signals if s.startswith("Weak"))
+    ocr_count      = sum(1 for s in signals if s.startswith("OCR"))
+
+    if strong_count >= 1 or (moderate_count >= 2):
+        result["pe_likelihood"] = "High"
+    elif moderate_count >= 1 or (weak_count >= 2) or (ocr_count >= 2):
+        result["pe_likelihood"] = "Medium"
+    elif weak_count >= 1 or ocr_count >= 1:
+        result["pe_likelihood"] = "Low"
+    else:
+        result["pe_likelihood"] = "None"
+
+    return result
+
+
+def _scan_ocr_for_pe(ocr_text: str, result: dict, signals: list | None = None):
+    """Scan OCR text for PE/ownership clues and add to signals."""
+    if signals is None:
+        signals = result.get("pe_signals", [])
+    text_lower = ocr_text.lower()
+    for pat in PE_OCR_PATTERNS:
+        if pat in text_lower:
+            signals.append(f"OCR: '{pat}' found in accounts text")
+    result["pe_signals"] = signals
 
 
 # ── Family / owner-managed detection ─────────────────────────────────────────
@@ -410,7 +571,9 @@ def run():
         psc       = get_psc(num);          time.sleep(0.05)
         charges   = get_charges(num);      time.sleep(0.05)
 
-        pe  = is_pe_backed(psc)
+        # Deep ownership analysis — checks holding company + PE patterns
+        ownership = analyse_ownership(psc)
+        pe  = ownership["pe_likelihood"] in ("High", "Medium")
         fam = detect_family(c["company_name"], directors)
         ss  = succession_score(directors)
 
@@ -429,6 +592,11 @@ def run():
             "director_count":     len(directors),
             "psc":                psc,
             "pe_backed":          pe,
+            "ownership":          ownership,
+            "corporate_owner":    ownership["corporate_owner"],
+            "owner_name":         ownership["owner_name"],
+            "pe_likelihood":      ownership["pe_likelihood"],
+            "pe_signals":         ownership["pe_signals"],
             **fam,
             "succession":         ss,
             "charges":            charges,

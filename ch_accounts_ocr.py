@@ -345,6 +345,7 @@ def scrape_company_accounts(company_number, company_name, acct_type, period_end)
         "filing_date":      filing_date,
         "pdf_pages":        n_pages,
         "financial_pages_ocrd": financial_pages_found,
+        "full_text":        full_text[:5000],   # first 5k chars for PE/ownership scanning
     })
 
     return parsed
@@ -500,6 +501,35 @@ def run(resume: bool = True):
             company["bs"]["net_assets_actual"] = to_gbp(na)
 
         merged_count += 1
+
+    # ── Re-run ownership/PE analysis with OCR text ───────────────────────────
+    # The initial enrichment step didn't have OCR text; now we can check for
+    # PE/group ownership mentions in the accounts PDF text.
+    try:
+        from ch_enrich import analyse_ownership
+        pe_updated = 0
+        for company in companies:
+            cn = company["company_number"]
+            ocr = ocr_results.get(cn)
+            if not ocr or ocr.get("error"):
+                continue
+            # Get the raw OCR text stored in the result
+            ocr_full_text = ocr.get("full_text", "")
+            if not ocr_full_text:
+                continue
+            psc = company.get("psc", [])
+            ownership = analyse_ownership(psc, ocr_text=ocr_full_text)
+            # Update if OCR found new PE signals
+            if ownership["pe_signals"] and len(ownership["pe_signals"]) > len(company.get("pe_signals", [])):
+                company["ownership"]     = ownership
+                company["pe_likelihood"] = ownership["pe_likelihood"]
+                company["pe_signals"]    = ownership["pe_signals"]
+                company["pe_backed"]     = ownership["pe_likelihood"] in ("High", "Medium")
+                pe_updated += 1
+        if pe_updated:
+            print(f"  PE ownership updated from OCR text: {pe_updated} companies")
+    except Exception as e:
+        print(f"  (OCR PE re-analysis skipped: {e})")
 
     # Save updated enriched file
     with open(enriched_path, "w") as f:
