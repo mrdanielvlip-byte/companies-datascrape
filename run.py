@@ -643,6 +643,10 @@ Examples:
     print(f"  Companies House PE Pipeline — {cfg.SECTOR_LABEL}")
     print(f"{'='*65}\n")
 
+    # ── Initialise API key pool (multi-key rotation) ─────────────────────────
+    from api_keys import init as _init_keys
+    _init_keys()
+
     # ── Individual step flags ─────────────────────────────────────────────────
 
     if args.search_only:

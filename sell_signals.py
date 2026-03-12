@@ -60,9 +60,10 @@ def load_api_key() -> str:
 
 
 def _get(path: str, retries: int = 3) -> dict:
+    from api_keys import get_auth
     for _ in range(retries):
         try:
-            r = requests.get(f"{BASE}{path}", auth=AUTH, timeout=12)
+            r = requests.get(f"{BASE}{path}", auth=get_auth(), timeout=12)
             if r.status_code == 200:
                 return r.json()
             if r.status_code == 429:

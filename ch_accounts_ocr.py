@@ -54,10 +54,11 @@ SKIP   = {"dormant", "micro-entity", "no-accounts-type-available", "audit-exempt
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 def ch_get(path, retries=3):
+    from api_keys import get_auth
     url = BASE + path if path.startswith("/") else path
     for _ in range(retries):
         try:
-            r = requests.get(url, auth=AUTH, timeout=20)
+            r = requests.get(url, auth=get_auth(), timeout=20)
             if r.status_code == 200:
                 return r.json()
             if r.status_code == 429:
@@ -67,9 +68,10 @@ def ch_get(path, retries=3):
     return {}
 
 def doc_get_meta(url, retries=3):
+    from api_keys import get_auth
     for _ in range(retries):
         try:
-            r = requests.get(url, auth=AUTH, timeout=15)
+            r = requests.get(url, auth=get_auth(), timeout=15)
             if r.status_code == 200:
                 return r.json()
             if r.status_code == 429:
@@ -79,9 +81,10 @@ def doc_get_meta(url, retries=3):
     return {}
 
 def doc_get_pdf(url, retries=3):
+    from api_keys import get_auth
     for _ in range(retries):
         try:
-            r = requests.get(url, auth=AUTH, timeout=60,
+            r = requests.get(url, auth=get_auth(), timeout=60,
                              headers={"Accept": "application/pdf"})
             if r.status_code == 200:
                 return r.content

@@ -147,6 +147,8 @@ jobs:
       - name: Write API keys
         run: |
           echo "COMPANIES_HOUSE_API_KEY=${{ secrets.CH_API_KEY }}" > .ch_api_key
+          echo "COMPANIES_HOUSE_API_KEY_2=${{ secrets.CH_API_KEY_2 }}" >> .ch_api_key
+          echo "COMPANIES_HOUSE_API_KEY_3=${{ secrets.CH_API_KEY_3 }}" >> .ch_api_key
           echo "FCA_SUBSCRIPTION_KEY=${{ secrets.FCA_SUBSCRIPTION_KEY }}" >> .ch_api_key
           echo "FCA_EMAIL=${{ secrets.FCA_EMAIL }}" >> .ch_api_key
           echo "CQC_API_KEY=${{ secrets.CQC_API_KEY }}" >> .ch_api_key

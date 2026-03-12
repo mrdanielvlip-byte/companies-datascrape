@@ -45,9 +45,10 @@ def load_api_key():
 
 
 def get(path, retries=3):
+    from api_keys import get_auth
     for _ in range(retries):
         try:
-            r = requests.get(f"{BASE}{path}", auth=AUTH, timeout=10)
+            r = requests.get(f"{BASE}{path}", auth=get_auth(), timeout=10)
             if r.status_code == 200:
                 return r.json()
             if r.status_code == 429:
@@ -553,7 +554,9 @@ def grade(score: int) -> str:
 
 def run():
     global AUTH
-    AUTH = (load_api_key(), "")
+    from api_keys import init as _init_keys, get_single_key
+    _init_keys()
+    AUTH = (get_single_key(), "")  # fallback for any code using AUTH directly
 
     filtered_path = os.path.join(cfg.OUTPUT_DIR, cfg.FILTERED_JSON)
     with open(filtered_path) as f:
