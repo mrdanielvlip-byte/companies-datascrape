@@ -881,75 +881,6 @@ with tabs[0]:
     st.subheader("New Sector Search")
     st.caption("Each search runs independently on GitHub — you can start multiple and close this window at any time.")
 
-    # ── AI Search Assistant ───────────────────────────────────────────────────
-    if ANTHROPIC_API_KEY:
-        with st.expander("💬 Describe your search in plain English", expanded=False):
-            st.caption(
-                "Tell me what you're looking for and I'll configure all the filters for you. "
-                "Just describe the type of companies you want to find — sector, location, size, "
-                "ownership, growth profile — and the AI will set up every filter automatically."
-            )
-
-            st.markdown(
-                "<div style='background:#F0F4F8;border-radius:8px;padding:14px 18px;margin-bottom:14px;"
-                "border-left:4px solid #1B3A6B'>"
-                "<div style='font-size:12px;font-weight:600;color:#1B3A6B;margin-bottom:8px'>💡 Example searches you can try:</div>"
-                "<div style='font-size:12px;color:#333;line-height:1.7'>"
-                "• <i>\"Find established waste management companies in the North West, 10+ years old, "
-                "growing, no PE ownership, ideally family-run with older directors approaching retirement\"</i><br>"
-                "• <i>\"Care homes in the East Midlands with 50+ employees, good growth scores, "
-                "and clean charges register — exclude anything PE-backed\"</i><br>"
-                "• <i>\"HVAC contractors across the UK, minimum £1m revenue, at least 5 years old, "
-                "with directors over 55. I want to see strong or growing performance only\"</i><br>"
-                "• <i>\"Small independent plumbing firms in London and South East, family-owned, "
-                "no PE, 10+ years trading, run a deep OCR scan\"</i><br>"
-                "• <i>\"FCA-regulated financial advisors in Scotland, search the FCA register, "
-                "minimum 20 employees, growing revenue, acquisition score 50+\"</i>"
-                "</div></div>",
-                unsafe_allow_html=True,
-            )
-
-            ai_col1, ai_col2 = st.columns([4, 1])
-            with ai_col1:
-                ai_input = st.text_area(
-                    "What are you looking for?",
-                    placeholder="Describe the companies you're looking for in your own words…",
-                    height=80,
-                    key="ai_search_input",
-                    label_visibility="collapsed",
-                )
-            with ai_col2:
-                ai_go = st.button("🤖 Configure", use_container_width=True, key="ai_go")
-
-            if ai_go and ai_input.strip():
-                with st.spinner("Parsing your search criteria…"):
-                    ai_config = _ai_parse_search(ai_input.strip())
-                if ai_config:
-                    # Store parsed values into session state for form defaults
-                    st.session_state["_ai_sector"]        = ai_config.get("sector", "")
-                    st.session_state["_ai_search_source"] = ai_config.get("search_source", "sic")
-                    st.session_state["_ai_reg_sources"]   = ai_config.get("reg_sources", [])
-                    st.session_state["_ai_reg_query"]     = ai_config.get("reg_query", "")
-                    st.session_state["_ai_region"]        = ai_config.get("region", "")
-                    st.session_state["_ai_min_revenue"]   = ai_config.get("min_revenue", "")
-                    st.session_state["_ai_min_age"]       = ai_config.get("min_age_years", 0)
-                    st.session_state["_ai_clean_charges"] = ai_config.get("clean_charges_only", False)
-                    st.session_state["_ai_min_dir_age"]   = ai_config.get("min_dir_age", 0)
-                    st.session_state["_ai_max_dir_age"]   = ai_config.get("max_dir_age", 999)
-                    st.session_state["_ai_pe_filter"]     = ai_config.get("pe_filter", "Include all")
-                    st.session_state["_ai_family_only"]   = ai_config.get("family_only", False)
-                    st.session_state["_ai_min_employees"] = ai_config.get("min_employees", 0)
-                    st.session_state["_ai_min_growth"]    = ai_config.get("min_growth_score", 0)
-                    st.session_state["_ai_min_acq"]       = ai_config.get("min_acq_score", 0)
-                    st.session_state["_ai_run_deep"]      = ai_config.get("run_deep", False)
-
-                    explanation = ai_config.get("explanation", "")
-                    st.success(f"✅ **Search configured!** {explanation}")
-                    st.caption("Review the form below — all fields have been pre-filled. Adjust anything, then click Preview.")
-                    st.rerun()
-                else:
-                    st.error("Couldn't parse your description. Please try rephrasing or fill in the form manually.")
-
     # ── PHASE 1: Search form ───────────────────────────────────────────────────
     # Hide form as soon as Preview is clicked (estimate_triggered), not just
     # when we have a run_id — prevents the race condition where GitHub takes
@@ -972,6 +903,70 @@ with tabs[0]:
     }
 
     if not estimate_active:
+
+        # ── AI Search Assistant — sits above the form next to sector input ────
+        if ANTHROPIC_API_KEY:
+            st.markdown("**Sector description** *")
+            ai_col1, ai_col2 = st.columns([4, 1])
+            with ai_col1:
+                ai_input = st.text_area(
+                    "Describe your search",
+                    placeholder="Or describe what you're looking for in plain English and I'll configure everything… "
+                                "e.g. 'Waste management firms in the North West, 10+ years, growing, no PE, family-run'",
+                    height=68,
+                    key="ai_search_input",
+                    label_visibility="collapsed",
+                )
+            with ai_col2:
+                st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+                ai_go = st.button("🤖 Auto-configure", use_container_width=True, key="ai_go")
+
+            with st.expander("💡 See example searches", expanded=False):
+                st.markdown(
+                    "<div style='font-size:12px;color:#333;line-height:1.8'>"
+                    "• <i>\"Find established waste management companies in the North West, 10+ years old, "
+                    "growing, no PE ownership, ideally family-run with older directors approaching retirement\"</i><br>"
+                    "• <i>\"Care homes in the East Midlands with 50+ employees, good growth scores, "
+                    "and clean charges register — exclude anything PE-backed\"</i><br>"
+                    "• <i>\"HVAC contractors across the UK, minimum £1m revenue, at least 5 years old, "
+                    "with directors over 55. I want to see strong or growing performance only\"</i><br>"
+                    "• <i>\"Small independent plumbing firms in London and South East, family-owned, "
+                    "no PE, 10+ years trading, run a deep OCR scan\"</i><br>"
+                    "• <i>\"FCA-regulated financial advisors in Scotland, search the FCA register, "
+                    "minimum 20 employees, growing revenue, acquisition score 50+\"</i>"
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+
+            if ai_go and ai_input.strip():
+                with st.spinner("Parsing your search criteria…"):
+                    ai_config = _ai_parse_search(ai_input.strip())
+                if ai_config:
+                    st.session_state["_ai_sector"]        = ai_config.get("sector", "")
+                    st.session_state["_ai_search_source"] = ai_config.get("search_source", "sic")
+                    st.session_state["_ai_reg_sources"]   = ai_config.get("reg_sources", [])
+                    st.session_state["_ai_reg_query"]     = ai_config.get("reg_query", "")
+                    st.session_state["_ai_region"]        = ai_config.get("region", "")
+                    st.session_state["_ai_min_revenue"]   = ai_config.get("min_revenue", "")
+                    st.session_state["_ai_min_age"]       = ai_config.get("min_age_years", 0)
+                    st.session_state["_ai_clean_charges"] = ai_config.get("clean_charges_only", False)
+                    st.session_state["_ai_min_dir_age"]   = ai_config.get("min_dir_age", 0)
+                    st.session_state["_ai_max_dir_age"]   = ai_config.get("max_dir_age", 999)
+                    st.session_state["_ai_pe_filter"]     = ai_config.get("pe_filter", "Include all")
+                    st.session_state["_ai_family_only"]   = ai_config.get("family_only", False)
+                    st.session_state["_ai_min_employees"] = ai_config.get("min_employees", 0)
+                    st.session_state["_ai_min_growth"]    = ai_config.get("min_growth_score", 0)
+                    st.session_state["_ai_min_acq"]       = ai_config.get("min_acq_score", 0)
+                    st.session_state["_ai_run_deep"]      = ai_config.get("run_deep", False)
+                    explanation = ai_config.get("explanation", "")
+                    st.success(f"✅ **Search configured!** {explanation}")
+                    st.caption("Review the form below — all fields have been pre-filled. Adjust anything, then click Preview.")
+                    st.rerun()
+                else:
+                    st.error("Couldn't parse your description. Try rephrasing or fill in the form manually.")
+
+            st.divider()
+
         with st.form("new_search", clear_on_submit=False):
 
             # ── Row 1: Sector + email ──────────────────────────────────────────
