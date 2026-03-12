@@ -886,14 +886,34 @@ with tabs[0]:
         with st.expander("💬 Describe your search in plain English", expanded=False):
             st.caption(
                 "Tell me what you're looking for and I'll configure all the filters for you. "
-                "For example: *\"Find established waste management companies in the North West, "
-                "10+ years old, growing, no PE ownership, ideally family-run with older directors.\"*"
+                "Just describe the type of companies you want to find — sector, location, size, "
+                "ownership, growth profile — and the AI will set up every filter automatically."
             )
+
+            st.markdown(
+                "<div style='background:#F0F4F8;border-radius:8px;padding:14px 18px;margin-bottom:14px;"
+                "border-left:4px solid #1B3A6B'>"
+                "<div style='font-size:12px;font-weight:600;color:#1B3A6B;margin-bottom:8px'>💡 Example searches you can try:</div>"
+                "<div style='font-size:12px;color:#333;line-height:1.7'>"
+                "• <i>\"Find established waste management companies in the North West, 10+ years old, "
+                "growing, no PE ownership, ideally family-run with older directors approaching retirement\"</i><br>"
+                "• <i>\"Care homes in the East Midlands with 50+ employees, good growth scores, "
+                "and clean charges register — exclude anything PE-backed\"</i><br>"
+                "• <i>\"HVAC contractors across the UK, minimum £1m revenue, at least 5 years old, "
+                "with directors over 55. I want to see strong or growing performance only\"</i><br>"
+                "• <i>\"Small independent plumbing firms in London and South East, family-owned, "
+                "no PE, 10+ years trading, run a deep OCR scan\"</i><br>"
+                "• <i>\"FCA-regulated financial advisors in Scotland, search the FCA register, "
+                "minimum 20 employees, growing revenue, acquisition score 50+\"</i>"
+                "</div></div>",
+                unsafe_allow_html=True,
+            )
+
             ai_col1, ai_col2 = st.columns([4, 1])
             with ai_col1:
                 ai_input = st.text_area(
                     "What are you looking for?",
-                    placeholder="e.g. 'I want to find care home businesses in the Midlands, at least 15 years old, with 20+ employees, growing revenue, and ideally family-owned with directors approaching retirement'",
+                    placeholder="Describe the companies you're looking for in your own words…",
                     height=80,
                     key="ai_search_input",
                     label_visibility="collapsed",
