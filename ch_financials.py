@@ -562,6 +562,27 @@ def run():
         if emp_count is not None:
             c["estimated_employees"]        = emp_count
             c["estimated_employees_source"] = emp_source
+
+        # ── Employee delta (3-year change) ────────────────────────────────────
+        # Uses XBRL employee data from accounts history where available.
+        # Format: "+5", "-3", or None if insufficient data.
+        hist = c.get("accounts_history", [])
+        emp_vals = [h.get("total_employees") for h in hist
+                    if h.get("total_employees") is not None and h["total_employees"] > 0]
+        if len(emp_vals) >= 2:
+            # hist[0] = most recent, hist[-1] = oldest with data
+            newest = emp_vals[0]
+            oldest = emp_vals[-1]
+            delta  = newest - oldest
+            c["employee_delta"]       = delta
+            c["employee_delta_label"] = f"+{delta}" if delta > 0 else str(delta)
+            c["employee_latest"]      = newest
+            c["employee_oldest"]      = oldest
+            c["employee_delta_years"] = len(emp_vals)
+        else:
+            c["employee_delta"]       = None
+            c["employee_delta_label"] = None
+
         time.sleep(0.1)
 
     fin_path = os.path.join(cfg.OUTPUT_DIR, cfg.ENRICHED_JSON)

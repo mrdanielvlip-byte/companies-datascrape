@@ -417,7 +417,7 @@ PIPELINE_COLS = [
     ("Director", 28), ("Email", 36), ("Email Conf.", 12), ("Director LinkedIn", 40),
     ("Nearest Competitor", 35), ("Competitor 2", 32), ("Competitor 3", 32),
     # ── Financial intelligence ────────────────────────────────────────────────
-    ("Employees", 11), ("Emp. Source", 22),
+    ("Employees", 11), ("Emp. Source", 22), ("Emp. Δ 3yr", 11),
     ("Rev. Low £", 13), ("Rev. Base £", 13), ("Rev. High £", 13),
     ("Rev. Trend", 12), ("EBITDA £", 13), ("EBITDA %", 12), ("Rev. Conf.", 10),
     ("Yr1 Period", 11), ("Yr1 Accts", 20),
@@ -511,6 +511,10 @@ PIPELINE_COL_NOTES = [
     "  UK SMEs filing Total Exemption accounts do not disclose headcount publicly.",
     "Emp. Source: Data reliability tier for the employee figure.\n"
     "  Tier 1 = Companies House filing  |  Tier 4 = Derived estimate.",
+    "Emp. Δ 3yr: Change in employee headcount over last 3 years of filed accounts.\n"
+    "  +5 = grew by 5 employees  |  -3 = shrank by 3  |  — = no data.\n"
+    "  Green = growth  |  Red = decline.\n"
+    "  Source: XBRL employee data from Companies House filings + OCR extraction.",
     "Rev. Low £: Low end of revenue estimate range.\n"
     "  Source: ch_financials.py PE triangulation — Staff Cost, Net Asset, Location, Employee models.",
     "Rev. Base £: Central revenue estimate (most likely scenario).\n"
@@ -711,18 +715,28 @@ def build_pipeline(wb, companies):
         # Col 35 — Employee source
         cell(ws, row, 35, emp_src, bg=bg, size=7)
 
-        # Cols 36–38 — Revenue Low / Base / High
+        # Col 36 — Employee delta (3-year change: +5, -3, etc.)
+        emp_delta_label = c.get("employee_delta_label")
+        emp_delta_val   = c.get("employee_delta")
+        if emp_delta_label:
+            delta_bg = fill("E2EFDA") if emp_delta_val > 0 else (
+                       fill("FFD6D6") if emp_delta_val < 0 else bg)
+            cell(ws, row, 36, emp_delta_label, bg=delta_bg, align="center", size=9, bold=True)
+        else:
+            cell(ws, row, 36, "-", bg=bg, align="center", size=9)
+
+        # Cols 37–39 — Revenue Low / Base / High
         def rev_str(v):
             return f"£{v:,.0f}" if v else "-"
-        cell(ws, row, 36, rev_str(rev_low),  bg=bg, align="right", size=9)
-        cx_rev = ws.cell(row=row, column=37, value=rev_str(rev_base))
+        cell(ws, row, 37, rev_str(rev_low),  bg=bg, align="right", size=9)
+        cx_rev = ws.cell(row=row, column=38, value=rev_str(rev_base))
         cx_rev.font      = Font(name="Arial", size=9, bold=True)
         cx_rev.alignment = Alignment(horizontal="right", vertical="center")
         cx_rev.border    = THIN
         cx_rev.fill      = fill("E8F4FD") if rev_base else (bg or fill("FFFFFF"))
-        cell(ws, row, 38, rev_str(rev_high), bg=bg, align="right", size=9)
+        cell(ws, row, 39, rev_str(rev_high), bg=bg, align="right", size=9)
 
-        # Col 39 — Revenue trend (derived from accounts history net_assets if available,
+        # Col 40 — Revenue trend (derived from accounts history net_assets if available,
         #           otherwise from est revenue confidence direction indicator)
         trend_symbol = "?"
         if len(hist) >= 2:
@@ -742,16 +756,16 @@ def build_pipeline(wb, companies):
                    (fill(bg) if isinstance(bg, str) else bg) if bg else fill("EEEEEE"))
         trend_color = "1A5C2C" if trend_symbol == "↑" else (
                       "7B0000" if trend_symbol == "↓" else "7B5B00")
-        cx_tr = ws.cell(row=row, column=39, value=trend_symbol)
+        cx_tr = ws.cell(row=row, column=40, value=trend_symbol)
         cx_tr.fill      = trend_bg if trend_bg else fill("EEEEEE")
         cx_tr.font      = Font(name="Arial", size=12, bold=True, color=trend_color)
         cx_tr.alignment = Alignment(horizontal="center", vertical="center")
         cx_tr.border    = THIN
 
-        # Col 40 — EBITDA estimate
-        cell(ws, row, 40, rev_str(ebitda), bg=bg, align="right", size=9)
+        # Col 41 — EBITDA estimate
+        cell(ws, row, 41, rev_str(ebitda), bg=bg, align="right", size=9)
 
-        # Col 41 — EBITDA %
+        # Col 42 — EBITDA %
         # "Actual (Tier 1)" means OCR found real turnover in filed accounts; otherwise estimated.
         is_actual = (conf == "Actual (Tier 1)" or
                      (c.get("rev_source") or "").startswith("Tier 1"))
@@ -762,18 +776,18 @@ def build_pipeline(wb, companies):
         else:
             ebitda_pct_str = "-"
         ebitda_pct_bg = fill("E2EFDA") if is_actual else fill("FFF2CC") if ebitda_pct_str != "-" else bg
-        cell(ws, row, 41, ebitda_pct_str, bg=ebitda_pct_bg, align="center", size=8,
+        cell(ws, row, 42, ebitda_pct_str, bg=ebitda_pct_bg, align="center", size=8,
              bold=is_actual, fg="1A5C2C" if is_actual else "7B5B00" if ebitda_pct_str != "-" else "000000")
 
-        # Col 42 — Revenue confidence
+        # Col 43 — Revenue confidence
         conf_bg = fill("E2EFDA") if conf == "HIGH" else (
                   fill("FFF2CC") if conf == "MEDIUM" else
                   fill("FFD6D6") if conf == "LOW" else bg)
-        cell(ws, row, 42, conf, bg=conf_bg, align="center", size=8, bold=(conf == "HIGH"))
+        cell(ws, row, 43, conf, bg=conf_bg, align="center", size=8, bold=(conf == "HIGH"))
 
-        # Cols 43–48 — Last 3 years of accounts filings (period + type)
+        # Cols 44–49 — Last 3 years of accounts filings (period + type)
         for yr_idx in range(3):
-            base_col = 43 + yr_idx * 2
+            base_col = 44 + yr_idx * 2
             if yr_idx < len(hist):
                 h = hist[yr_idx]
                 period = (h.get("period_end") or "")[:7]   # YYYY-MM

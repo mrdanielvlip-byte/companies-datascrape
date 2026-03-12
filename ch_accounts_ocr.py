@@ -144,6 +144,17 @@ P_STAFF = re.compile(
     r'[\s\d:]*\s+([\(\)£$\d,\.\-]+)',
     re.IGNORECASE | re.MULTILINE)
 
+# Average number of persons employed — standard line in UK accounts
+# Matches: "Average number of persons employed 35" / "Average number of employees 12"
+# Also: "Monthly average of employees during the year 28"
+# Note: captures plain integers (no £ sign) — distinct from financial value patterns
+P_EMPLOYEES = re.compile(
+    r'(?:average\s+(?:monthly\s+)?number\s+of\s+(?:persons?\s+employed|employees?)'
+    r'|monthly\s+average\s+of\s+employees?\s+(?:during|in)\s+the\s+(?:year|period)'
+    r'|employees?\s*[:—–-]\s*(?:number|headcount)?)'
+    r'[\s:—–\-]*(\d[\d,]*)',
+    re.IGNORECASE | re.MULTILINE)
+
 P_NET_ASSETS = re.compile(
     r'(?:net\s+assets|shareholders[\'\s]+(?:funds|equity)|total\s+equity)'
     r'[\s\d:]*\s+([\(\)£$\d,\.\-]+)',
@@ -217,6 +228,7 @@ def parse_financials(full_text, priority):
         "fixed_assets": None, "current_assets": None,
         "trade_debtors": None,    # for debtor book revenue model (Method 7)
         "total_liabilities": None, # for debt capacity model (Method 8)
+        "employees": None,         # average number of persons employed
         "currency": currency_from_text(full_text),
         "source": "CH accounts PDF (OCR)",
         "data_tier": "Tier 1 — Companies House filing",
@@ -232,6 +244,16 @@ def parse_financials(full_text, priority):
     result["current_assets"]    = safe_val(P_CURRENT_ASSETS.search(full_text))
     result["trade_debtors"]     = safe_val(P_TRADE_DEBTORS.search(full_text))
     result["total_liabilities"] = safe_val(P_CREDITORS.search(full_text))
+
+    # Employee headcount — plain integer, not a £ value
+    emp_match = P_EMPLOYEES.search(full_text)
+    if emp_match:
+        try:
+            emp_val = int(emp_match.group(1).replace(",", ""))
+            if 0 < emp_val < 500_000:   # sanity guard
+                result["employees"] = emp_val
+        except (ValueError, IndexError):
+            pass
 
     # Sanity-check trade_debtors: must be positive and < total_assets (if known)
     if result["trade_debtors"] and result["trade_debtors"] < 0:
@@ -448,6 +470,13 @@ def run(resume: bool = True):
         if ta:    company["bs"]["total_assets"]  = to_gbp(ta)
         if na:    company["bs"]["net_assets"]     = to_gbp(na)
         if sc:    company["bs"]["staff_costs"]    = to_gbp(sc)
+
+        # Employee headcount from OCR (Tier 1 — actual from filed accounts)
+        ocr_emp = ocr.get("employees")
+        if ocr_emp and ocr_emp > 0:
+            company["bs"]["total_employees"]      = ocr_emp
+            company["estimated_employees"]        = ocr_emp
+            company["estimated_employees_source"] = "Tier 1 — filed accounts (OCR)"
 
         # If we have actual turnover, replace the revenue estimate
         if turn and turn > 0:
