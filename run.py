@@ -764,12 +764,16 @@ Examples:
                 if not args.local_db:
                     _db_path     = os.path.join(os.path.dirname(__file__), "data", "companies_house.db")
                     _parts_dir   = os.path.join(os.path.dirname(__file__), "datasets", "uk_companies_full")
+                    print(f"  [DB check] DB path: {_db_path} — exists: {os.path.exists(_db_path)}")
+                    print(f"  [DB check] Parts dir: {_parts_dir} — exists: {os.path.isdir(_parts_dir)}")
                     if os.path.exists(_db_path):
+                        _db_size = os.path.getsize(_db_path) / (1024*1024)
                         args.local_db = True
-                        print("  ⚡ Local DB detected — using SQLite (5.6M companies, no API rate limits)")
+                        print(f"  ⚡ Local DB detected ({_db_size:.0f} MB) — using SQLite (5.6M companies, no API rate limits)")
                     elif os.path.isdir(_parts_dir):
                         import glob as _glob
                         _parts = sorted(_glob.glob(os.path.join(_parts_dir, "BasicCompanyData-*.zip")))
+                        print(f"  [DB check] Found {len(_parts)} ZIP parts")
                         if _parts:
                             print(f"  ⚡ Local bulk data found ({len(_parts)} parts) — building SQLite DB")
                             print(f"     This is a one-time build (~10 min). Future runs will be instant.")
@@ -782,6 +786,8 @@ Examples:
                             )
                             args.local_db = True
                             print("  ✅ DB built — continuing pipeline with local search\n")
+                    else:
+                        print("  ⚠ No local DB and no bulk data parts — falling back to CH API search")
 
                 if args.local_db:
                     print("Step 1/13 — Local DB Search  ⚡ (SQLite, 5.6M companies, no API)")

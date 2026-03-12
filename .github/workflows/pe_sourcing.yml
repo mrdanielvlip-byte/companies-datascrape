@@ -157,14 +157,25 @@ jobs:
       - name: Prepare directories
         run: mkdir -p output data/sectors
 
-      # ── Build local SQLite DB from committed bulk data (first run only) ───────
+      # ── Build local SQLite DB from committed bulk data ──────────────────────────
       - name: Build local Companies House DB
         run: |
-          if [ ! -f "data/companies_house.db" ]; then
-            echo "Building local DB from datasets/uk_companies_full/ (one-time, ~10 min)..."
-            python3 build_local_db.py
-          else
+          if [ -f "data/companies_house.db" ]; then
             echo "Local DB already exists — skipping build"
+            python3 build_local_db.py --stats
+          else
+            echo "Building local DB from datasets/uk_companies_full/..."
+            echo "Parts found:"
+            ls -lh datasets/uk_companies_full/BasicCompanyData-*.zip 2>/dev/null || echo "  ⚠ No parts found!"
+            python3 build_local_db.py
+            echo ""
+            echo "Verifying DB was built:"
+            if [ -f "data/companies_house.db" ]; then
+              ls -lh data/companies_house.db
+              python3 build_local_db.py --stats
+            else
+              echo "⚠ DB build failed — falling back to API search"
+            fi
           fi
 
       # ── 6. Build pipeline flags from per-module inputs ────────────────────────
