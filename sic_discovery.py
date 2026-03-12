@@ -29,6 +29,8 @@ CURATED_SECTORS = [
         "sic_codes": ["80200", "43210", "43290", "33190", "71200", "74909"],
         "benchmark_category": "technical_services",
         "market_score": 82,
+        # BAFE (British Approvals for Fire Equipment), FIA (Fire Industry Association)
+        "recommended_trade_bodies": ["AUTO"],
     },
     {
         "triggers": ["security system", "cctv", "access control", "intruder alarm",
@@ -37,6 +39,8 @@ CURATED_SECTORS = [
         "sic_codes": ["80200", "80100", "80300", "43210", "43290"],
         "benchmark_category": "technical_services",
         "market_score": 78,
+        "recommended_registers": ["SIA"],
+        "recommended_trade_bodies": ["AUTO"],
     },
     {
         "triggers": ["electrical contractor", "electrical installation", "electrical engineer",
@@ -46,6 +50,8 @@ CURATED_SECTORS = [
         "sic_codes": ["43210", "71200", "33140", "27120"],
         "benchmark_category": "construction_trades",
         "market_score": 75,
+        "recommended_registers": ["NICEIC"],
+        "recommended_trade_bodies": ["AUTO"],
     },
     {
         "triggers": ["ev charging", "electric vehicle", "ev charger", "ev install",
@@ -61,6 +67,8 @@ CURATED_SECTORS = [
         "sic_codes": ["43220", "43290", "33190", "28250", "35300"],
         "benchmark_category": "construction_trades",
         "market_score": 74,
+        "recommended_registers": ["GAS_SAFE"],
+        "recommended_trade_bodies": ["AUTO"],
     },
     {
         "triggers": ["calibration", "metrology", "calibration lab", "dimensional measurement",
@@ -85,6 +93,7 @@ CURATED_SECTORS = [
         "sic_codes": ["38110", "38120", "38210", "38220", "38310", "38320", "39000"],
         "benchmark_category": "waste_environmental",
         "market_score": 80,
+        "recommended_registers": ["EA_WASTE", "EA_CARRIERS"],
     },
     {
         "triggers": ["environmental consulting", "environmental service", "environmental remediation",
@@ -93,6 +102,7 @@ CURATED_SECTORS = [
         "sic_codes": ["74901", "71200", "39000", "74909", "71122"],
         "benchmark_category": "technical_services",
         "market_score": 82,
+        "recommended_registers": ["EA_DISCHARGES"],
     },
     {
         "triggers": ["it support", "managed service", "msp", "it managed", "helpdesk",
@@ -117,6 +127,7 @@ CURATED_SECTORS = [
         "sic_codes": ["62020", "80200", "62090", "63110"],
         "benchmark_category": "it_digital",
         "market_score": 88,
+        "recommended_registers": ["ICO"],
     },
     {
         "triggers": ["roofing", "flat roof", "cladding", "waterproofing", "roof contractor",
@@ -238,6 +249,7 @@ CURATED_SECTORS = [
         "sic_codes": ["87100", "87300", "88100", "87900"],
         "benchmark_category": "healthcare",
         "market_score": 78,
+        "recommended_registers": ["CQC"],
     },
     {
         "triggers": ["pharmaceutical", "pharma", "drug manufacturer", "clinical research",
@@ -245,6 +257,7 @@ CURATED_SECTORS = [
         "sic_codes": ["21100", "21200", "72110", "72190", "26600"],
         "benchmark_category": "manufacturing",
         "market_score": 82,
+        "recommended_registers": ["FCA"],
     },
     {
         "triggers": ["food manufacturing", "food production", "food processing",
@@ -294,6 +307,8 @@ CURATED_SECTORS = [
         "sic_codes": ["36000", "71200", "74909", "39000"],
         "benchmark_category": "technical_services",
         "market_score": 80,
+        "recommended_registers": ["EA_ABSTRACTION", "EA_DISCHARGES"],
+        "recommended_trade_bodies": ["AUTO"],
     },
     {
         "triggers": ["asbestos", "asbestos removal", "asbestos survey", "asbestos management",
@@ -1178,6 +1193,8 @@ def discover(
         bench_cat        = curated["benchmark_category"]
         market_score     = curated["market_score"]
         curated_excludes = curated.get("exclude_subsectors", [])
+        curated_registers    = curated.get("recommended_registers", [])
+        curated_trade_bodies = curated.get("recommended_trade_bodies", [])
         source           = "curated sector map"
         # Build match metadata for display
         selected = [
@@ -1192,6 +1209,8 @@ def discover(
         print(f"  ✓ Matched via curated sector map")
     else:
         curated_excludes = []
+        curated_registers    = []
+        curated_trade_bodies = ["AUTO"]  # always try auto-discovery for non-curated
         # ── Step 2: Fuzzy fallback ─────────────────────────────────────────────
         print(f"  No curated match found — using fuzzy SIC scoring ...")
         selected = _fuzzy_sic_match(sector_description, top_n=top_sic, min_score=min_score)
@@ -1270,6 +1289,8 @@ def discover(
         MARKET_ATTRACTIVENESS_SCORE = market_score,
         CONTACT_ENRICH_TOP_N    = 50,
         BOLT_ON_ADJACENCIES     = bolt_on,
+        RECOMMENDED_REGISTERS   = curated_registers,
+        RECOMMENDED_TRADE_BODIES = curated_trade_bodies,
         OUTPUT_DIR              = "output",
         RAW_JSON                = "raw_companies.json",
         FILTERED_JSON           = "filtered_companies.json",
@@ -1279,6 +1300,10 @@ def discover(
         _benchmark_category     = bench_cat,
     )
 
+    if curated_registers:
+        print(f"\n  Recommended registers → {curated_registers}")
+    if curated_trade_bodies:
+        print(f"  Recommended trade bodies → {curated_trade_bodies}")
     print(f"\n  Config ready  →  '{cfg.SECTOR_LABEL}'")
     print(f"  Benchmarks    →  {bench_cat}  |  Rev/head: £{benchmarks['revenue_per_head_base']:,}  |  EBITDA: {int(benchmarks['ebitda_margin_base']*100)}%")
     print(f"  Name queries  →  {cfg.NAME_QUERIES}")

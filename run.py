@@ -815,6 +815,14 @@ Examples:
                     filter_companies(cfg)
 
             # ── Register discovery (when source is 'register' or 'both') ──────
+            # Auto-inject recommended registers from sic_discovery curated map
+            auto_regs = getattr(cfg, "RECOMMENDED_REGISTERS", []) or []
+            if auto_regs and not reg_sources:
+                reg_sources = auto_regs
+                if search_src == "sic":
+                    search_src = "both"
+                print(f"\n  Auto-detected recommended registers: {reg_sources}")
+
             if search_src in ("register", "both") and reg_sources:
                 merge = (search_src == "both")
                 for i, reg_key in enumerate(reg_sources):
@@ -837,12 +845,12 @@ Examples:
                 filter_companies(cfg)
 
         # ── Trade body member discovery ───────────────────────────────────────
-        # Always runs. If no --trade-body flags given, defaults to AUTO
-        # (dynamic web search for the sector). Explicit keys override AUTO.
+        # Uses recommended trade bodies from curated config, or CLI flags, or AUTO
         trade_bodies = getattr(args, "trade_bodies", []) or []
         sector_label = getattr(args, "sector", None) or getattr(cfg, "SECTOR_LABEL", "")
         if not trade_bodies:
-            trade_bodies = ["AUTO"]   # discover relevant bodies dynamically
+            # Use curated recommendations if available, otherwise AUTO
+            trade_bodies = getattr(cfg, "RECOMMENDED_TRADE_BODIES", []) or ["AUTO"]
         print(f"\nStep 2c/13 — Trade Body Member Discovery")
         _run_trade_body_discovery(
             sector=sector_label,
