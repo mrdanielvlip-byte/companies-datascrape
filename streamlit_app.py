@@ -254,9 +254,13 @@ def parse_excel_preview(zip_bytes: bytes) -> dict | None:
         ci_epct   = col("EBITDA %")
         ci_sell   = col("SI Band")
         ci_family = col("Family")
-        ci_pe     = col("PE")
+        ci_pe     = col("PE Likelihood") or col("PE")
         ci_dirs   = col("Dirs")
         ci_age    = col("Age")
+        ci_gscore = col("Growth Score")
+        ci_perf   = col("Performance")
+        ci_emp    = col("Employees")
+        ci_fq     = col("Filing Quality")
 
         data_rows = rows[3:]   # skip title, subtitle, header
         records = []
@@ -278,6 +282,10 @@ def parse_excel_preview(zip_bytes: bytes) -> dict | None:
                 "PE":          str(r[ci_pe]     or "") if ci_pe     is not None else "",
                 "Dirs":        r[ci_dirs]  if ci_dirs  is not None else None,
                 "Age (yr)":    r[ci_age]   if ci_age   is not None else None,
+                "Growth":      r[ci_gscore] if ci_gscore is not None else None,
+                "Performance": str(r[ci_perf] or "") if ci_perf is not None else "",
+                "Employees":   r[ci_emp]   if ci_emp   is not None else None,
+                "Filing":      str(r[ci_fq] or "") if ci_fq is not None else "",
             })
 
         df = pd.DataFrame(records)
@@ -294,8 +302,11 @@ def parse_excel_preview(zip_bytes: bytes) -> dict | None:
         grade_rank = {"Prime": 0, "High": 1, "Medium": 2, "Intelligence Only": 3}
         df["_grade_rank"] = df["Grade"].map(grade_rank).fillna(9)
         top = df.sort_values(["_grade_rank", "_score_num"], ascending=[True, False]).head(25)
-        display_cols = ["Company", "Grade", "Score", "Rev. Base", "EBITDA £",
-                        "EBITDA %", "Sell Intent", "Family", "Dirs", "Age (yr)"]
+        display_cols = ["Company", "Grade", "Score", "Growth", "Performance",
+                        "Rev. Base", "EBITDA £", "EBITDA %", "Sell Intent",
+                        "Employees", "Family", "Dirs", "Age (yr)", "Filing"]
+        # Only include columns that actually exist in the data
+        display_cols = [c for c in display_cols if c in top.columns]
         top_df = top[display_cols].reset_index(drop=True)
         top_df.index = top_df.index + 1   # 1-based rank
 
@@ -458,14 +469,35 @@ def show_excel_preview(zip_bytes: bytes, run_id: str):
         fg = GRADE_COLOURS.get(val, "#000000")
         return f"background-color:{bg};color:{fg};font-weight:600"
 
-    styled = (
-        preview["top_df"]
-        .style
-        .applymap(style_grade, subset=["Grade"])
-        .format({"Score": lambda x: str(int(x)) if pd.notna(x) and x != "" else "-",
-                 "Dirs":  lambda x: str(int(x)) if pd.notna(x) and x != "" else "-",
-                 "Age (yr)": lambda x: f"{x:.0f}" if pd.notna(x) and x != "" else "-"})
-    )
+    # Colour-code Performance column
+    PERF_BG = {"Strong Growth": "#E2EFDA", "Growing": "#E2EFDA", "Stable": "#FFF2CC",
+               "Declining": "#FFD6D6", "Weak": "#FFD6D6", "Insufficient Data": "#EEEEEE"}
+    PERF_FG = {"Strong Growth": "#1A5C2C", "Growing": "#1A5C2C", "Stable": "#7B5B00",
+               "Declining": "#7B0000", "Weak": "#7B0000", "Insufficient Data": "#888888"}
+
+    def style_perf(val):
+        bg = PERF_BG.get(str(val), "#FFFFFF")
+        fg = PERF_FG.get(str(val), "#000000")
+        return f"background-color:{bg};color:{fg};font-weight:600"
+
+    top_df = preview["top_df"]
+    style_subsets = [("Grade", style_grade)]
+    if "Performance" in top_df.columns:
+        style_subsets.append(("Performance", style_perf))
+
+    styled = top_df.style
+    for col_name, fn in style_subsets:
+        styled = styled.applymap(fn, subset=[col_name])
+
+    fmt = {"Score": lambda x: str(int(x)) if pd.notna(x) and x != "" else "-",
+           "Dirs":  lambda x: str(int(x)) if pd.notna(x) and x != "" else "-",
+           "Age (yr)": lambda x: f"{x:.0f}" if pd.notna(x) and x != "" else "-"}
+    if "Growth" in top_df.columns:
+        fmt["Growth"] = lambda x: str(int(x)) if pd.notna(x) and x != "" else "-"
+    if "Employees" in top_df.columns:
+        fmt["Employees"] = lambda x: str(int(x)) if pd.notna(x) and x != "" else "-"
+    styled = styled.format(fmt)
+
     st.dataframe(styled, use_container_width=True, height=600)
 
 
