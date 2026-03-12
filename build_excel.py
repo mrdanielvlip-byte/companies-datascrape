@@ -426,6 +426,10 @@ PIPELINE_COLS = [
     ("Yr1 Period", 11), ("Yr1 Accts", 20),
     ("Yr2 Period", 11), ("Yr2 Accts", 20),
     ("Yr3 Period", 11), ("Yr3 Accts", 20),
+    # ── Performance & growth metrics ───────────────────────────────────────
+    ("Net Asset Δ 3yr", 13), ("Staff Cost Δ 3yr", 13),
+    ("Gross Margin %", 12), ("Debt/Asset %", 12), ("Debtors £", 13),
+    ("Filing Quality", 12), ("Growth Score", 11), ("Performance", 14),
 ]
 
 # Column header tooltips — explain the formula or data source for each column
@@ -563,6 +567,31 @@ PIPELINE_COL_NOTES = [
     "Yr2 Accts: Accounts type for the second most recent filing.",
     "Yr3 Period: Period end date of the third most recent annual accounts filing.",
     "Yr3 Accts: Accounts type for the third most recent filing.",
+    "Net Asset Δ 3yr: Percentage change in net assets over 3 years.\n"
+    "  Source: XBRL balance sheet data across last 3 filings.\n"
+    "  Works for Total Exemption filers — net_assets is the one field most UK SMEs disclose.",
+    "Staff Cost Δ 3yr: Percentage change in staff costs over 3 years.\n"
+    "  Proxy for headcount growth — available even when employee count is not disclosed.\n"
+    "  Source: XBRL staff_costs field across last 3 filings.",
+    "Gross Margin %: Gross profit as percentage of turnover.\n"
+    "  Source: OCR extraction from filed accounts PDF.\n"
+    "  Only available where accounts disclose both gross profit and turnover.",
+    "Debt/Asset %: Total liabilities as percentage of total assets.\n"
+    "  Lower is healthier. >100% indicates negative equity.\n"
+    "  Source: XBRL or OCR balance sheet data.",
+    "Debtors £: Latest trade debtors / receivables figure.\n"
+    "  Source: OCR extraction from filed accounts PDF.\n"
+    "  High debtors relative to revenue suggests strong order book.",
+    "Filing Quality: Classification of accounts type.\n"
+    "  Full/Medium = most data available; Small/Exempt = balance sheet only;\n"
+    "  Micro/Dormant = minimal data. Affects reliability of other metrics.",
+    "Growth Score (0-100): Composite weighted score blending:\n"
+    "  Revenue growth (30%), Net asset growth (20%), Staff cost growth (15%),\n"
+    "  Employee growth (15%), Gross margin (10%), Debt health (10%).\n"
+    "  Confidence-adjusted: fewer signals → lower maximum score.",
+    "Performance: Summary label derived from Growth Score.\n"
+    "  Strong Growth (75+) | Growing (55-74) | Stable (40-54) |\n"
+    "  Declining (25-39) | Weak (<25) | Insufficient Data (no score).",
 ]
 
 def build_pipeline(wb, companies):
@@ -871,6 +900,96 @@ def build_pipeline(wb, companies):
             else:
                 cell(ws, row, base_col,     "—", bg=bg, align="center", size=8, fg="AAAAAA")
                 cell(ws, row, base_col + 1, "—", bg=bg, size=7, fg="AAAAAA")
+
+        # ── Performance & growth metric columns (59–66) ─────────────────────
+
+        # Col 59 — Net Asset Δ 3yr
+        na_growth_label = c.get("net_asset_growth_label")
+        na_growth_val   = c.get("net_asset_growth_pct")
+        if na_growth_label:
+            na_bg = fill("E2EFDA") if na_growth_val > 0 else (
+                    fill("FFD6D6") if na_growth_val < 0 else bg)
+            cell(ws, row, 59, na_growth_label, bg=na_bg, align="center", size=9, bold=True)
+        else:
+            cell(ws, row, 59, "-", bg=bg, align="center", size=9, fg="AAAAAA")
+
+        # Col 60 — Staff Cost Δ 3yr
+        sc_growth_label = c.get("staff_cost_growth_label")
+        sc_growth_val   = c.get("staff_cost_growth_pct")
+        if sc_growth_label:
+            sc_bg = fill("E2EFDA") if sc_growth_val > 0 else (
+                    fill("FFD6D6") if sc_growth_val < 0 else bg)
+            cell(ws, row, 60, sc_growth_label, bg=sc_bg, align="center", size=9, bold=True)
+        else:
+            cell(ws, row, 60, "-", bg=bg, align="center", size=9, fg="AAAAAA")
+
+        # Col 61 — Gross Margin %
+        gm_label = c.get("gross_margin_label")
+        gm_val   = c.get("gross_margin_pct")
+        if gm_label:
+            gm_bg = fill("E2EFDA") if gm_val >= 30 else (
+                    fill("FFF2CC") if gm_val >= 15 else fill("FFD6D6"))
+            cell(ws, row, 61, gm_label, bg=gm_bg, align="center", size=9)
+        else:
+            cell(ws, row, 61, "-", bg=bg, align="center", size=9, fg="AAAAAA")
+
+        # Col 62 — Debt/Asset %
+        da_label = c.get("debt_to_asset_label")
+        da_val   = c.get("debt_to_asset_pct")
+        if da_label:
+            da_bg = fill("E2EFDA") if da_val < 50 else (
+                    fill("FFF2CC") if da_val < 80 else fill("FFD6D6"))
+            cell(ws, row, 62, da_label, bg=da_bg, align="center", size=9)
+        else:
+            cell(ws, row, 62, "-", bg=bg, align="center", size=9, fg="AAAAAA")
+
+        # Col 63 — Trade Debtors £
+        td_label = c.get("trade_debtors_label")
+        if td_label:
+            cell(ws, row, 63, td_label, bg=bg, align="right", size=9)
+        else:
+            cell(ws, row, 63, "-", bg=bg, align="center", size=9, fg="AAAAAA")
+
+        # Col 64 — Filing Quality
+        fq = c.get("filing_quality", "Unknown")
+        fq_bg_map = {"Full": fill("E2EFDA"), "Medium": fill("E2EFDA"),
+                     "Small-Full": fill("E8F4FD"), "Small": fill("FFF2CC"),
+                     "Exempt-Full": fill("FFF2CC"), "Exempt-Small": fill("FFF2CC"),
+                     "Abridged": fill("FFF2CC"),
+                     "Micro": fill("FFD6D6"), "Dormant": fill("FFD6D6")}
+        cell(ws, row, 64, fq, bg=fq_bg_map.get(fq, bg), align="center", size=8)
+
+        # Col 65 — Growth Score (0–100)
+        gs = c.get("growth_score")
+        if gs is not None:
+            gs_bg = fill("E2EFDA") if gs >= 55 else (
+                    fill("FFF2CC") if gs >= 35 else fill("FFD6D6"))
+            gs_fg = "1A5C2C" if gs >= 55 else ("7B5B00" if gs >= 35 else "7B0000")
+            cell(ws, row, 65, gs, bg=gs_bg, align="center", size=10, bold=True, fg=gs_fg)
+            # Add data count as tooltip
+            dc = c.get("growth_data_count", 0)
+            cmt = Comment(f"Based on {dc} growth signal(s)\n"
+                          + "\n".join(f"  {k}: {v:.0f}" for k, v in (c.get("growth_signals") or {}).items()),
+                          "V² Pipeline")
+            ws.cell(row=row, column=65).comment = cmt
+        else:
+            cell(ws, row, 65, "-", bg=bg, align="center", size=9, fg="AAAAAA")
+
+        # Col 66 — Performance summary label
+        perf = c.get("performance_label", "Insufficient Data")
+        perf_bg_map = {
+            "Strong Growth": fill("E2EFDA"), "Growing": fill("E2EFDA"),
+            "Stable": fill("FFF2CC"), "Declining": fill("FFD6D6"),
+            "Weak": fill("FFD6D6"), "Insufficient Data": fill("EEEEEE"),
+        }
+        perf_fg_map = {
+            "Strong Growth": "1A5C2C", "Growing": "1A5C2C",
+            "Stable": "7B5B00", "Declining": "7B0000",
+            "Weak": "7B0000", "Insufficient Data": "888888",
+        }
+        cell(ws, row, 66, perf,
+             bg=perf_bg_map.get(perf, bg), fg=perf_fg_map.get(perf, "000000"),
+             align="center", size=9, bold=(perf in ("Strong Growth", "Weak")))
 
     ws.freeze_panes = "E4"   # freeze cols A-D (Rank, Reg, Name, Sector ✓)
     ws.auto_filter.ref = f"A3:{get_column_letter(n)}{len(companies)+3}"

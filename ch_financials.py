@@ -631,6 +631,191 @@ def run():
             c["revenue_growth_pct"]   = None
             c["revenue_growth_label"] = None
 
+        # ── 1. Net Asset Growth % (3yr) ───────────────────────────────────────
+        # Percentage change in net assets from oldest → newest XBRL year.
+        # Works for Total Exemption filers — net_assets is the one field almost
+        # all UK SME filings include on the balance sheet.
+        na_vals = [(h.get("net_assets"), h.get("period_end"))
+                   for h in hist if h.get("net_assets") is not None]
+        if len(na_vals) >= 2:
+            na_new = na_vals[0][0]
+            na_old = na_vals[-1][0]
+            if na_old and na_old != 0:
+                na_growth = round((na_new - na_old) / abs(na_old) * 100, 1)
+                c["net_asset_growth_pct"]   = na_growth
+                c["net_asset_growth_label"] = f"+{na_growth}%" if na_growth > 0 else f"{na_growth}%"
+            else:
+                c["net_asset_growth_pct"]   = None
+                c["net_asset_growth_label"] = None
+        else:
+            c["net_asset_growth_pct"]   = None
+            c["net_asset_growth_label"] = None
+
+        # ── 2. Staff Cost Growth % (3yr) ──────────────────────────────────────
+        # Proxy for headcount growth — available even when employee count isn't
+        # disclosed. Uses staff_costs from XBRL history.
+        sc_vals = [(h.get("staff_costs"), h.get("period_end"))
+                   for h in hist if h.get("staff_costs") is not None and h["staff_costs"] > 0]
+        if len(sc_vals) >= 2:
+            sc_new = sc_vals[0][0]
+            sc_old = sc_vals[-1][0]
+            if sc_old > 0:
+                sc_growth = round((sc_new - sc_old) / sc_old * 100, 1)
+                c["staff_cost_growth_pct"]   = sc_growth
+                c["staff_cost_growth_label"] = f"+{sc_growth}%" if sc_growth > 0 else f"{sc_growth}%"
+            else:
+                c["staff_cost_growth_pct"]   = None
+                c["staff_cost_growth_label"] = None
+        else:
+            c["staff_cost_growth_pct"]   = None
+            c["staff_cost_growth_label"] = None
+
+        # ── 3. Gross Profit Margin % ──────────────────────────────────────────
+        # From OCR gross_profit / turnover. Only available if OCR found both.
+        ocr = c.get("accounts_ocr", {})
+        gp_val  = ocr.get("gross_profit")
+        gp_turn = ocr.get("turnover")
+        if gp_val and gp_turn and gp_turn > 0:
+            gp_margin = round(gp_val / gp_turn * 100, 1)
+            c["gross_margin_pct"]   = gp_margin
+            c["gross_margin_label"] = f"{gp_margin}%"
+        else:
+            c["gross_margin_pct"]   = None
+            c["gross_margin_label"] = None
+
+        # ── 4. Debt-to-Asset Ratio + trend ────────────────────────────────────
+        # total_liabilities / total_assets from the most recent data.
+        # Trend uses XBRL history where both values are available.
+        bs = c.get("bs") or c.get("financials", {}).get("balance_sheet", {}) or {}
+        tl = bs.get("total_liabilities") or (ocr.get("total_liabilities") if ocr else None)
+        ta = bs.get("total_assets") or (ocr.get("total_assets") if ocr else None)
+        if tl and ta and ta > 0:
+            dta = round(tl / ta * 100, 1)
+            c["debt_to_asset_pct"]   = dta
+            c["debt_to_asset_label"] = f"{dta}%"
+        else:
+            c["debt_to_asset_pct"]   = None
+            c["debt_to_asset_label"] = None
+
+        # ── 5. Trade Debtors Growth ───────────────────────────────────────────
+        # Change in trade debtors across available years (OCR-extracted).
+        td_val = ocr.get("trade_debtors") if ocr else None
+        c["trade_debtors_latest"] = td_val
+        # We can only trend debtors if we have history from OCR; for now,
+        # just report the latest value. Future: multi-year OCR comparison.
+        c["trade_debtors_label"] = f"£{td_val:,.0f}" if td_val else None
+
+        # ── 6. Filing Quality Indicator ───────────────────────────────────────
+        # Classify the accounts type into a filing quality tier.
+        acct_type = bs.get("accounts_type", "").lower() if bs else ""
+        if not acct_type and hist:
+            acct_type = (hist[0].get("accounts_type") or "").lower()
+        fq_map = {
+            "full": "Full", "group": "Full", "large": "Full",
+            "medium": "Medium", "small-full": "Small-Full",
+            "small": "Small", "total exemption full": "Exempt-Full",
+            "total exemption small": "Exempt-Small",
+            "total-exemption-full": "Exempt-Full",
+            "total-exemption-small": "Exempt-Small",
+            "micro-entity": "Micro", "micro entity": "Micro",
+            "dormant": "Dormant",
+            "unaudited-abridged": "Abridged", "unaudited abridged": "Abridged",
+        }
+        filing_quality = "Unknown"
+        for key, label in fq_map.items():
+            if key in acct_type:
+                filing_quality = label
+                break
+        c["filing_quality"] = filing_quality
+
+        # ── 7. Composite Growth Score (0–100) ─────────────────────────────────
+        # Weighted blend of all available growth signals.
+        # Each signal contributes a sub-score scaled to 0–100, weighted by
+        # importance. If data is missing, the weight is redistributed to
+        # available signals — so companies with less data still get a
+        # proportional score, but with a confidence penalty.
+        growth_signals = {}
+        growth_weights = {}
+
+        # Revenue growth — strongest signal (weight 30)
+        rg = c.get("revenue_growth_pct")
+        if rg is not None:
+            # Map: -50% → 0, 0% → 40, +50% → 80, +100%+ → 100
+            rg_score = max(0, min(100, 40 + rg * 0.6))
+            growth_signals["revenue_growth"] = rg_score
+            growth_weights["revenue_growth"] = 30
+
+        # Net asset growth — weight 20
+        nag = c.get("net_asset_growth_pct")
+        if nag is not None:
+            na_score = max(0, min(100, 40 + nag * 0.6))
+            growth_signals["net_asset_growth"] = na_score
+            growth_weights["net_asset_growth"] = 20
+
+        # Staff cost growth — weight 15
+        scg = c.get("staff_cost_growth_pct")
+        if scg is not None:
+            sc_score = max(0, min(100, 40 + scg * 0.6))
+            growth_signals["staff_cost_growth"] = sc_score
+            growth_weights["staff_cost_growth"] = 15
+
+        # Employee delta — weight 15
+        ed = c.get("employee_delta")
+        if ed is not None:
+            # Map: -10 → 0, 0 → 40, +10 → 80, +20+ → 100
+            ed_score = max(0, min(100, 40 + ed * 4))
+            growth_signals["employee_growth"] = ed_score
+            growth_weights["employee_growth"] = 15
+
+        # Gross margin — weight 10 (absolute level, not growth)
+        gpm = c.get("gross_margin_pct")
+        if gpm is not None:
+            # Map: 0% → 10, 30% → 50, 60%+ → 90
+            gm_score = max(0, min(100, 10 + gpm * 1.33))
+            growth_signals["gross_margin"] = gm_score
+            growth_weights["gross_margin"] = 10
+
+        # Debt-to-asset — weight 10 (lower is better)
+        dta_val = c.get("debt_to_asset_pct")
+        if dta_val is not None:
+            # Map: 0% → 90, 50% → 50, 100%+ → 10
+            da_score = max(0, min(100, 90 - dta_val * 0.8))
+            growth_signals["debt_health"] = da_score
+            growth_weights["debt_health"] = 10
+
+        # Compute weighted score
+        total_weight = sum(growth_weights.values())
+        if total_weight > 0:
+            raw_score = sum(growth_signals[k] * growth_weights[k]
+                           for k in growth_signals) / total_weight
+            # Confidence penalty: reduce score if we have few signals
+            signal_count = len(growth_signals)
+            confidence_factor = min(1.0, signal_count / 4)  # full confidence at 4+ signals
+            composite = round(raw_score * confidence_factor)
+            c["growth_score"]      = max(0, min(100, composite))
+            c["growth_signals"]    = growth_signals
+            c["growth_data_count"] = signal_count
+        else:
+            c["growth_score"]      = None
+            c["growth_signals"]    = {}
+            c["growth_data_count"] = 0
+
+        # ── Performance Summary label ─────────────────────────────────────────
+        gs = c.get("growth_score")
+        if gs is not None:
+            if gs >= 75:
+                c["performance_label"] = "Strong Growth"
+            elif gs >= 55:
+                c["performance_label"] = "Growing"
+            elif gs >= 40:
+                c["performance_label"] = "Stable"
+            elif gs >= 25:
+                c["performance_label"] = "Declining"
+            else:
+                c["performance_label"] = "Weak"
+        else:
+            c["performance_label"] = "Insufficient Data"
+
         time.sleep(0.1)
 
     fin_path = os.path.join(cfg.OUTPUT_DIR, cfg.ENRICHED_JSON)

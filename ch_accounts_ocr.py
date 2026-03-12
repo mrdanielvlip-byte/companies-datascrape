@@ -148,6 +148,11 @@ P_STAFF = re.compile(
 # Matches: "Average number of persons employed 35" / "Average number of employees 12"
 # Also: "Monthly average of employees during the year 28"
 # Note: captures plain integers (no £ sign) — distinct from financial value patterns
+P_GROSS_PROFIT = re.compile(
+    r'(?:gross\s+profit|gross\s+margin|gross\s+surplus)'
+    r'[\s\d:]*\s+([\(\)£$\d,\.\-]+)',
+    re.IGNORECASE | re.MULTILINE)
+
 P_EMPLOYEES = re.compile(
     r'(?:average\s+(?:monthly\s+)?number\s+of\s+(?:persons?\s+employed|employees?)'
     r'|monthly\s+average\s+of\s+employees?\s+(?:during|in)\s+the\s+(?:year|period)'
@@ -228,6 +233,7 @@ def parse_financials(full_text, priority):
         "fixed_assets": None, "current_assets": None,
         "trade_debtors": None,    # for debtor book revenue model (Method 7)
         "total_liabilities": None, # for debt capacity model (Method 8)
+        "gross_profit": None,      # gross profit / gross margin
         "employees": None,         # average number of persons employed
         "currency": currency_from_text(full_text),
         "source": "CH accounts PDF (OCR)",
@@ -244,6 +250,7 @@ def parse_financials(full_text, priority):
     result["current_assets"]    = safe_val(P_CURRENT_ASSETS.search(full_text))
     result["trade_debtors"]     = safe_val(P_TRADE_DEBTORS.search(full_text))
     result["total_liabilities"] = safe_val(P_CREDITORS.search(full_text))
+    result["gross_profit"]      = safe_val(P_GROSS_PROFIT.search(full_text))
 
     # Employee headcount — plain integer, not a £ value
     emp_match = P_EMPLOYEES.search(full_text)
