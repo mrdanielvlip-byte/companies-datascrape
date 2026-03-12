@@ -488,6 +488,10 @@ SIC_CODES_LIST = {
     "24100": "Manufacture of basic iron and steel and of ferro-alloys",
     "24200": "Manufacture of tubes, pipes, hollow profiles and related fittings, of steel",
     "24420": "Aluminium production",
+    "24430": "Lead, zinc and tin production",
+    "24440": "Copper production",
+    "24450": "Other non-ferrous metal production",
+    "24460": "Processing of nuclear fuel",
     "24510": "Casting of iron",
     "24520": "Casting of steel",
     "25110": "Manufacture of metal structures and parts of structures",
@@ -1098,8 +1102,9 @@ def discover(
     _raw = sector_description.strip().replace(" ", "")
     _raw_codes = [c.strip() for c in _raw.split(",") if c.strip().isdigit()]
     if _raw_codes and all(c.isdigit() for c in _raw_codes):
-        # Validate each code exists in the SIC list
-        valid_codes = [c for c in _raw_codes if c in SIC_CODES_LIST]
+        # Accept codes in the SIC list, but also accept any 4-5 digit code
+        # (Companies House uses codes not always in our dictionary)
+        valid_codes = [c for c in _raw_codes if c in SIC_CODES_LIST or (len(c) in (4, 5) and c.isdigit())]
         if valid_codes:
             sic_code_list = valid_codes[:top_sic]
             selected = [
