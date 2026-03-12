@@ -1117,18 +1117,55 @@ def discover(
                 for c in sic_code_list
             ]
             bench_cat    = _infer_benchmark_category(sic_code_list)
-            market_score = min(int(BENCHMARK_DEFAULTS[bench_cat]["sector_b2b_score"] * 0.85), 85)
+            benchmarks   = BENCHMARK_DEFAULTS[bench_cat].copy()
+            market_score = min(int(benchmarks["sector_b2b_score"] * 0.85), 85)
             source       = "direct SIC code"
+            label        = ", ".join(SIC_CODES_LIST.get(c, c) for c in sic_code_list)
+            slug         = sic_code_list[0]
+            bolt_on      = _build_bolt_on_adjacencies(label, sic_code_list)
             print(f"  ✓ Direct SIC code lookup: {', '.join(sic_code_list)}")
 
             cfg = SimpleNamespace(
-                SIC_CODES          = sic_code_list,
-                SECTOR_DESCRIPTION = ", ".join(SIC_CODES_LIST.get(c, c) for c in sic_code_list),
-                BENCHMARK_CATEGORY = bench_cat,
-                MARKET_SCORE       = market_score,
-                EXCLUDE_SUBSECTORS = [],
-                _sic_matches       = selected,
-                _source            = source,
+                SECTOR_LABEL            = f"UK {label.title()}",
+                SECTOR_DESCRIPTION      = label,
+                SECTOR_SLUG             = slug,
+                SIC_CODES               = sic_code_list,
+                NAME_QUERIES            = [],
+                INCLUDE_STEMS           = [],
+                EXCLUDE_TERMS           = ["holdings", "holding company", "group plc",
+                                           "quoted", "listed", "investment trust",
+                                           "venture capital"],
+                EXCLUDE_SUBSECTORS      = [],
+                SECTOR_BENCHMARKS       = benchmarks,
+                REVENUE_PER_HEAD_LOW    = benchmarks["revenue_per_head_low"],
+                REVENUE_PER_HEAD_MID    = benchmarks["revenue_per_head_base"],
+                REVENUE_PER_HEAD_HIGH   = benchmarks["revenue_per_head_high"],
+                ASSET_TURNOVER_RATIO    = benchmarks["asset_turnover_ratio"],
+                EBITDA_MARGIN_LOW       = benchmarks["ebitda_margin_low"],
+                EBITDA_MARGIN_BASE      = benchmarks["ebitda_margin_base"],
+                EBITDA_MARGIN_HIGH      = benchmarks["ebitda_margin_high"],
+                TARGET_REVENUE_MIN      = 5_000_000,
+                TARGET_REVENUE_MAX      = 30_000_000,
+                TARGET_EBITDA_MIN       = 1_000_000,
+                TARGET_EBITDA_MAX       = 5_000_000,
+                FOUNDER_AGE_FLOOR       = 55,
+                SCORE_WEIGHTS           = {
+                    "scale_financial":       0.30,
+                    "market_attractiveness": 0.20,
+                    "ownership_succession":  0.30,
+                    "dealability_signals":   0.20,
+                },
+                SCORE_THRESHOLDS        = {"prime": 80, "high": 65, "medium": 50},
+                MARKET_ATTRACTIVENESS_SCORE = market_score,
+                CONTACT_ENRICH_TOP_N    = 50,
+                BOLT_ON_ADJACENCIES     = bolt_on,
+                OUTPUT_DIR              = "output",
+                RAW_JSON                = "raw_companies.json",
+                FILTERED_JSON           = "filtered_companies.json",
+                ENRICHED_JSON           = "enriched_companies.json",
+                EXCEL_OUTPUT            = "PE_Pipeline.xlsx",
+                _sic_matches            = selected,
+                _benchmark_category     = bench_cat,
             )
             print(f"\n📋 Config ready — {len(sic_code_list)} SIC codes via {source}")
             return cfg
