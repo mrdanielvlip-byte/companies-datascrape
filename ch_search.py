@@ -53,7 +53,12 @@ def is_genuine(name: str) -> bool:
         return False
     if any(ex in n for ex in cfg.EXCLUDE_SUBSECTORS):
         return False
-    return any(kw in n for kw in cfg.INCLUDE_STEMS)
+    # If INCLUDE_STEMS is empty (e.g. direct SIC code input), accept all
+    # companies that pass the exclusion filters above.
+    stems = cfg.INCLUDE_STEMS
+    if not stems:
+        return True
+    return any(kw in n for kw in stems)
 
 
 # ── SIC sweep ─────────────────────────────────────────────────────────────────
