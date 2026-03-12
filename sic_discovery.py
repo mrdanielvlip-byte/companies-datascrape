@@ -1092,6 +1092,42 @@ def discover(
 
     print(f"\n🔍 Discovering SIC codes for: '{sector_description}' ...")
 
+    # ── Step 0: Direct SIC code input ─────────────────────────────────────────
+    # If the user typed a raw SIC code (e.g. "24430") or comma-separated codes,
+    # look them up directly instead of fuzzy matching on the text.
+    _raw = sector_description.strip().replace(" ", "")
+    _raw_codes = [c.strip() for c in _raw.split(",") if c.strip().isdigit()]
+    if _raw_codes and all(c.isdigit() for c in _raw_codes):
+        # Validate each code exists in the SIC list
+        valid_codes = [c for c in _raw_codes if c in SIC_CODES_LIST]
+        if valid_codes:
+            sic_code_list = valid_codes[:top_sic]
+            selected = [
+                {
+                    "code":        c,
+                    "description": SIC_CODES_LIST.get(c, ""),
+                    "score":       1.0,
+                    "source":      "direct SIC code",
+                }
+                for c in sic_code_list
+            ]
+            bench_cat    = _infer_benchmark_category(sic_code_list)
+            market_score = min(int(BENCHMARK_DEFAULTS[bench_cat]["sector_b2b_score"] * 0.85), 85)
+            source       = "direct SIC code"
+            print(f"  ✓ Direct SIC code lookup: {', '.join(sic_code_list)}")
+
+            cfg = SimpleNamespace(
+                SIC_CODES          = sic_code_list,
+                SECTOR_DESCRIPTION = ", ".join(SIC_CODES_LIST.get(c, c) for c in sic_code_list),
+                BENCHMARK_CATEGORY = bench_cat,
+                MARKET_SCORE       = market_score,
+                EXCLUDE_SUBSECTORS = [],
+                _sic_matches       = selected,
+                _source            = source,
+            )
+            print(f"\n📋 Config ready — {len(sic_code_list)} SIC codes via {source}")
+            return cfg
+
     # ── Step 1: Try curated map first ─────────────────────────────────────────
     curated = _curated_match(sector_description)
 
