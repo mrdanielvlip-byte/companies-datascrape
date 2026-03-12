@@ -26,6 +26,35 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+# ── Password gate ─────────────────────────────────────────────────────────────
+# Set APP_PASSWORD in .streamlit/secrets.toml to enable. Users must enter it
+# once per session before seeing the app.
+_APP_PASSWORD = st.secrets.get("APP_PASSWORD", "")
+
+if _APP_PASSWORD:
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+
+    if not st.session_state.authenticated:
+        st.markdown(
+            "<div style='max-width:400px;margin:120px auto;text-align:center'>"
+            "<h2>🔒 V Squared Sector Search</h2>"
+            "<p style='color:gray'>Enter the password to continue</p></div>",
+            unsafe_allow_html=True,
+        )
+        with st.container():
+            col_l, col_m, col_r = st.columns([1, 1, 1])
+            with col_m:
+                pwd = st.text_input("Password", type="password", key="login_pwd",
+                                    label_visibility="collapsed", placeholder="Password")
+                if st.button("Sign in", use_container_width=True, type="primary"):
+                    if pwd == _APP_PASSWORD:
+                        st.session_state.authenticated = True
+                        st.rerun()
+                    else:
+                        st.error("Incorrect password.")
+        st.stop()
+
 # ── Config ─────────────────────────────────────────────────────────────────────
 GITHUB_TOKEN   = st.secrets.get("GITHUB_TOKEN", "")
 GITHUB_REPO    = st.secrets.get("GITHUB_REPO", "mrdanielvlip-byte/companies-datascrape")
