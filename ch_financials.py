@@ -70,6 +70,55 @@ def get_filing_history(company_number: str) -> list[dict]:
     return data.get("items", [])
 
 
+def _parse_filing_entry(filing: dict) -> dict:
+    """Parse a single accounts filing into the standard entry format, fetching XBRL if available."""
+    acc_type_raw = filing.get("description", "")
+    acc_type = acc_type_raw.replace("accounts-with-accounts-type-", "").replace("-", " ").title()
+    period_end = filing.get("action_date", "")
+
+    entry = {
+        "period_end":        period_end,
+        "accounts_type":     acc_type,
+        "turnover":          None,
+        "profit_before_tax": None,
+        "operating_profit":  None,
+        "net_assets":        None,
+        "total_assets":      None,
+        "total_employees":   None,
+        "staff_costs":       None,
+    }
+
+    # Try to get XBRL structured data from document metadata link
+    # (Available for larger / full accounts; not for Total Exemption)
+    doc_url = filing.get("links", {}).get("document_metadata", "")
+    if doc_url:
+        try:
+            doc_meta = get(doc_url.replace("https://api.company-information.service.gov.uk", ""))
+            xbrl = doc_meta.get("xbrl_data", {}) or {}
+            if xbrl:
+                entry["turnover"]          = xbrl.get("turnover") or xbrl.get("Turnover") or xbrl.get("Revenue")
+                entry["profit_before_tax"]  = xbrl.get("profit_before_tax") or xbrl.get("ProfitBeforeTax") or xbrl.get("ProfitLossBeforeTax")
+                entry["operating_profit"]   = xbrl.get("operating_profit") or xbrl.get("OperatingProfit") or xbrl.get("ProfitLossOnOrdinaryActivitiesBeforeTax")
+                entry["net_assets"]        = xbrl.get("net_assets") or xbrl.get("NetAssets")
+                entry["total_assets"]      = xbrl.get("total_assets") or xbrl.get("TotalAssets")
+                entry["total_employees"]   = xbrl.get("employees") or xbrl.get("NumberEmployees")
+                entry["staff_costs"]       = xbrl.get("staff_costs") or xbrl.get("StaffCosts")
+        except Exception:
+            pass
+
+    return entry
+
+
+def _parse_accounts_from_filings(company_number: str, filing_items: list[dict],
+                                  years: int = 3) -> list[dict]:
+    """
+    Parse accounts history from pre-fetched filing items (cached from ch_enrich).
+    Same logic as get_accounts_history but skips the API call for filing list.
+    Still makes API calls for XBRL document metadata where available.
+    """
+    return [_parse_filing_entry(f) for f in filing_items[:years]]
+
+
 def get_accounts_history(company_number: str, years: int = 3) -> list[dict]:
     """
     Fetch the last N years of accounts filings and extract what data is available.
@@ -90,47 +139,7 @@ def get_accounts_history(company_number: str, years: int = 3) -> list[dict]:
     """
     filings = get(f"/company/{company_number}/filing-history?category=accounts&items_per_page={years + 2}")
     items = filings.get("items", [])
-    history = []
-
-    for filing in items[:years]:
-        acc_type_raw = filing.get("description", "")
-        # Normalise CH description string e.g. "accounts-with-accounts-type-total-exemption-full"
-        acc_type = acc_type_raw.replace("accounts-with-accounts-type-", "").replace("-", " ").title()
-        period_end = filing.get("action_date", "")
-
-        entry = {
-            "period_end":        period_end,
-            "accounts_type":     acc_type,
-            "turnover":          None,
-            "profit_before_tax": None,
-            "operating_profit":  None,
-            "net_assets":        None,
-            "total_assets":      None,
-            "total_employees":   None,
-            "staff_costs":       None,
-        }
-
-        # Try to get XBRL structured data from document metadata link
-        # (Available for larger / full accounts; not for Total Exemption)
-        doc_url = filing.get("links", {}).get("document_metadata", "")
-        if doc_url:
-            try:
-                doc_meta = get(doc_url.replace("https://api.company-information.service.gov.uk", ""))
-                xbrl = doc_meta.get("xbrl_data", {}) or {}
-                if xbrl:
-                    entry["turnover"]          = xbrl.get("turnover") or xbrl.get("Turnover") or xbrl.get("Revenue")
-                    entry["profit_before_tax"]  = xbrl.get("profit_before_tax") or xbrl.get("ProfitBeforeTax") or xbrl.get("ProfitLossBeforeTax")
-                    entry["operating_profit"]   = xbrl.get("operating_profit") or xbrl.get("OperatingProfit") or xbrl.get("ProfitLossOnOrdinaryActivitiesBeforeTax")
-                    entry["net_assets"]        = xbrl.get("net_assets") or xbrl.get("NetAssets")
-                    entry["total_assets"]      = xbrl.get("total_assets") or xbrl.get("TotalAssets")
-                    entry["total_employees"]   = xbrl.get("employees") or xbrl.get("NumberEmployees")
-                    entry["staff_costs"]       = xbrl.get("staff_costs") or xbrl.get("StaffCosts")
-            except Exception:
-                pass
-
-        history.append(entry)
-
-    return history
+    return _parse_accounts_from_filings(company_number, items, years)
 
 
 def estimate_employees(company: dict) -> tuple[int | None, str]:
@@ -199,8 +208,11 @@ def get_balance_sheet(company_number: str) -> dict:
     is publicly available — turnover is not disclosed.
     Returns values with data reliability tier tags.
     """
-    # Try the company profile for any embedded financial data
-    profile = get(f"/company/{company_number}")
+    # Try local DB first for accounts metadata, API fallback
+    from db_lookup import get_company_profile as _db_profile, db_available
+    profile = _db_profile(company_number) if db_available() else None
+    if profile is None:
+        profile = get(f"/company/{company_number}")
     accounts_meta = profile.get("accounts", {})
 
     result = {
@@ -485,8 +497,17 @@ def enrich_financials(company: dict) -> dict:
     num       = company["company_number"]
     employees = company.get("total_employees")
     bs        = get_balance_sheet(num)
-    charges   = get_charges(num)
-    accounts_history = get_accounts_history(num, years=3)
+    # Reuse charges from ch_enrich if already fetched (avoid duplicate API call)
+    charges   = company.get("charges") or get_charges(num)
+    # Reuse cached filing history from ch_enrich if available
+    cached_fh = company.get("_raw_filing_history")
+    if cached_fh:
+        # Extract accounts filings from the cached full filing history
+        acct_items = [f for f in cached_fh.get("items", [])
+                      if "account" in f.get("description", "").lower()][:5]
+        accounts_history = _parse_accounts_from_filings(num, acct_items, years=3)
+    else:
+        accounts_history = get_accounts_history(num, years=3)
     time.sleep(0.1)
 
     # ── Legacy single-sector models (kept for backward compat) ───────────────

@@ -78,7 +78,13 @@ def years_since(date_str: str) -> float:
         return 0
 
 
-def get_directors(company_number: str) -> list[dict]:
+def get_directors(company_number: str) -> tuple[list[dict], dict]:
+    """
+    Fetch officers and return (active_directors, raw_officers_response).
+
+    The raw response is cached in the company dict so that sell_signals
+    can reuse it for churn analysis without a duplicate API call.
+    """
     data = get(f"/company/{company_number}/officers?items_per_page=100")
     active_roles = {
         "director", "corporate-director",
@@ -100,7 +106,7 @@ def get_directors(company_number: str) -> list[dict]:
                 "occupation":   o.get("occupation", ""),
                 "data_tier":    "Tier 1 — Companies House officers register",
             })
-    return directors
+    return directors, data
 
 
 def get_psc(company_number: str) -> list[dict]:
@@ -215,17 +221,25 @@ def analyse_ownership(psc_list: list[dict], ocr_text: str = "") -> dict:
         if pat in name_lower:
             signals.append(f"Weak: '{pat}' in owner name")
 
-    # ── Step 3: Look up holding company on Companies House ───────────────────
+    # ── Step 3: Look up holding company — DB first, API fallback ──────────────
     try:
-        # Search CH for the holding company by exact name
-        search_q = owner_name.replace(" LIMITED", "").replace(" LTD", "").strip()
-        search_data = get(f"/search/companies?q={requests.utils.quote(search_q)}&items_per_page=5")
-        matches = search_data.get("items", [])
+        from db_lookup import search_company_by_name, get_holding_co_sics, db_available
+
+        # Search local DB first (instant, no API call)
+        db_matches = search_company_by_name(owner_name, limit=5) if db_available() else []
+
+        if db_matches:
+            matches = db_matches
+        else:
+            # Fallback: CH search API
+            search_q = owner_name.replace(" LIMITED", "").replace(" LTD", "").strip()
+            search_data = get(f"/search/companies?q={requests.utils.quote(search_q)}&items_per_page=5")
+            matches = search_data.get("items", [])
 
         # Try to find an exact or close match
         holding_co = None
         for m in matches:
-            m_name = (m.get("title") or "").upper()
+            m_name = (m.get("title") or m.get("company_name") or "").upper()
             if m_name == owner_name.upper() or m_name.replace("LIMITED", "LTD") == owner_name.upper().replace("LIMITED", "LTD"):
                 holding_co = m
                 break
@@ -235,6 +249,7 @@ def analyse_ownership(psc_list: list[dict], ocr_text: str = "") -> dict:
             result["owner_company_number"] = hc_number
 
             # Get PSC of the holding company — check for PE one level up
+            # (PSC is NOT in the local DB — API call required)
             hc_psc_data = get(f"/company/{hc_number}/persons-with-significant-control?items_per_page=50")
             hc_psc = [p for p in hc_psc_data.get("items", []) if not p.get("ceased_on")]
             result["owner_psc_chain"] = [
@@ -250,9 +265,11 @@ def analyse_ownership(psc_list: list[dict], ocr_text: str = "") -> dict:
                         if pat in pn:
                             signals.append(f"Upstream: '{pat}' in holding co PSC: {p.get('name', '')}")
 
-            # Check holding company SIC codes for investment/holding patterns
-            hc_profile = get(f"/company/{hc_number}")
-            hc_sics = hc_profile.get("sic_codes", [])
+            # Check holding company SIC codes — DB first, API fallback
+            hc_sics = get_holding_co_sics(hc_number) if db_available() else None
+            if hc_sics is None:
+                hc_profile = get(f"/company/{hc_number}")
+                hc_sics = hc_profile.get("sic_codes", [])
             # 64205 = Activities of financial services holding companies
             # 64209 = Activities of other holding companies
             # 64301 = Activities of venture and development capital companies
@@ -392,7 +409,7 @@ def succession_score(directors: list[dict]) -> dict:
 # ── Dealability signals ───────────────────────────────────────────────────────
 
 def dealability_score(company_number: str, directors: list[dict],
-                       charges: dict) -> dict:
+                       charges: dict, cached_filing_history: dict | None = None) -> dict:
     """
     Dealability Signals score (0–20):
     • Corporate restructuring (new HoldCo, share transfers)   +5
@@ -404,7 +421,10 @@ def dealability_score(company_number: str, directors: list[dict],
     Debt Growth = (Current Debt − Previous Debt) / Previous Debt
     Data tier: Tier 1
     """
-    filing_history = get(f"/company/{company_number}/filing-history?items_per_page=25")
+    if cached_filing_history is not None:
+        filing_history = cached_filing_history
+    else:
+        filing_history = get(f"/company/{company_number}/filing-history?items_per_page=25")
     filings        = filing_history.get("items", [])
     score = 0
     signals = []
@@ -564,9 +584,13 @@ def enrich_one(c: dict) -> dict:
 
     num = c["company_number"]
 
-    directors = get_directors(num);    rate_limited_sleep()
+    directors, raw_officers = get_directors(num);    rate_limited_sleep()
     psc       = get_psc(num);          rate_limited_sleep()
     charges   = get_charges(num);      rate_limited_sleep()
+
+    # Fetch filing history once — reused by dealability + sell_signals
+    raw_filing_history = get(f"/company/{num}/filing-history?items_per_page=25")
+    rate_limited_sleep()
 
     # Deep ownership analysis — checks holding company + PE patterns
     ownership = analyse_ownership(psc)
@@ -577,8 +601,8 @@ def enrich_one(c: dict) -> dict:
     incorp_year  = int(c["date_of_creation"][:4]) if c.get("date_of_creation") else 0
     company_age  = 2025 - incorp_year if incorp_year else 0
 
-    deal         = dealability_score(num, directors, charges)
-    rate_limited_sleep()
+    deal         = dealability_score(num, directors, charges,
+                                     cached_filing_history=raw_filing_history)
 
     acq          = acquisition_score(company_age, ss, pe, deal, charges)
 
@@ -587,6 +611,8 @@ def enrich_one(c: dict) -> dict:
         "company_age_years":  company_age,
         "directors":          directors,
         "director_count":     len(directors),
+        "_raw_officers":        raw_officers,       # cached for sell_signals reuse
+        "_raw_filing_history": raw_filing_history,  # cached for sell_signals + financials reuse
         "psc":                psc,
         "pe_backed":          pe,
         "ownership":          ownership,

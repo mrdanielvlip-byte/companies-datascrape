@@ -186,11 +186,16 @@ def structure_score(directors: list[dict]) -> dict:
 
 # ── C. Operational Stress Signals ─────────────────────────────────────────────
 
-def get_all_officers(company_number: str) -> dict:
+def get_all_officers(company_number: str, company: dict | None = None) -> dict:
     """
     Pull all officers (active + resigned) with appointment/resignation dates.
     Used for director churn analysis.
+
+    Reuses _raw_officers cached by ch_enrich if available (saves 1 API call
+    per company).
     """
+    if company and company.get("_raw_officers"):
+        return company["_raw_officers"]
     data = _get(f"/company/{company_number}/officers?items_per_page=100&register_type=directors")
     return data
 
@@ -231,7 +236,14 @@ def operational_stress_score(company_number: str, company: dict) -> dict:
     score   = 0
 
     # ── 1. Late filings ──
-    fh = _get(f"/company/{company_number}/filing-history?category=accounts&items_per_page=10")
+    # Reuse cached filing history from ch_enrich if available
+    cached_fh = company.get("_raw_filing_history") if company else None
+    if cached_fh:
+        # Filter to accounts category from the cached full history
+        fh = {"items": [f for f in cached_fh.get("items", [])
+                        if "account" in f.get("description", "").lower()][:10]}
+    else:
+        fh = _get(f"/company/{company_number}/filing-history?category=accounts&items_per_page=10")
     late_count = 0
     for f in fh.get("items", []):
         filing_date = f.get("date", "")
@@ -248,7 +260,7 @@ def operational_stress_score(company_number: str, company: dict) -> dict:
         signals.append("Accounts filed late once — possible compliance fatigue")
 
     # ── 2. Director churn ──
-    officers_data = get_all_officers(company_number)
+    officers_data = get_all_officers(company_number, company)
     cutoff        = TODAY - timedelta(days=3*365)
     resignations  = []
 
