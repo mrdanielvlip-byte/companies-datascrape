@@ -1,0 +1,120 @@
+name: PE Batch Score — All UK Companies
+run-name: "Batch Score (min ${{ inputs.min_age }}yr, ${{ inputs.sic_filter || 'all SICs' }})"
+
+on:
+  workflow_dispatch:
+    inputs:
+      min_age:
+        description: 'Minimum company age in years'
+        required: false
+        default: '10'
+      sic_filter:
+        description: 'Comma-separated SIC codes (blank = all sectors)'
+        required: false
+        default: ''
+      notify_email:
+        description: 'Email to send results to'
+        required: false
+        default: 'daniellipinski@mac.com'
+
+jobs:
+  score:
+    name: Score All UK Companies
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Python packages
+        run: pip install openpyxl
+
+      # ── Restore or build company DB ──────────────────────────────────────
+      - name: Cache company DB
+        id: db-cache
+        uses: actions/cache@v4
+        with:
+          path: data/companies_house.db
+          key: ch-db-${{ hashFiles('datasets/uk_companies_full/*.zip') }}
+
+      - name: Build company DB (if cache miss)
+        if: steps.db-cache.outputs.cache-hit != 'true'
+        run: |
+          echo "Building company DB from bulk CSVs..."
+          python3 build_local_db.py
+          ls -lh data/companies_house.db
+
+      # ── Download + build PSC data ────────────────────────────────────────
+      - name: Cache PSC DB
+        id: psc-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            datasets/uk_psc/
+          key: psc-snapshot-${{ github.run_id }}
+          restore-keys: |
+            psc-snapshot-
+
+      - name: Download PSC snapshot
+        run: |
+          # Check if we have recent PSC parts (< 7 days old)
+          LATEST=$(ls -t datasets/uk_psc/psc-snapshot-*.zip 2>/dev/null | head -1)
+          if [ -n "$LATEST" ]; then
+            AGE_DAYS=$(( ($(date +%s) - $(stat -c %Y "$LATEST")) / 86400 ))
+            echo "Latest PSC part is ${AGE_DAYS} days old"
+            if [ "$AGE_DAYS" -lt 7 ]; then
+              echo "PSC data is fresh enough — skipping download"
+              exit 0
+            fi
+          fi
+          echo "Downloading fresh PSC snapshot..."
+          python3 build_psc_db.py --download-only
+
+      - name: Build PSC table
+        run: |
+          python3 build_psc_db.py --build-only
+          python3 build_psc_db.py --stats
+
+      # ── Score all companies ──────────────────────────────────────────────
+      - name: Score all companies
+        run: |
+          mkdir -p output
+          FLAGS="--min-age ${{ inputs.min_age }}"
+          if [ -n "${{ inputs.sic_filter }}" ]; then
+            FLAGS="$FLAGS --sic ${{ inputs.sic_filter }}"
+          fi
+          echo "Running: python3 batch_score.py $FLAGS"
+          python3 batch_score.py $FLAGS
+
+      - name: Show output stats
+        run: |
+          echo "Output files:"
+          ls -lh output/
+          echo ""
+          echo "First 5 rows (top scored):"
+          head -6 output/all_uk_scored.csv | column -t -s,
+          echo ""
+          echo "Row count:"
+          wc -l output/all_uk_scored.csv
+
+      # ── Upload results ───────────────────────────────────────────────────
+      - name: Upload scored CSV
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-uk-scored-${{ github.run_number }}
+          path: output/all_uk_scored.csv
+          retention-days: 90
+
+      # ── Email results ────────────────────────────────────────────────────
+      - name: Email results
+        if: inputs.notify_email != ''
+        env:
+          EMAIL_TO: ${{ inputs.notify_email }}
+        run: |
+          ROW_COUNT=$(wc -l < output/all_uk_scored.csv)
+          FILE_SIZE=$(du -h output/all_uk_scored.csv | cut -f1)
+          echo "Scored ${ROW_COUNT} companies (${FILE_SIZE})"
+          echo "Results uploaded as artifact: all-uk-scored-${{ github.run_number }}"
+          # Note: actual email sending uses the same mechanism as pe_sourcing.yml
+          # For now, results are available as a downloadable GitHub Actions artifact
