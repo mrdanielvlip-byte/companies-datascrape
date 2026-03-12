@@ -644,8 +644,12 @@ Examples:
     print(f"{'='*65}\n")
 
     # ── Initialise API key pool (multi-key rotation) ─────────────────────────
-    from api_keys import init as _init_keys
+    from api_keys import init as _init_keys, key_count as _key_count
     _init_keys()
+
+    # ── Initialise concurrent pipeline rate limiter ────────────────────────
+    from concurrent_pipeline import init_rate_limiter
+    init_rate_limiter(_key_count())
 
     # ── Individual step flags ─────────────────────────────────────────────────
 

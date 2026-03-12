@@ -437,17 +437,36 @@ def run():
     print(f"\nDigital health assessment for top {len(to_enrich)} companies"
           f" ({skipped} skipped)...")
 
+    def _enrich_one_digital(c):
+        from concurrent_pipeline import rate_limited_sleep
+        result = enrich_digital(c)
+        c["digital_health"] = result
+        rate_limited_sleep()
+        return c
+
     live_count  = 0
     linked_count = 0
 
-    for i, c in enumerate(to_enrich):
-        if i % 10 == 0:
-            print(f"  [{i+1}/{len(to_enrich)}] processing {c['company_name'][:40]}...")
-        result = enrich_digital(c)
-        c["digital_health"] = result
-        if result["website_live"]:  live_count  += 1
-        if result["has_linkedin"]:  linked_count += 1
-        time.sleep(0.3)
+    if len(to_enrich) > 1:
+        from concurrent_pipeline import process_batch
+        to_enrich = process_batch(
+            items=to_enrich,
+            func=_enrich_one_digital,
+            max_workers=min(8, len(to_enrich)),
+            description="Digital health (domain, LinkedIn, jobs)",
+        )
+        to_enrich = [c for c in to_enrich if c is not None]
+        companies[:top_n] = to_enrich
+    else:
+        for i, c in enumerate(to_enrich):
+            if i % 10 == 0:
+                print(f"  [{i+1}/{len(to_enrich)}] processing {c['company_name'][:40]}...")
+            _enrich_one_digital(c)
+
+    for c in to_enrich:
+        dh = c.get("digital_health", {})
+        if dh.get("website_live"):  live_count  += 1
+        if dh.get("has_linkedin"): linked_count += 1
 
     for c in companies[top_n:]:
         c["digital_health"] = {"digital_health_score": None, "digital_health_band": "Not assessed", "data_tier": "N/A"}

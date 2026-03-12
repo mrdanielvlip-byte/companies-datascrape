@@ -240,17 +240,36 @@ def run():
     if not HAS_REG_SOURCES:
         print("  ⚠️  reg_sources.py not available — website keyword detection only")
 
+    def _enrich_one_accred(c):
+        from concurrent_pipeline import rate_limited_sleep
+        result = enrich_accreditations(c)
+        c["accreditations"] = result
+        rate_limited_sleep()
+        return c
+
     accred_count = 0
     reg_count    = 0
 
-    for i, c in enumerate(to_enrich):
-        if i % 15 == 0:
-            print(f"  [{i+1}/{len(to_enrich)}] {c['company_name'][:45]}...")
-        result = enrich_accreditations(c)
-        c["accreditations"] = result
-        if result.get("accreditation_count", 0) > 0:
+    if len(to_enrich) > 1:
+        from concurrent_pipeline import process_batch
+        to_enrich = process_batch(
+            items=to_enrich,
+            func=_enrich_one_accred,
+            max_workers=min(8, len(to_enrich)),
+            description="Accreditations (CQC, EA, ICO, ISO, CHAS)",
+        )
+        to_enrich = [c for c in to_enrich if c is not None]
+        companies[:top_n] = to_enrich
+    else:
+        for i, c in enumerate(to_enrich):
+            if i % 15 == 0:
+                print(f"  [{i+1}/{len(to_enrich)}] {c['company_name'][:45]}...")
+            _enrich_one_accred(c)
+
+    for c in to_enrich:
+        if c.get("accreditations", {}).get("accreditation_count", 0) > 0:
             accred_count += 1
-        if result.get("reg_count", 0) > 0:
+        if c.get("accreditations", {}).get("reg_count", 0) > 0:
             reg_count += 1
 
     for c in companies[top_n:]:

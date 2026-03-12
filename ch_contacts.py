@@ -465,10 +465,28 @@ def run(run_disify: bool = True):
     disify_str = "with Disify verification" if run_disify else "without email verification"
     print(f"\nContact enrichment for top {top_n} companies ({disify_str})...")
 
-    for i, c in enumerate(companies[:top_n]):
-        if i % 10 == 0:
-            print(f"  [{i+1}/{top_n}] {c['company_name'][:50]}")
+    def _enrich_one_contact(c):
+        from concurrent_pipeline import rate_limited_sleep
         c["contacts"] = enrich_contacts(c, run_disify=run_disify)
+        rate_limited_sleep()
+        return c
+
+    to_enrich = companies[:top_n]
+    if len(to_enrich) > 1:
+        from concurrent_pipeline import process_batch
+        to_enrich = process_batch(
+            items=to_enrich,
+            func=_enrich_one_contact,
+            max_workers=min(8, len(to_enrich)),
+            description="Contacts (website + email inference + Disify)",
+        )
+        to_enrich = [c for c in to_enrich if c is not None]
+        companies[:top_n] = to_enrich
+    else:
+        for i, c in enumerate(to_enrich):
+            if i % 10 == 0:
+                print(f"  [{i+1}/{top_n}] {c['company_name'][:50]}")
+            _enrich_one_contact(c)
 
     with open(enriched_path, "w") as f:
         json.dump(companies, f, indent=2)

@@ -555,7 +555,17 @@ def sell_intent_grade(score: int) -> str:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def run():
+def _enrich_one_sell(c: dict) -> dict:
+    """Thread-safe per-company sell signal enrichment."""
+    from concurrent_pipeline import rate_limited_sleep
+    num = c["company_number"]
+    result = sell_intent_score(c, num)
+    c["sell_intent"] = result
+    rate_limited_sleep()
+    return c
+
+
+def run(concurrent: bool = True, max_workers: int = 8):
     global AUTH
     AUTH = (load_api_key(), "")
 
@@ -565,17 +575,24 @@ def run():
 
     print(f"\nSell signal analysis for {len(companies)} companies...")
 
+    if concurrent and len(companies) > 1:
+        from concurrent_pipeline import process_batch
+        companies = process_batch(
+            items=companies,
+            func=_enrich_one_sell,
+            max_workers=max_workers,
+            description="Sell signals (exit readiness, late filings, churn)",
+        )
+        companies = [c for c in companies if c is not None]
+    else:
+        for i, c in enumerate(companies):
+            if i % 20 == 0:
+                print(f"  [{i+1}/{len(companies)}] processing...")
+            _enrich_one_sell(c)
+
     strong = moderate = weak = low = 0
-
-    for i, c in enumerate(companies):
-        if i % 20 == 0:
-            print(f"  [{i+1}/{len(companies)}] processing...")
-        num = c["company_number"]
-        result = sell_intent_score(c, num)
-        c["sell_intent"] = result
-        time.sleep(0.1)
-
-        band = result["sell_intent_band"]
+    for c in companies:
+        band = c.get("sell_intent", {}).get("sell_intent_band", "Low")
         if band == "Strong":   strong   += 1
         elif band == "Moderate": moderate += 1
         elif band == "Weak":   weak     += 1

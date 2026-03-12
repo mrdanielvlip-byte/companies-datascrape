@@ -550,9 +550,80 @@ def grade(score: int) -> str:
     return "Intelligence Only"
 
 
+# ── Per-company enrichment (thread-safe) ──────────────────────────────────────
+
+def enrich_one(c: dict) -> dict:
+    """
+    Enrich a single company with directors, PSC, ownership, charges,
+    succession, dealability, and acquisition scoring.
+
+    Thread-safe — uses get_auth() for API key rotation.
+    Returns the enriched company dict.
+    """
+    from concurrent_pipeline import rate_limited_sleep
+
+    num = c["company_number"]
+
+    directors = get_directors(num);    rate_limited_sleep()
+    psc       = get_psc(num);          rate_limited_sleep()
+    charges   = get_charges(num);      rate_limited_sleep()
+
+    # Deep ownership analysis — checks holding company + PE patterns
+    ownership = analyse_ownership(psc)
+    pe  = ownership["pe_likelihood"] in ("High", "Medium")
+    fam = detect_family(c["company_name"], directors)
+    ss  = succession_score(directors)
+
+    incorp_year  = int(c["date_of_creation"][:4]) if c.get("date_of_creation") else 0
+    company_age  = 2025 - incorp_year if incorp_year else 0
+
+    deal         = dealability_score(num, directors, charges)
+    rate_limited_sleep()
+
+    acq          = acquisition_score(company_age, ss, pe, deal, charges)
+
+    return {
+        **c,
+        "company_age_years":  company_age,
+        "directors":          directors,
+        "director_count":     len(directors),
+        "psc":                psc,
+        "pe_backed":          pe,
+        "ownership":          ownership,
+        "corporate_owner":    ownership["corporate_owner"],
+        "owner_name":         ownership["owner_name"],
+        "pe_likelihood":      ownership["pe_likelihood"],
+        "pe_signals":         ownership["pe_signals"],
+        **fam,
+        "succession":         ss,
+        "charges":            charges,
+        "dealability":        deal,
+        "acquisition_score":  acq["total"],
+        "acquisition_grade":  grade(acq["total"]),
+        "acq_components":     acq,
+        "data_tier":          "Tier 1 — Companies House",
+    }
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def run():
+def _save_and_summarise(enriched: list, out_path: str):
+    """Sort, save, and print summary stats."""
+    enriched.sort(key=lambda x: x.get("acquisition_score", 0), reverse=True)
+
+    with open(out_path, "w") as f:
+        json.dump(enriched, f, indent=2)
+
+    print(f"\nDone. {len(enriched)} companies saved → {out_path}")
+
+    prime  = sum(1 for c in enriched if c.get("acquisition_score", 0) >= 80)
+    high   = sum(1 for c in enriched if 65 <= c.get("acquisition_score", 0) < 80)
+    medium = sum(1 for c in enriched if 50 <= c.get("acquisition_score", 0) < 65)
+    intel  = sum(1 for c in enriched if c.get("acquisition_score", 0) < 50)
+    print(f"  Prime (80+): {prime}  |  High (65-79): {high}  |  Medium (50-64): {medium}  |  Intel only (<50): {intel}")
+
+
+def run(concurrent: bool = True, max_workers: int = 8):
     global AUTH
     from api_keys import init as _init_keys, get_single_key
     _init_keys()
@@ -564,68 +635,27 @@ def run():
 
     print(f"\nEnriching {len(companies)} companies via Companies House API...")
 
-    enriched = []
-    for i, c in enumerate(companies):
-        num = c["company_number"]
-        if i % 25 == 0:
-            print(f"  [{i+1}/{len(companies)}] processing...")
-
-        directors = get_directors(num);    time.sleep(0.05)
-        psc       = get_psc(num);          time.sleep(0.05)
-        charges   = get_charges(num);      time.sleep(0.05)
-
-        # Deep ownership analysis — checks holding company + PE patterns
-        ownership = analyse_ownership(psc)
-        pe  = ownership["pe_likelihood"] in ("High", "Medium")
-        fam = detect_family(c["company_name"], directors)
-        ss  = succession_score(directors)
-
-        incorp_year  = int(c["date_of_creation"][:4]) if c.get("date_of_creation") else 0
-        company_age  = 2025 - incorp_year if incorp_year else 0
-
-        deal         = dealability_score(num, directors, charges)
-        time.sleep(0.05)
-
-        acq          = acquisition_score(company_age, ss, pe, deal, charges)
-
-        enriched.append({
-            **c,
-            "company_age_years":  company_age,
-            "directors":          directors,
-            "director_count":     len(directors),
-            "psc":                psc,
-            "pe_backed":          pe,
-            "ownership":          ownership,
-            "corporate_owner":    ownership["corporate_owner"],
-            "owner_name":         ownership["owner_name"],
-            "pe_likelihood":      ownership["pe_likelihood"],
-            "pe_signals":         ownership["pe_signals"],
-            **fam,
-            "succession":         ss,
-            "charges":            charges,
-            "dealability":        deal,
-            "acquisition_score":  acq["total"],
-            "acquisition_grade":  grade(acq["total"]),
-            "acq_components":     acq,
-            "data_tier":          "Tier 1 — Companies House",
-        })
-        time.sleep(0.05)
-
-    enriched.sort(key=lambda x: x["acquisition_score"], reverse=True)
-
     out_path = os.path.join(cfg.OUTPUT_DIR, cfg.ENRICHED_JSON)
-    with open(out_path, "w") as f:
-        json.dump(enriched, f, indent=2)
 
-    print(f"\nDone. {len(enriched)} companies saved → {out_path}")
+    if concurrent and len(companies) > 1:
+        from concurrent_pipeline import process_batch
+        enriched = process_batch(
+            items=companies,
+            func=enrich_one,
+            max_workers=max_workers,
+            description="Enriching (directors, PSC, ownership, scoring)",
+        )
+        # Filter out any None results from failed items
+        enriched = [c for c in enriched if c is not None]
+    else:
+        # Sequential fallback
+        enriched = []
+        for i, c in enumerate(companies):
+            if i % 25 == 0:
+                print(f"  [{i+1}/{len(companies)}] processing...")
+            enriched.append(enrich_one(c))
 
-    # Summary
-    prime  = sum(1 for c in enriched if c["acquisition_score"] >= 80)
-    high   = sum(1 for c in enriched if 65 <= c["acquisition_score"] < 80)
-    medium = sum(1 for c in enriched if 50 <= c["acquisition_score"] < 65)
-    intel  = sum(1 for c in enriched if c["acquisition_score"] < 50)
-    print(f"  Prime (80+): {prime}  |  High (65-79): {high}  |  Medium (50-64): {medium}  |  Intel only (<50): {intel}")
-
+    _save_and_summarise(enriched, out_path)
     return enriched
 
 

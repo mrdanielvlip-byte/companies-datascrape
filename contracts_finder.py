@@ -229,13 +229,32 @@ def run():
     print(f"\nContracts Finder enrichment for top {len(to_enrich)} companies"
           f" ({skipped} skipped)...")
 
-    with_contracts = 0
-    for i, c in enumerate(to_enrich):
-        if i % 10 == 0:
-            print(f"  [{i+1}/{len(to_enrich)}] processing {c['company_name'][:40]}...")
+    def _enrich_one_contract(c):
+        from concurrent_pipeline import rate_limited_sleep
         result = enrich_contracts(c)
         c["government_contracts"] = result
-        if result["contracts_found"] > 0:
+        rate_limited_sleep()
+        return c
+
+    with_contracts = 0
+    if len(to_enrich) > 1:
+        from concurrent_pipeline import process_batch
+        to_enrich = process_batch(
+            items=to_enrich,
+            func=_enrich_one_contract,
+            max_workers=min(8, len(to_enrich)),
+            description="Gov. contracts (Contracts Finder + FTS)",
+        )
+        to_enrich = [c for c in to_enrich if c is not None]
+        companies[:top_n] = to_enrich
+    else:
+        for i, c in enumerate(to_enrich):
+            if i % 10 == 0:
+                print(f"  [{i+1}/{len(to_enrich)}] processing {c['company_name'][:40]}...")
+            _enrich_one_contract(c)
+
+    for c in to_enrich:
+        if c.get("government_contracts", {}).get("contracts_found", 0) > 0:
             with_contracts += 1
 
     # Fill empty for skipped companies

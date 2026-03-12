@@ -404,14 +404,20 @@ def run(resume: bool = True):
     ocr_results = dict(done)
     errors = 0
 
-    for i, company in enumerate(queue):
+    # ── Concurrent OCR processing ─────────────────────────────────────────
+    # OCR is both I/O-bound (PDF download) and CPU-bound (Tesseract),
+    # so we use fewer workers than pure-API modules (default 5).
+    concurrent = len(queue) > 1
+    max_workers = min(5, len(queue))
+
+    def _scrape_one(company):
+        """Thread-safe per-company OCR wrapper."""
+        from concurrent_pipeline import rate_limited_sleep
         cn     = company["company_number"]
         name   = company.get("company_name", "")
         acct   = _acct_type(company)
         period = (company.get("bs") or {}).get("period_end", "")
         tier   = "A" if cn in tier_a_nums else "B"
-
-        print(f"  [{i+1}/{len(queue)}] [{tier}] {name[:45]:<45} ({acct})", end="  ", flush=True)
 
         try:
             result = scrape_company_accounts(cn, name, acct, period)
@@ -419,28 +425,50 @@ def run(resume: bool = True):
             result["company_name"]   = name
             turn = result.get("turnover")
             na   = result.get("net_assets")
-            curr = result.get("currency", "GBP")
             if "error" in result:
-                print(f"ERR: {result['error']}")
+                return cn, result, True   # error flag
+            return cn, result, False
+        except Exception as e:
+            return cn, {"company_number": cn, "company_name": name,
+                        "error": str(e), "accounts_type": acct}, True
+
+    if concurrent and queue:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import threading
+        _lock = threading.Lock()
+        _completed = [0]
+
+        print(f"  ⚡ OCR: {len(queue)} companies × {max_workers} workers (concurrent)")
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(_scrape_one, c): c for c in queue}
+            for future in as_completed(futures):
+                cn, result, is_error = future.result()
+                if is_error:
+                    errors += 1
+                else:
+                    ocr_results[cn] = result
+
+                with _lock:
+                    _completed[0] += 1
+                    if _completed[0] % 10 == 0 or _completed[0] == len(queue):
+                        print(f"    [{_completed[0]}/{len(queue)}] OCR {_completed[0]/len(queue)*100:.0f}% done")
+                        # Checkpoint save
+                        with open(cache_path, "w") as f:
+                            json.dump(list(ocr_results.values()), f)
+    else:
+        # Sequential fallback
+        for i, company in enumerate(queue):
+            cn, result, is_error = _scrape_one(company)
+            if is_error:
                 errors += 1
             else:
-                if turn:
-                    print(f"✓  {curr} Turnover={turn:,.0f}")
-                elif na:
-                    print(f"✓  {curr} NetAssets={na:,.0f}")
-                else:
-                    print(f"  ({result.get('figures_extracted', 0)} figures)")
                 ocr_results[cn] = result
-        except Exception as e:
-            result = {"company_number": cn, "company_name": name,
-                      "error": str(e), "accounts_type": acct}
-            print(f"EXC: {e}")
-            errors += 1
 
-        # Save checkpoint every 10
-        if (i + 1) % 10 == 0:
-            with open(cache_path, "w") as f:
-                json.dump(list(ocr_results.values()), f)
+            # Save checkpoint every 10
+            if (i + 1) % 10 == 0:
+                with open(cache_path, "w") as f:
+                    json.dump(list(ocr_results.values()), f)
 
     # Final cache save
     with open(cache_path, "w") as f:
