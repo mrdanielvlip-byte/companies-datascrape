@@ -420,6 +420,9 @@ PIPELINE_COLS = [
     ("Employees", 11), ("Emp. Source", 22), ("Emp. Δ 3yr", 11),
     ("Rev. Low £", 13), ("Rev. Base £", 13), ("Rev. High £", 13),
     ("Rev. Trend", 12), ("EBITDA £", 13), ("EBITDA %", 12), ("Rev. Conf.", 10),
+    ("Rev. Growth 3yr", 14),
+    ("EBITDA Yr1", 13), ("EBITDA Yr2", 13), ("EBITDA Yr3", 13),
+    ("EBITDA % Yr1", 12), ("EBITDA % Yr2", 12), ("EBITDA % Yr3", 12),
     ("Yr1 Period", 11), ("Yr1 Accts", 20),
     ("Yr2 Period", 11), ("Yr2 Accts", 20),
     ("Yr3 Period", 11), ("Yr3 Accts", 20),
@@ -533,6 +536,17 @@ PIPELINE_COL_NOTES = [
     "Rev. Conf.: Revenue estimate confidence level.\n"
     "  HIGH = 3+ financial models available (actual accounts data).\n"
     "  MEDIUM = 2 models.  LOW = 1 model (estimates only).",
+    "Rev. Growth 3yr: Percentage revenue change from oldest → newest filed accounts.\n"
+    "  Green = growing  |  Red = declining.\n"
+    "  Source: XBRL turnover data from last 3 Companies House filings.",
+    "EBITDA Yr1: EBITDA (PBT or operating profit) from the most recent filed accounts.\n"
+    "  Source: XBRL data from Companies House filing.",
+    "EBITDA Yr2: EBITDA from the second most recent filed accounts.",
+    "EBITDA Yr3: EBITDA from the third most recent filed accounts.",
+    "EBITDA % Yr1: EBITDA margin (EBITDA ÷ Turnover × 100) for the most recent year.\n"
+    "  Source: XBRL turnover + profit from Companies House filing.",
+    "EBITDA % Yr2: EBITDA margin for the second most recent year.",
+    "EBITDA % Yr3: EBITDA margin for the third most recent year.",
     "Yr1 Period: Period end date of the most recent annual accounts filing.",
     "Yr1 Accts: Accounts type for the most recent filing (e.g. Total Exemption, Full).",
     "Yr2 Period: Period end date of the second most recent annual accounts filing.",
@@ -785,9 +799,44 @@ def build_pipeline(wb, companies):
                   fill("FFD6D6") if conf == "LOW" else bg)
         cell(ws, row, 43, conf, bg=conf_bg, align="center", size=8, bold=(conf == "HIGH"))
 
-        # Cols 44–49 — Last 3 years of accounts filings (period + type)
+        # ── 3-year financial history from XBRL ──────────────────────────────
+        rev_hist = c.get("revenue_history") or []
+
+        # Col 44 — Revenue growth % over 3 years
+        rev_growth_label = c.get("revenue_growth_label")
+        rev_growth_pct   = c.get("revenue_growth_pct")
+        if rev_growth_label:
+            rg_bg = fill("E2EFDA") if rev_growth_pct > 0 else (
+                    fill("FFD6D6") if rev_growth_pct < 0 else bg)
+            rg_fg = "1A5C2C" if rev_growth_pct > 0 else ("7B0000" if rev_growth_pct < 0 else "000000")
+            cell(ws, row, 44, rev_growth_label, bg=rg_bg, align="center", size=9, bold=True, fg=rg_fg)
+        else:
+            cell(ws, row, 44, "-", bg=bg, align="center", size=9)
+
+        # Cols 45–47 — EBITDA £ for Yr1, Yr2, Yr3
+        for yi, col_off in enumerate([45, 46, 47]):
+            if yi < len(rev_hist) and rev_hist[yi].get("ebitda") is not None:
+                ev = rev_hist[yi]["ebitda"]
+                e_label = f"£{ev:,.0f}" if ev >= 0 else f"-£{abs(ev):,.0f}"
+                e_bg = fill("E2EFDA") if ev > 0 else fill("FFD6D6") if ev < 0 else bg
+                cell(ws, row, col_off, e_label, bg=e_bg, align="right", size=8)
+            else:
+                cell(ws, row, col_off, "-", bg=bg, align="center", size=8, fg="AAAAAA")
+
+        # Cols 48–50 — EBITDA % for Yr1, Yr2, Yr3
+        for yi, col_off in enumerate([48, 49, 50]):
+            if yi < len(rev_hist) and rev_hist[yi].get("ebitda_pct") is not None:
+                ep = rev_hist[yi]["ebitda_pct"]
+                ep_label = f"{ep:.1f}%"
+                ep_bg = fill("E2EFDA") if ep > 10 else (fill("FFF2CC") if ep > 0 else fill("FFD6D6"))
+                ep_fg = "1A5C2C" if ep > 10 else ("7B5B00" if ep > 0 else "7B0000")
+                cell(ws, row, col_off, ep_label, bg=ep_bg, align="center", size=8, bold=(ep > 10), fg=ep_fg)
+            else:
+                cell(ws, row, col_off, "-", bg=bg, align="center", size=8, fg="AAAAAA")
+
+        # Cols 51–56 — Last 3 years of accounts filings (period + type)
         for yr_idx in range(3):
-            base_col = 44 + yr_idx * 2
+            base_col = 51 + yr_idx * 2
             if yr_idx < len(hist):
                 h = hist[yr_idx]
                 period = (h.get("period_end") or "")[:7]   # YYYY-MM

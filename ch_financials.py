@@ -76,6 +76,9 @@ def get_accounts_history(company_number: str, years: int = 3) -> list[dict]:
     For each filing returns:
       period_end       — accounts period end date (YYYY-MM-DD)
       accounts_type    — e.g. total-exemption-full, full, micro-entity
+      turnover         — from XBRL where available (full/small accounts only)
+      profit_before_tax— from XBRL where available
+      operating_profit — from XBRL where available
       net_assets       — from XBRL where available (null for most SMEs)
       total_assets     — from XBRL where available
       total_employees  — from XBRL where available (rare for UK SMEs)
@@ -95,12 +98,15 @@ def get_accounts_history(company_number: str, years: int = 3) -> list[dict]:
         period_end = filing.get("action_date", "")
 
         entry = {
-            "period_end":      period_end,
-            "accounts_type":   acc_type,
-            "net_assets":      None,
-            "total_assets":    None,
-            "total_employees": None,
-            "staff_costs":     None,
+            "period_end":        period_end,
+            "accounts_type":     acc_type,
+            "turnover":          None,
+            "profit_before_tax": None,
+            "operating_profit":  None,
+            "net_assets":        None,
+            "total_assets":      None,
+            "total_employees":   None,
+            "staff_costs":       None,
         }
 
         # Try to get XBRL structured data from document metadata link
@@ -111,10 +117,13 @@ def get_accounts_history(company_number: str, years: int = 3) -> list[dict]:
                 doc_meta = get(doc_url.replace("https://api.company-information.service.gov.uk", ""))
                 xbrl = doc_meta.get("xbrl_data", {}) or {}
                 if xbrl:
-                    entry["net_assets"]      = xbrl.get("net_assets") or xbrl.get("NetAssets")
-                    entry["total_assets"]    = xbrl.get("total_assets") or xbrl.get("TotalAssets")
-                    entry["total_employees"] = xbrl.get("employees") or xbrl.get("NumberEmployees")
-                    entry["staff_costs"]     = xbrl.get("staff_costs") or xbrl.get("StaffCosts")
+                    entry["turnover"]          = xbrl.get("turnover") or xbrl.get("Turnover") or xbrl.get("Revenue")
+                    entry["profit_before_tax"]  = xbrl.get("profit_before_tax") or xbrl.get("ProfitBeforeTax") or xbrl.get("ProfitLossBeforeTax")
+                    entry["operating_profit"]   = xbrl.get("operating_profit") or xbrl.get("OperatingProfit") or xbrl.get("ProfitLossOnOrdinaryActivitiesBeforeTax")
+                    entry["net_assets"]        = xbrl.get("net_assets") or xbrl.get("NetAssets")
+                    entry["total_assets"]      = xbrl.get("total_assets") or xbrl.get("TotalAssets")
+                    entry["total_employees"]   = xbrl.get("employees") or xbrl.get("NumberEmployees")
+                    entry["staff_costs"]       = xbrl.get("staff_costs") or xbrl.get("StaffCosts")
             except Exception:
                 pass
 
@@ -582,6 +591,45 @@ def run():
         else:
             c["employee_delta"]       = None
             c["employee_delta_label"] = None
+
+        # ── 3-year Revenue, EBITDA, EBITDA % history ─────────────────────────
+        # Pull per-year turnover and profit from XBRL history.
+        # Also compute revenue growth % (oldest → newest).
+        rev_history = []     # [{"year": "2024", "turnover": 1200000, "ebitda": 150000, "ebitda_pct": 12.5}, ...]
+        for h in hist:
+            yr = (h.get("period_end") or "")[:4]
+            turn = h.get("turnover")
+            pbt  = h.get("profit_before_tax")
+            op   = h.get("operating_profit")
+            ebitda_val = pbt or op    # prefer PBT, fall back to operating profit
+            ebitda_pct = None
+            if ebitda_val and turn and turn > 0:
+                ebitda_pct = round(ebitda_val / turn * 100, 1)
+            rev_history.append({
+                "year":       yr,
+                "turnover":   turn,
+                "ebitda":     ebitda_val,
+                "ebitda_pct": ebitda_pct,
+            })
+        c["revenue_history"] = rev_history
+
+        # Revenue growth % over 3 years (oldest → newest with data)
+        rev_vals = [(rh["turnover"], rh["year"]) for rh in rev_history
+                    if rh["turnover"] is not None and rh["turnover"] > 0]
+        if len(rev_vals) >= 2:
+            newest_rev, newest_yr = rev_vals[0]
+            oldest_rev, oldest_yr = rev_vals[-1]
+            if oldest_rev > 0:
+                growth_pct = round((newest_rev - oldest_rev) / oldest_rev * 100, 1)
+                c["revenue_growth_pct"]   = growth_pct
+                c["revenue_growth_label"] = f"+{growth_pct}%" if growth_pct > 0 else f"{growth_pct}%"
+                c["revenue_growth_abs"]   = newest_rev - oldest_rev
+            else:
+                c["revenue_growth_pct"]   = None
+                c["revenue_growth_label"] = None
+        else:
+            c["revenue_growth_pct"]   = None
+            c["revenue_growth_label"] = None
 
         time.sleep(0.1)
 
