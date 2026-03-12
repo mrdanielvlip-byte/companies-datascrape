@@ -157,25 +157,35 @@ jobs:
       - name: Prepare directories
         run: mkdir -p output data/sectors
 
-      # ── Build local SQLite DB from committed bulk data ──────────────────────────
+      # ── Restore cached DB (skips 10-min rebuild if ZIPs haven't changed) ────────
+      - name: Cache local Companies House DB
+        id: db-cache
+        uses: actions/cache@v4
+        with:
+          path: data/companies_house.db
+          key: ch-db-${{ hashFiles('datasets/uk_companies_full/*.zip') }}
+
       - name: Build local Companies House DB
+        if: steps.db-cache.outputs.cache-hit != 'true'
         run: |
+          echo "Cache miss — building DB from bulk CSVs..."
+          echo "Parts found:"
+          ls -lh datasets/uk_companies_full/BasicCompanyData-*.zip 2>/dev/null || echo "  ⚠ No parts found!"
+          python3 build_local_db.py
           if [ -f "data/companies_house.db" ]; then
-            echo "Local DB already exists — skipping build"
+            ls -lh data/companies_house.db
             python3 build_local_db.py --stats
           else
-            echo "Building local DB from datasets/uk_companies_full/..."
-            echo "Parts found:"
-            ls -lh datasets/uk_companies_full/BasicCompanyData-*.zip 2>/dev/null || echo "  ⚠ No parts found!"
-            python3 build_local_db.py
-            echo ""
-            echo "Verifying DB was built:"
-            if [ -f "data/companies_house.db" ]; then
-              ls -lh data/companies_house.db
-              python3 build_local_db.py --stats
-            else
-              echo "⚠ DB build failed — falling back to API search"
-            fi
+            echo "⚠ DB build failed — falling back to API search"
+          fi
+
+      - name: Verify DB
+        run: |
+          if [ -f "data/companies_house.db" ]; then
+            echo "✅ DB ready ($(du -h data/companies_house.db | cut -f1))"
+            python3 build_local_db.py --stats
+          else
+            echo "⚠ No local DB — will use API search"
           fi
 
       # ── 6. Build pipeline flags from per-module inputs ────────────────────────
