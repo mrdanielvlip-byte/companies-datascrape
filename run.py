@@ -350,19 +350,29 @@ def _run_trade_body_discovery(sector: str, trade_body_keys: list, cfg,
 
 def _apply_post_filters(cfg, args):
     """
-    Apply optional post-discovery quality filters to filtered_companies.json:
-      --min-age N         remove companies incorporated less than N years ago
-      --clean-charges     remove companies with any outstanding charges
-      --exclude-sic CODE  remove companies whose primary SIC code matches CODE
+    Apply optional post-discovery quality filters to filtered_companies.json.
+
+    NOTE: min_age and region are now applied at DB query time (early filtering)
+    when using local DB search. This function still applies them as a safety net
+    for API-based searches where early filtering isn't available, plus filters
+    that can only be applied post-discovery (clean_charges, exclude_sic).
+
     Writes the result back to filtered_companies.json.
     """
     from datetime import date
 
+    # min_age: skip if local_db was used (already applied at SQL level)
+    _used_local_db = getattr(args, "local_db", False)
     min_age       = getattr(args, "min_age",       0)  or 0
     clean_charges = getattr(args, "clean_charges", False)
     excluded_sics = set(str(s).strip() for s in (getattr(args, "excluded_sics", []) or []))
 
-    if not any([min_age > 0, clean_charges, excluded_sics]):
+    # If min_age was already applied at DB level, don't re-apply
+    apply_age = min_age > 0 and not _used_local_db
+
+    if not any([apply_age, clean_charges, excluded_sics]):
+        if _used_local_db and min_age > 0:
+            print(f"  [POST-FILTER] Min age {min_age}yr already applied at DB level — skipping")
         return   # nothing to do
 
     filtered_path = os.path.join(cfg.OUTPUT_DIR, cfg.FILTERED_JSON)
@@ -373,7 +383,7 @@ def _apply_post_filters(cfg, args):
         companies = json.load(f)
     before = len(companies)
 
-    if min_age > 0:
+    if apply_age:
         cutoff_year = date.today().year - min_age
         def _old_enough(c):
             doc = (c.get("date_of_creation") or c.get("incorporation_date") or "")[:4]
@@ -501,6 +511,25 @@ Examples:
         default=[],
         help="Exclude companies whose primary SIC code matches CODE. Repeatable.",
     )
+    parser.add_argument(
+        "--region",
+        metavar="REGION",
+        default="",
+        help='UK region to filter to (e.g. "North West", "Scotland"). '
+             'Applied at DB query time for maximum speed. '
+             'Also reads from SECTOR_REGION env var if not set on CLI.',
+    )
+    parser.add_argument(
+        "--no-exclude-dormant",
+        action="store_true",
+        help="Include dormant companies (by default dormant are excluded at DB query time).",
+    )
+    parser.add_argument(
+        "--no-exclude-non-ltd",
+        action="store_true",
+        help="Include non-PE-target entity types (LLP, overseas, charities etc). "
+             "By default these are excluded at DB query time.",
+    )
 
     # ── Step flags ────────────────────────────────────────────────────────────
     # ── Report depth preset ───────────────────────────────────────────────────
@@ -624,7 +653,14 @@ Examples:
                 args.local_db = True
         if args.local_db:
             local = reload("local_search")
-            local.run()
+            _region = getattr(args, "region", "") or os.environ.get("SECTOR_REGION", "")
+            _min_age = getattr(args, "min_age", 0) or 0
+            local.run(early_filters={
+                "min_age_yrs":     _min_age if _min_age > 0 else None,
+                "region":          _region.strip(),
+                "exclude_dormant": not getattr(args, "no_exclude_dormant", False),
+                "exclude_non_ltd": not getattr(args, "no_exclude_non_ltd", False),
+            })
         else:
             search = reload("ch_search")
             search.run()
@@ -742,7 +778,20 @@ Examples:
                 if args.local_db:
                     print("Step 1/13 — Local DB Search  ⚡ (SQLite, 5.6M companies, no API)")
                     local = reload("local_search")
-                    local.run()
+
+                    # ── Build early filters dict ───────────────────────────────
+                    # These are applied at SQL query time, BEFORE enrichment,
+                    # to avoid wasting API calls on companies that will be
+                    # filtered out later anyway.
+                    _region = getattr(args, "region", "") or os.environ.get("SECTOR_REGION", "")
+                    _min_age = getattr(args, "min_age", 0) or 0
+                    _early = {
+                        "min_age_yrs":     _min_age if _min_age > 0 else None,
+                        "region":          _region.strip(),
+                        "exclude_dormant": not getattr(args, "no_exclude_dormant", False),
+                        "exclude_non_ltd": not getattr(args, "no_exclude_non_ltd", False),
+                    }
+                    local.run(early_filters=_early)
                     print("\nStep 2/13 — Filter (applied during local search)")
                 else:
                     print("Step 1/13 — Search (Companies House API, SIC codes)")

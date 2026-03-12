@@ -201,6 +201,10 @@ jobs:
           if [ -n "${{ inputs.min_age_years }}" ] && [ "${{ inputs.min_age_years }}" != "0" ]; then
             FLAGS="$FLAGS --min-age ${{ inputs.min_age_years }}"
           fi
+          # Region filter (applied at SQL level for speed)
+          if [ -n "${{ inputs.region }}" ]; then
+            FLAGS="$FLAGS --region '${{ inputs.region }}'"
+          fi
           if [ "${{ inputs.clean_charges_only }}" = "true" ]; then
             FLAGS="$FLAGS --clean-charges"
           fi

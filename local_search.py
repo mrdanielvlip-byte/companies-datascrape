@@ -118,6 +118,48 @@ def _normalise_row(row: sqlite3.Row, source: str = "local_db") -> dict:
 
 # ── Search functions ──────────────────────────────────────────────────────────
 
+def _build_early_filter_clauses(
+    status:           str | None = "Active",
+    min_age_yrs:      float | None = None,
+    max_age_yrs:      float | None = None,
+    postcode_prefixes: list[str] | None = None,
+    exclude_dormant:  bool = False,
+    exclude_types:    list[str] | None = None,
+) -> tuple[list[str], list]:
+    """
+    Build reusable SQL WHERE clause fragments for early filtering.
+    Returns (clauses, params) to be ANDed into any query.
+    """
+    clauses = []
+    params  = []
+
+    if status:
+        clauses.append("company_status=?")
+        params.append(status)
+    if min_age_yrs is not None:
+        clauses.append("company_age_years >= ?")
+        params.append(min_age_yrs)
+    if max_age_yrs is not None:
+        clauses.append("company_age_years <= ?")
+        params.append(max_age_yrs)
+    if postcode_prefixes:
+        # OR across multiple postcode prefixes for region filtering
+        pc_clauses = []
+        for pc in postcode_prefixes:
+            pc_clauses.append("postcode LIKE ?")
+            params.append(f"{pc.upper()}%")
+        clauses.append(f"({' OR '.join(pc_clauses)})")
+    if exclude_dormant:
+        clauses.append("accounts_category != 'DORMANT'")
+        clauses.append("accounts_category != 'NO_ACCOUNTS_FILED'")
+    if exclude_types:
+        for ct in exclude_types:
+            clauses.append("company_type != ?")
+            params.append(ct)
+
+    return clauses, params
+
+
 def search_by_sic(
     sic_codes:   list[str],
     status:      str = "Active",
@@ -125,40 +167,47 @@ def search_by_sic(
     min_age_yrs: float | None = None,
     max_age_yrs: float | None = None,
     postcode_prefix: str | None = None,
+    postcode_prefixes: list[str] | None = None,
+    exclude_dormant: bool = False,
+    exclude_types:   list[str] | None = None,
 ) -> list[dict]:
     """
     Return all companies registered under one or more SIC codes.
 
     Args:
-        sic_codes:       List of 5-digit SIC codes, e.g. ['38110', '38120']
-        status:          'Active' | 'Dissolved' | None (all)
-        limit:           Max results (per SIC code)
-        min_age_yrs:     Only include companies older than N years
-        max_age_yrs:     Only include companies younger than N years
-        postcode_prefix: Filter to postcode area, e.g. 'LS' or 'M1'
+        sic_codes:          List of 5-digit SIC codes, e.g. ['38110', '38120']
+        status:             'Active' | 'Dissolved' | None (all)
+        limit:              Max results (per SIC code)
+        min_age_yrs:        Only include companies older than N years
+        max_age_yrs:        Only include companies younger than N years
+        postcode_prefix:    Filter to single postcode area, e.g. 'LS' or 'M1'
+        postcode_prefixes:  Filter to multiple postcode prefixes (for region mapping)
+        exclude_dormant:    Exclude dormant companies (accounts_category = DORMANT)
+        exclude_types:      Exclude certain company types (e.g. LLP, overseas)
 
     Returns list of normalised company dicts.
     """
+    # Merge single prefix into list for backward compat
+    pc_list = list(postcode_prefixes or [])
+    if postcode_prefix and postcode_prefix not in pc_list:
+        pc_list.append(postcode_prefix)
+
+    early_clauses, early_params = _build_early_filter_clauses(
+        status=status,
+        min_age_yrs=min_age_yrs,
+        max_age_yrs=max_age_yrs,
+        postcode_prefixes=pc_list or None,
+        exclude_dormant=exclude_dormant,
+        exclude_types=exclude_types,
+    )
+
     con     = get_connection()
     results = {}
 
     for sic in sic_codes:
         # Match sic1..sic4 columns
-        clauses = ["(sic1=? OR sic2=? OR sic3=? OR sic4=?)"]
-        params  = [sic, sic, sic, sic]
-
-        if status:
-            clauses.append("company_status=?")
-            params.append(status)
-        if min_age_yrs is not None:
-            clauses.append("company_age_years >= ?")
-            params.append(min_age_yrs)
-        if max_age_yrs is not None:
-            clauses.append("company_age_years <= ?")
-            params.append(max_age_yrs)
-        if postcode_prefix:
-            clauses.append("postcode LIKE ?")
-            params.append(f"{postcode_prefix.upper()}%")
+        clauses = ["(sic1=? OR sic2=? OR sic3=? OR sic4=?)"] + early_clauses
+        params  = [sic, sic, sic, sic] + early_params
 
         sql = f"SELECT * FROM companies WHERE {' AND '.join(clauses)} LIMIT ?"
         params.append(limit)
@@ -173,18 +222,38 @@ def search_by_sic(
     return list(results.values())
 
 
-def search_by_name(query: str, status: str = "Active", limit: int = 500) -> list[dict]:
+def search_by_name(
+    query: str,
+    status: str = "Active",
+    limit: int = 500,
+    min_age_yrs: float | None = None,
+    postcode_prefixes: list[str] | None = None,
+    exclude_dormant: bool = False,
+    exclude_types: list[str] | None = None,
+) -> list[dict]:
     """
     FTS5 full-text search on company names.
     Supports phrases ("drainage services"), prefix (drainage*), and boolean (drainage NOT waste).
 
     Args:
-        query:  FTS5 query string
-        status: 'Active' | 'Dissolved' | None (all)
-        limit:  Max results
+        query:              FTS5 query string
+        status:             'Active' | 'Dissolved' | None (all)
+        limit:              Max results
+        min_age_yrs:        Only include companies older than N years
+        postcode_prefixes:  Filter to multiple postcode prefixes (for region mapping)
+        exclude_dormant:    Exclude dormant companies
+        exclude_types:      Exclude certain company types
 
     Returns list of normalised company dicts.
     """
+    early_clauses, early_params = _build_early_filter_clauses(
+        status=status,
+        min_age_yrs=min_age_yrs,
+        postcode_prefixes=postcode_prefixes,
+        exclude_dormant=exclude_dormant,
+        exclude_types=exclude_types,
+    )
+
     con = get_connection()
 
     # FTS5 search — join back to main table for full data
@@ -196,9 +265,9 @@ def search_by_name(query: str, status: str = "Active", limit: int = 500) -> list
     """
     params = [query]
 
-    if status:
-        sql += " AND c.company_status = ?"
-        params.append(status)
+    for clause in early_clauses:
+        sql += f" AND c.{clause}"
+    params.extend(early_params)
 
     sql += f" LIMIT {limit}"
 
@@ -211,9 +280,9 @@ def search_by_name(query: str, status: str = "Active", limit: int = 500) -> list
             WHERE company_name_upper LIKE ?
         """
         p2 = [f"%{query.upper()}%"]
-        if status:
-            sql2 += " AND company_status = ?"
-            p2.append(status)
+        for clause in early_clauses:
+            sql2 += f" AND {clause}"
+        p2.extend(early_params)
         sql2 += f" LIMIT {limit}"
         rows = con.execute(sql2, p2).fetchall()
 
@@ -349,15 +418,66 @@ def _is_genuine(name: str) -> bool:
 
 # ── Step 1 replacement ────────────────────────────────────────────────────────
 
-def run(override_cfg=None) -> dict:
+# ── Region → postcode prefix mapping ──────────────────────────────────────────
+# Maps UK region names (as used in the Streamlit UI) to postcode prefixes.
+# This allows the SQL query to filter at the DB level rather than post-enrichment.
+REGION_POSTCODE_MAP = {
+    "London":                    ["E", "EC", "N", "NW", "SE", "SW", "W", "WC"],
+    "South East":                ["BN", "CT", "GU", "HP", "KT", "ME", "MK", "OX",
+                                  "PO", "RG", "RH", "SL", "SM", "SO", "TN", "TW"],
+    "South West":                ["BA", "BH", "BS", "DT", "EX", "GL", "PL", "SN",
+                                  "SP", "TA", "TQ", "TR"],
+    "East of England":           ["AL", "CB", "CM", "CO", "EN", "IG", "IP", "LU",
+                                  "NR", "PE", "RM", "SG", "SS", "WD"],
+    "East Midlands":             ["DE", "DN", "LE", "LN", "NG", "NN"],
+    "West Midlands":             ["B", "CV", "DY", "HR", "ST", "SY", "TF", "WR",
+                                  "WS", "WV"],
+    "Yorkshire and The Humber":  ["BD", "DN", "HD", "HG", "HU", "HX", "LS", "S",
+                                  "WF", "YO"],
+    "North West":                ["BB", "BL", "CA", "CH", "CW", "FY", "L", "LA",
+                                  "M", "OL", "PR", "SK", "WA", "WN"],
+    "North East":                ["DH", "DL", "NE", "SR", "TS"],
+    "Wales":                     ["CF", "LD", "LL", "NP", "SA", "SY"],
+    "Scotland":                  ["AB", "DD", "DG", "EH", "FK", "G", "HS", "IV",
+                                  "KA", "KW", "KY", "ML", "PA", "PH", "TD", "ZE"],
+    "Northern Ireland":          ["BT"],
+}
+
+# Non-PE-target company types to exclude by default
+_NON_PE_COMPANY_TYPES = [
+    "oversea-company",
+    "registered-overseas-entity",
+    "scottish-partnership",
+    "royal-charter",
+    "industrial-and-provident-society",
+    "registered-society-non-jurisdictional",
+    "unregistered-company",
+    "charitable-incorporated-organisation",
+    "scottish-charitable-incorporated-organisation",
+    "further-education-or-sixth-form-college-corporation",
+]
+
+
+def run(override_cfg=None, early_filters: dict | None = None) -> dict:
     """
     Full Step 1 replacement using local DB.
     Sweeps configured SIC codes + name queries, applies filters,
     writes raw_companies.json and filtered_companies.json.
 
+    Args:
+        override_cfg:  Config override (default: global cfg module)
+        early_filters: Dict of cheap filters to apply at DB query time:
+            - min_age_yrs (float):        Minimum company age in years
+            - region (str):               UK region name → maps to postcode prefixes
+            - postcode_prefixes (list):    Direct postcode prefixes (overrides region)
+            - exclude_dormant (bool):      Exclude dormant companies
+            - exclude_non_ltd (bool):      Exclude non-PE-target entity types
+            - exclude_types (list[str]):   Explicit company types to exclude
+
     Returns dict of {company_number: company_dict} (same as ch_search.run()).
     """
-    c = override_cfg or cfg
+    c  = override_cfg or cfg
+    ef = early_filters or {}
 
     if not db_ready():
         raise FileNotFoundError(
@@ -373,6 +493,47 @@ def run(override_cfg=None) -> dict:
     sic_codes   = getattr(c, "SIC_CODES",   [])
     name_queries= getattr(c, "NAME_QUERIES", [])
 
+    # ── Build early filter kwargs ──────────────────────────────────────────────
+    search_kwargs = {}
+
+    min_age = ef.get("min_age_yrs")
+    if min_age:
+        search_kwargs["min_age_yrs"] = float(min_age)
+
+    # Region → postcode prefixes
+    region = ef.get("region", "")
+    pc_prefixes = ef.get("postcode_prefixes") or []
+    if region and region in REGION_POSTCODE_MAP and not pc_prefixes:
+        pc_prefixes = REGION_POSTCODE_MAP[region]
+    if pc_prefixes:
+        search_kwargs["postcode_prefixes"] = pc_prefixes
+
+    # Dormant exclusion (default True for PE pipeline)
+    if ef.get("exclude_dormant", True):
+        search_kwargs["exclude_dormant"] = True
+
+    # Company type exclusion
+    exclude_types = list(ef.get("exclude_types") or [])
+    if ef.get("exclude_non_ltd", True):
+        exclude_types.extend(_NON_PE_COMPANY_TYPES)
+    if exclude_types:
+        search_kwargs["exclude_types"] = list(set(exclude_types))
+
+    # Print active early filters
+    active_filters = []
+    if search_kwargs.get("min_age_yrs"):
+        active_filters.append(f"age ≥ {search_kwargs['min_age_yrs']:.0f}yr")
+    if region:
+        active_filters.append(f"region = {region}")
+    if search_kwargs.get("exclude_dormant"):
+        active_filters.append("excl. dormant")
+    if search_kwargs.get("exclude_types"):
+        active_filters.append(f"excl. {len(search_kwargs['exclude_types'])} non-PE types")
+    if active_filters:
+        print(f"  ⚡ Early filters (SQL-level): {', '.join(active_filters)}")
+    else:
+        print(f"  No early filters — returning all active companies")
+
     all_companies: dict[str, dict] = {}
 
     # ── SIC code sweep ────────────────────────────────────────────────────────
@@ -380,7 +541,7 @@ def run(override_cfg=None) -> dict:
         print(f"\nSweeping {len(sic_codes)} SIC codes against local DB ...")
         for sic in sic_codes:
             t0   = __import__("time").time()
-            rows = search_by_sic([sic], status="Active")
+            rows = search_by_sic([sic], status="Active", **search_kwargs)
             new  = 0
             for c_dict in rows:
                 num  = c_dict["company_number"]
@@ -396,7 +557,7 @@ def run(override_cfg=None) -> dict:
         print(f"\nRunning {len(name_queries)} name queries ...")
         for query in name_queries:
             t0   = __import__("time").time()
-            rows = search_by_name(query, status="Active")
+            rows = search_by_name(query, status="Active", **search_kwargs)
             new  = 0
             for c_dict in rows:
                 num  = c_dict["company_number"]
