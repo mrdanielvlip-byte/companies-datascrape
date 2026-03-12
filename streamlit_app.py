@@ -31,6 +31,7 @@ GITHUB_TOKEN   = st.secrets.get("GITHUB_TOKEN", "")
 GITHUB_REPO    = st.secrets.get("GITHUB_REPO", "mrdanielvlip-byte/companies-datascrape")
 API_BASE       = "https://api.github.com"
 HEADERS        = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github+json"}
+ANTHROPIC_API_KEY = st.secrets.get("ANTHROPIC_API_KEY", "")
 WORKFLOW_QUICK    = "pe_sourcing.yml"
 WORKFLOW_DEEP     = "lift_maintenance_ocr.yml"
 WORKFLOW_ESTIMATE = "estimate.yml"
@@ -261,6 +262,9 @@ def parse_excel_preview(zip_bytes: bytes) -> dict | None:
         ci_perf   = col("Performance")
         ci_emp    = col("Employees")
         ci_fq     = col("Filing Quality")
+        ci_maxage = col("Max Age")
+        ci_corp   = col("Corp. Owner")
+        ci_plike  = col("PE Likelihood")
 
         data_rows = rows[3:]   # skip title, subtitle, header
         records = []
@@ -286,6 +290,9 @@ def parse_excel_preview(zip_bytes: bytes) -> dict | None:
                 "Performance": str(r[ci_perf] or "") if ci_perf is not None else "",
                 "Employees":   r[ci_emp]   if ci_emp   is not None else None,
                 "Filing":      str(r[ci_fq] or "") if ci_fq is not None else "",
+                "Max Dir Age": r[ci_maxage] if ci_maxage is not None else None,
+                "Corp. Owner": str(r[ci_corp] or "") if ci_corp is not None else "",
+                "PE Likelihood": str(r[ci_plike] or "") if ci_plike is not None else "",
             })
 
         df = pd.DataFrame(records)
@@ -297,20 +304,27 @@ def parse_excel_preview(zip_bytes: bytes) -> dict | None:
         grade_order  = ["Prime", "High", "Medium", "Intelligence Only"]
         grade_counts = {g: grade_counts.get(g, 0) for g in grade_order}
 
-        # Top companies — Prime first, then High, sorted by score
+        # Sort all companies — Prime first, then High, sorted by score
         df["_score_num"] = pd.to_numeric(df["Score"], errors="coerce").fillna(0)
         grade_rank = {"Prime": 0, "High": 1, "Medium": 2, "Intelligence Only": 3}
         df["_grade_rank"] = df["Grade"].map(grade_rank).fillna(9)
-        top = df.sort_values(["_grade_rank", "_score_num"], ascending=[True, False]).head(25)
+        df_sorted = df.sort_values(["_grade_rank", "_score_num"], ascending=[True, False])
+
+        top = df_sorted.head(25)
         display_cols = ["Company", "Grade", "Score", "Growth", "Performance",
                         "Rev. Base", "EBITDA £", "EBITDA %", "Sell Intent",
-                        "Employees", "Family", "Dirs", "Age (yr)", "Filing"]
+                        "Employees", "Family", "PE", "Dirs", "Age (yr)", "Filing",
+                        "Max Dir Age", "Corp. Owner", "PE Likelihood"]
         # Only include columns that actually exist in the data
         display_cols = [c for c in display_cols if c in top.columns]
         top_df = top[display_cols].reset_index(drop=True)
         top_df.index = top_df.index + 1   # 1-based rank
 
-        return {"grade_counts": grade_counts, "top_df": top_df, "total": len(df)}
+        all_cols = [c for c in display_cols if c in df_sorted.columns]
+        all_df = df_sorted[all_cols].reset_index(drop=True)
+        all_df.index = all_df.index + 1
+
+        return {"grade_counts": grade_counts, "top_df": top_df, "all_df": all_df, "total": len(df)}
 
     except Exception:
         return None
@@ -432,6 +446,66 @@ def _show_reenrich_panel(run_id: str, run: dict, inputs: dict):
                 st.error("Failed to trigger re-enrichment. Check your GitHub token in secrets.")
 
 
+def _apply_post_filters(df: "pd.DataFrame", filters: dict) -> "pd.DataFrame":
+    """Apply post-enrichment filters to a results DataFrame."""
+    filtered = df.copy()
+
+    # Director age
+    min_dir = filters.get("min_dir_age", 0)
+    max_dir = filters.get("max_dir_age", 999)
+    if min_dir > 0 and "Max Dir Age" in filtered.columns:
+        filtered["_max_dir_num"] = pd.to_numeric(filtered["Max Dir Age"], errors="coerce")
+        filtered = filtered[filtered["_max_dir_num"].isna() | (filtered["_max_dir_num"] >= min_dir)]
+    if max_dir < 999 and "Max Dir Age" in filtered.columns:
+        if "_max_dir_num" not in filtered.columns:
+            filtered["_max_dir_num"] = pd.to_numeric(filtered["Max Dir Age"], errors="coerce")
+        filtered = filtered[filtered["_max_dir_num"].isna() | (filtered["_max_dir_num"] < max_dir)]
+
+    # PE filter
+    pe_rule = filters.get("pe", "Include all")
+    if pe_rule != "Include all" and "PE Likelihood" in filtered.columns:
+        if pe_rule == "Exclude High PE":
+            filtered = filtered[filtered["PE Likelihood"] != "High"]
+        elif pe_rule == "Exclude High + Medium":
+            filtered = filtered[~filtered["PE Likelihood"].isin(["High", "Medium"])]
+        elif pe_rule == "PE-backed only":
+            filtered = filtered[filtered["PE Likelihood"].isin(["High", "Medium"])]
+
+    # Family only
+    if filters.get("family_only") and "Family" in filtered.columns:
+        filtered = filtered[filtered["Family"].str.strip().isin(["✓", "Yes", "TRUE", "True", "1"])]
+
+    # Min employees
+    min_emp = filters.get("min_employees", 0)
+    if min_emp > 0 and "Employees" in filtered.columns:
+        filtered["_emp_num"] = pd.to_numeric(filtered["Employees"], errors="coerce")
+        filtered = filtered[filtered["_emp_num"].isna() | (filtered["_emp_num"] >= min_emp)]
+
+    # Min growth score
+    min_gr = filters.get("min_growth", 0)
+    if min_gr > 0 and "Growth" in filtered.columns:
+        filtered["_gr_num"] = pd.to_numeric(filtered["Growth"], errors="coerce")
+        filtered = filtered[filtered["_gr_num"].isna() | (filtered["_gr_num"] >= min_gr)]
+
+    # Filing quality
+    fq_list = filters.get("filing_quality", [])
+    if fq_list and "Filing" in filtered.columns:
+        filtered = filtered[filtered["Filing"].isin(fq_list) | (filtered["Filing"] == "")]
+
+    # Min acquisition score
+    min_acq = filters.get("min_acq_score", 0)
+    if min_acq > 0 and "Score" in filtered.columns:
+        filtered["_acq_num"] = pd.to_numeric(filtered["Score"], errors="coerce")
+        filtered = filtered[filtered["_acq_num"].isna() | (filtered["_acq_num"] >= min_acq)]
+
+    # Drop helper columns
+    for c in ["_max_dir_num", "_emp_num", "_gr_num", "_acq_num"]:
+        if c in filtered.columns:
+            filtered = filtered.drop(columns=[c])
+
+    return filtered
+
+
 def show_excel_preview(zip_bytes: bytes, run_id: str):
     """Render grade distribution metrics + top companies table in Streamlit."""
     preview = parse_excel_preview(zip_bytes)
@@ -441,27 +515,132 @@ def show_excel_preview(zip_bytes: bytes, run_id: str):
     st.divider()
     st.markdown("#### 📊 Results Preview")
 
-    gc   = preview["grade_counts"]
-    total = preview["total"]
+    # ── Interactive filter panel ──────────────────────────────────────────────
+    all_df = preview.get("all_df")  # full dataset (not just top 25)
+    inputs = st.session_state.run_inputs_store.get(run_id, {})
+    saved_filters = inputs.get("filters", {})
+
+    with st.expander("🔍 Filter results", expanded=bool(any(v for k, v in saved_filters.items()
+                                                             if k != "max_dir_age" and v not in (0, 999, "Include all", False, [], "")))):
+        flt1, flt2, flt3, flt4 = st.columns(4)
+        with flt1:
+            _rv_min_dir = st.selectbox(
+                "Min director age", ["Any", "45+", "50+", "55+", "60+", "65+"],
+                index=0, key=f"rv_flt_dir_{run_id}",
+            )
+            _rv_dir_map = {"Any": 0, "45+": 45, "50+": 50, "55+": 55, "60+": 60, "65+": 65}
+        with flt2:
+            _rv_pe = st.selectbox(
+                "PE ownership", ["Include all", "Exclude High PE", "Exclude High + Medium", "PE-backed only"],
+                index=0, key=f"rv_flt_pe_{run_id}",
+            )
+        with flt3:
+            _rv_min_emp = st.selectbox(
+                "Min employees", ["Any", "5+", "10+", "20+", "50+", "100+"],
+                index=0, key=f"rv_flt_emp_{run_id}",
+            )
+            _rv_emp_map = {"Any": 0, "5+": 5, "10+": 10, "20+": 20, "50+": 50, "100+": 100}
+        with flt4:
+            _rv_min_growth = st.selectbox(
+                "Min Growth Score", ["Any", "25+", "40+", "55+", "75+"],
+                index=0, key=f"rv_flt_gr_{run_id}",
+            )
+            _rv_gr_map = {"Any": 0, "25+": 25, "40+": 40, "55+": 55, "75+": 75}
+
+        flt5, flt6, flt7, flt8 = st.columns(4)
+        with flt5:
+            _rv_min_acq = st.selectbox(
+                "Min Acq. Score", ["Any", "30+", "50+", "65+", "80+"],
+                index=0, key=f"rv_flt_acq_{run_id}",
+            )
+            _rv_acq_map = {"Any": 0, "30+": 30, "50+": 50, "65+": 65, "80+": 80}
+        with flt6:
+            _rv_family = st.checkbox("Family-owned only", value=False, key=f"rv_flt_fam_{run_id}")
+        with flt7:
+            _rv_perf = st.multiselect(
+                "Performance",
+                ["Strong Growth", "Growing", "Stable", "Declining", "Weak"],
+                default=[], key=f"rv_flt_perf_{run_id}",
+            )
+        with flt8:
+            _rv_filing = st.multiselect(
+                "Filing quality",
+                ["Full", "Medium", "Small-Full", "Small", "Exempt-Full", "Exempt-Small", "Abridged", "Micro"],
+                default=[], key=f"rv_flt_fq_{run_id}",
+            )
+
+    # Build active filter dict from the interactive controls
+    live_filters = {
+        "min_dir_age":    _rv_dir_map[_rv_min_dir],
+        "max_dir_age":    999,
+        "pe":             _rv_pe,
+        "family_only":    _rv_family,
+        "min_employees":  _rv_emp_map[_rv_min_emp],
+        "min_growth":     _rv_gr_map[_rv_min_growth],
+        "filing_quality": _rv_filing,
+        "min_acq_score":  _rv_acq_map[_rv_min_acq],
+    }
+
+    # Apply filters
+    if all_df is not None and not all_df.empty:
+        display_df = _apply_post_filters(all_df, live_filters)
+        # Also filter by Performance multiselect
+        if _rv_perf and "Performance" in display_df.columns:
+            display_df = display_df[display_df["Performance"].isin(_rv_perf)]
+    else:
+        display_df = preview["top_df"]
+
+    total_unfiltered = preview["total"]
+    total_filtered   = len(display_df)
+
+    # Grade distribution (from filtered data)
+    gc_filtered = display_df["Grade"].value_counts().to_dict() if "Grade" in display_df.columns else {}
+    grade_order = ["Prime", "High", "Medium", "Intelligence Only"]
+    gc = {g: gc_filtered.get(g, 0) for g in grade_order}
 
     # Grade metric cards
     mcols = st.columns(4)
-    for i, grade in enumerate(["Prime", "High", "Medium", "Intelligence Only"]):
+    for i, grade in enumerate(grade_order):
         count = gc.get(grade, 0)
-        pct   = f"{count/total*100:.0f}%" if total > 0 else "0%"
+        pct   = f"{count/total_filtered*100:.0f}%" if total_filtered > 0 else "0%"
         with mcols[i]:
             st.markdown(
                 f"<div style='background:{GRADE_BG[grade]};border-radius:8px;padding:12px 16px;"
                 f"text-align:center;border-left:4px solid {GRADE_COLOURS[grade]}'>"
                 f"<div style='font-size:28px;font-weight:700;color:{GRADE_COLOURS[grade]}'>{count}</div>"
                 f"<div style='font-size:12px;font-weight:600;color:{GRADE_COLOURS[grade]}'>{grade}</div>"
-                f"<div style='font-size:11px;color:#888'>{pct} of {total}</div>"
+                f"<div style='font-size:11px;color:#888'>{pct} of {total_filtered}</div>"
                 f"</div>",
                 unsafe_allow_html=True,
             )
 
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown(f"**Top targets** (sorted by grade then acquisition score)  ·  {total} companies total")
+
+    if total_filtered < total_unfiltered:
+        st.markdown(
+            f"**Showing {total_filtered:,} of {total_unfiltered:,} companies** "
+            f"({total_unfiltered - total_filtered:,} filtered out)  ·  "
+            f"Sorted by grade then acquisition score"
+        )
+    else:
+        st.markdown(f"**All {total_filtered:,} companies** · Sorted by grade then acquisition score")
+
+    # Sort for display
+    grade_rank = {"Prime": 0, "High": 1, "Medium": 2, "Intelligence Only": 3}
+    display_df["_score_num"] = pd.to_numeric(display_df["Score"], errors="coerce").fillna(0)
+    display_df["_grade_rank"] = display_df["Grade"].map(grade_rank).fillna(9)
+    display_df = display_df.sort_values(["_grade_rank", "_score_num"], ascending=[True, False])
+    display_df = display_df.drop(columns=["_score_num", "_grade_rank"])
+    display_df.index = range(1, len(display_df) + 1)
+
+    # Choose display columns (hide internal ones)
+    hide_cols = {"Max Dir Age", "Corp. Owner", "PE Likelihood"}
+    display_cols = ["Company", "Grade", "Score", "Growth", "Performance",
+                    "Rev. Base", "EBITDA £", "EBITDA %", "Sell Intent",
+                    "Employees", "PE", "Family", "Dirs", "Age (yr)", "Filing"]
+    display_cols = [c for c in display_cols if c in display_df.columns and c not in hide_cols]
+
+    show_df = display_df[display_cols]
 
     # Colour-code Grade column
     def style_grade(val):
@@ -480,21 +659,20 @@ def show_excel_preview(zip_bytes: bytes, run_id: str):
         fg = PERF_FG.get(str(val), "#000000")
         return f"background-color:{bg};color:{fg};font-weight:600"
 
-    top_df = preview["top_df"]
     style_subsets = [("Grade", style_grade)]
-    if "Performance" in top_df.columns:
+    if "Performance" in show_df.columns:
         style_subsets.append(("Performance", style_perf))
 
-    styled = top_df.style
+    styled = show_df.style
     for col_name, fn in style_subsets:
         styled = styled.applymap(fn, subset=[col_name])
 
     fmt = {"Score": lambda x: str(int(x)) if pd.notna(x) and x != "" else "-",
            "Dirs":  lambda x: str(int(x)) if pd.notna(x) and x != "" else "-",
            "Age (yr)": lambda x: f"{x:.0f}" if pd.notna(x) and x != "" else "-"}
-    if "Growth" in top_df.columns:
+    if "Growth" in show_df.columns:
         fmt["Growth"] = lambda x: str(int(x)) if pd.notna(x) and x != "" else "-"
-    if "Employees" in top_df.columns:
+    if "Employees" in show_df.columns:
         fmt["Employees"] = lambda x: str(int(x)) if pd.notna(x) and x != "" else "-"
     styled = styled.format(fmt)
 
@@ -582,6 +760,79 @@ tabs = st.tabs(tab_labels)
 # TAB 0 — New Search
 # ══════════════════════════════════════════════════════════════════════════════
 
+# ── AI Search Assistant — natural language → form config ──────────────────────
+_AI_SYSTEM_PROMPT = """You are a PE deal-sourcing assistant. The user will describe what kind of companies they want to find.
+Parse their description into a JSON config with these fields:
+
+{
+  "sector": "short sector description for SIC matching, e.g. 'fire safety systems'",
+  "search_source": "sic" or "register" or "both",
+  "reg_sources": [] or list of: "EA_WASTE", "EA_CARRIERS", "EA_ABSTRACTION", "EA_DISCHARGES", "CQC", "FCA",
+  "reg_query": "" or keyword for register search,
+  "region": "" or one of: "London", "South East", "South West", "East of England", "East Midlands", "West Midlands", "Yorkshire and The Humber", "North West", "North East", "Wales", "Scotland", "Northern Ireland",
+  "min_revenue": "" or one of: "250000", "500000", "1000000", "2000000", "5000000",
+  "min_age_years": 0 or integer (3, 5, 10, 15),
+  "clean_charges_only": false or true,
+  "min_dir_age": 0 or integer (45, 50, 55, 60, 65),
+  "max_dir_age": 999 or integer (50, 55, 60, 65, 70, 75),
+  "pe_filter": "Include all" or "Exclude High PE" or "Exclude High + Medium" or "PE-backed only",
+  "family_only": false or true,
+  "min_employees": 0 or integer (5, 10, 20, 50, 100),
+  "min_growth_score": 0 or integer (25, 40, 55, 75),
+  "min_acq_score": 0 or integer (30, 50, 65, 80),
+  "run_deep": false or true,
+  "explanation": "Brief explanation of how you interpreted their request"
+}
+
+Rules:
+- If the user mentions care homes, healthcare → suggest CQC register
+- If the user mentions waste, recycling, skip hire → suggest EA_WASTE register
+- If the user mentions financial services, brokers, IFA → suggest FCA register
+- If they want "established" or "mature" companies → set min_age_years to 10+
+- If they mention succession, retirement, older directors → set min_dir_age to 55+
+- If they say "no PE" or "independent" → set pe_filter to "Exclude High + Medium"
+- If they want "growing" companies → set min_growth_score to 55
+- If they mention a UK region, set it
+- Default to search_source "sic" unless registers are clearly relevant
+- Always set a sector even if using registers
+
+Respond ONLY with the JSON object, no other text."""
+
+
+def _ai_parse_search(user_input: str) -> dict | None:
+    """Call Claude API to parse a natural language search description into form config."""
+    if not ANTHROPIC_API_KEY:
+        return None
+    try:
+        resp = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": "claude-sonnet-4-20250514",
+                "max_tokens": 1024,
+                "system": _AI_SYSTEM_PROMPT,
+                "messages": [{"role": "user", "content": user_input}],
+            },
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            content = resp.json()["content"][0]["text"]
+            # Strip markdown code fences if present
+            content = content.strip()
+            if content.startswith("```"):
+                content = content.split("\n", 1)[1] if "\n" in content else content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            return json.loads(content.strip())
+    except Exception:
+        pass
+    return None
+
+
 def _reset_estimate():
     st.session_state.estimate_triggered  = False
     st.session_state.estimate_run_id     = None
@@ -600,6 +851,55 @@ def _reset_estimate():
 with tabs[0]:
     st.subheader("New Sector Search")
     st.caption("Each search runs independently on GitHub — you can start multiple and close this window at any time.")
+
+    # ── AI Search Assistant ───────────────────────────────────────────────────
+    if ANTHROPIC_API_KEY:
+        with st.expander("💬 Describe your search in plain English", expanded=False):
+            st.caption(
+                "Tell me what you're looking for and I'll configure all the filters for you. "
+                "For example: *\"Find established waste management companies in the North West, "
+                "10+ years old, growing, no PE ownership, ideally family-run with older directors.\"*"
+            )
+            ai_col1, ai_col2 = st.columns([4, 1])
+            with ai_col1:
+                ai_input = st.text_area(
+                    "What are you looking for?",
+                    placeholder="e.g. 'I want to find care home businesses in the Midlands, at least 15 years old, with 20+ employees, growing revenue, and ideally family-owned with directors approaching retirement'",
+                    height=80,
+                    key="ai_search_input",
+                    label_visibility="collapsed",
+                )
+            with ai_col2:
+                ai_go = st.button("🤖 Configure", use_container_width=True, key="ai_go")
+
+            if ai_go and ai_input.strip():
+                with st.spinner("Parsing your search criteria…"):
+                    ai_config = _ai_parse_search(ai_input.strip())
+                if ai_config:
+                    # Store parsed values into session state for form defaults
+                    st.session_state["_ai_sector"]        = ai_config.get("sector", "")
+                    st.session_state["_ai_search_source"] = ai_config.get("search_source", "sic")
+                    st.session_state["_ai_reg_sources"]   = ai_config.get("reg_sources", [])
+                    st.session_state["_ai_reg_query"]     = ai_config.get("reg_query", "")
+                    st.session_state["_ai_region"]        = ai_config.get("region", "")
+                    st.session_state["_ai_min_revenue"]   = ai_config.get("min_revenue", "")
+                    st.session_state["_ai_min_age"]       = ai_config.get("min_age_years", 0)
+                    st.session_state["_ai_clean_charges"] = ai_config.get("clean_charges_only", False)
+                    st.session_state["_ai_min_dir_age"]   = ai_config.get("min_dir_age", 0)
+                    st.session_state["_ai_max_dir_age"]   = ai_config.get("max_dir_age", 999)
+                    st.session_state["_ai_pe_filter"]     = ai_config.get("pe_filter", "Include all")
+                    st.session_state["_ai_family_only"]   = ai_config.get("family_only", False)
+                    st.session_state["_ai_min_employees"] = ai_config.get("min_employees", 0)
+                    st.session_state["_ai_min_growth"]    = ai_config.get("min_growth_score", 0)
+                    st.session_state["_ai_min_acq"]       = ai_config.get("min_acq_score", 0)
+                    st.session_state["_ai_run_deep"]      = ai_config.get("run_deep", False)
+
+                    explanation = ai_config.get("explanation", "")
+                    st.success(f"✅ **Search configured!** {explanation}")
+                    st.caption("Review the form below — all fields have been pre-filled. Adjust anything, then click Preview.")
+                    st.rerun()
+                else:
+                    st.error("Couldn't parse your description. Please try rephrasing or fill in the form manually.")
 
     # ── PHASE 1: Search form ───────────────────────────────────────────────────
     # Hide form as soon as Preview is clicked (estimate_triggered), not just
@@ -626,10 +926,12 @@ with tabs[0]:
         with st.form("new_search", clear_on_submit=False):
 
             # ── Row 1: Sector + email ──────────────────────────────────────────
+            _ai_sector = st.session_state.get("_ai_sector", "")
             col1, col2 = st.columns([2, 1])
             with col1:
                 sector = st.text_input(
                     "Sector description *",
+                    value=_ai_sector if _ai_sector else "",
                     placeholder='e.g. "fire safety systems", "HVAC contractors", "waste management"',
                     help="Free text — the pipeline auto-discovers SIC codes using curated maps and fuzzy matching.",
                 )
@@ -644,6 +946,8 @@ with tabs[0]:
             st.markdown("**Search universe** — where to look for companies")
             src_col, reg_col = st.columns([1, 2])
             with src_col:
+                _ai_src = st.session_state.get("_ai_search_source", "sic")
+                _src_idx = {"sic": 0, "register": 1, "both": 2}.get(_ai_src, 0)
                 search_source = st.radio(
                     "Discover from",
                     options=["sic", "register", "both"],
@@ -652,7 +956,7 @@ with tabs[0]:
                         "register": "🏛  Regulatory register  (registered firms only)",
                         "both":     "📋 + 🏛  SIC + register  (broadest coverage)",
                     }[x],
-                    index=0,
+                    index=_src_idx,
                     help=(
                         "**SIC codes** — broadest. Finds every active UK company in the sector.\n\n"
                         "**Regulatory register** — highest quality signal. Only firms registered "
@@ -736,29 +1040,38 @@ with tabs[0]:
 
             # ── Advanced filters ──────────────────────────────────────────────
             with st.expander("Advanced filters (optional)"):
+                _ai_region = st.session_state.get("_ai_region", "")
+                _ai_min_rev = st.session_state.get("_ai_min_revenue", "")
+                _region_opts = [
+                    "", "London", "South East", "South West", "East of England",
+                    "East Midlands", "West Midlands", "Yorkshire and The Humber",
+                    "North West", "North East", "Wales", "Scotland", "Northern Ireland",
+                ]
+                _rev_opts = ["", "250000", "500000", "1000000", "2000000", "5000000"]
                 fc1, fc2 = st.columns(2)
                 with fc1:
-                    region = st.selectbox("UK region", [
-                        "", "London", "South East", "South West", "East of England",
-                        "East Midlands", "West Midlands", "Yorkshire and The Humber",
-                        "North West", "North East", "Wales", "Scotland", "Northern Ireland",
-                    ], index=0, help="Leave blank for all UK.")
+                    region = st.selectbox("UK region", _region_opts,
+                        index=_region_opts.index(_ai_region) if _ai_region in _region_opts else 0,
+                        help="Leave blank for all UK.")
                 with fc2:
-                    min_revenue = st.selectbox("Minimum estimated revenue",
-                        ["", "250000", "500000", "1000000", "2000000", "5000000"],
+                    min_revenue = st.selectbox("Minimum estimated revenue", _rev_opts,
                         format_func=lambda x: "No minimum" if x == "" else f"£{int(x):,}",
-                        index=0)
+                        index=_rev_opts.index(str(_ai_min_rev)) if str(_ai_min_rev) in _rev_opts else 0)
 
                 st.markdown("**Company quality filters**")
                 qf1, qf2, qf3 = st.columns(3)
                 with qf1:
+                    _MIN_AGE_MAP = {"Any age": 0, "3+ years": 3, "5+ years": 5, "10+ years": 10, "15+ years": 15}
+                    _ai_min_age = st.session_state.get("_ai_min_age", 0)
+                    _age_opts = list(_MIN_AGE_MAP.keys())
+                    _age_rev  = {v: k for k, v in _MIN_AGE_MAP.items()}
+                    _age_idx  = _age_opts.index(_age_rev.get(_ai_min_age, "Any age"))
                     min_age_sel = st.selectbox(
                         "Minimum company age",
-                        options=["Any age", "3+ years", "5+ years", "10+ years", "15+ years"],
-                        index=0,
+                        options=_age_opts,
+                        index=_age_idx,
                         help="Exclude recently incorporated companies. Useful for sectors where new entrants are less likely PE targets.",
                     )
-                    _MIN_AGE_MAP = {"Any age": 0, "3+ years": 3, "5+ years": 5, "10+ years": 10, "15+ years": 15}
                     min_age_yrs = _MIN_AGE_MAP[min_age_sel]
                 with qf2:
                     clean_charges = st.checkbox(
@@ -772,6 +1085,112 @@ with tabs[0]:
                         "Further SIC refinement available after preview — "
                         "untick individual SIC codes before confirming the full run."
                     )
+
+                st.markdown("**Director & ownership filters** *(applied to results after enrichment)*")
+                df1, df2, df3, df4 = st.columns(4)
+                with df1:
+                    _DIR_AGE_MAP = {"Any": 0, "45+": 45, "50+": 50, "55+": 55, "60+": 60, "65+": 65}
+                    _ai_mda = st.session_state.get("_ai_min_dir_age", 0)
+                    _da_rev = {v: k for k, v in _DIR_AGE_MAP.items()}
+                    _da_idx = list(_DIR_AGE_MAP.keys()).index(_da_rev.get(_ai_mda, "Any"))
+                    min_dir_age_sel = st.selectbox(
+                        "Min director age",
+                        options=list(_DIR_AGE_MAP.keys()),
+                        index=_da_idx,
+                        help="Filter for companies where the oldest director is at least this age — "
+                             "higher director age = stronger succession signal.",
+                        key="flt_min_dir_age",
+                    )
+                    min_dir_age = _DIR_AGE_MAP[min_dir_age_sel]
+                with df2:
+                    _DIR_MAX_MAP = {"Any": 999, "Under 50": 50, "Under 55": 55, "Under 60": 60,
+                                    "Under 65": 65, "Under 70": 70, "Under 75": 75}
+                    _ai_maxda = st.session_state.get("_ai_max_dir_age", 999)
+                    _dmax_rev = {v: k for k, v in _DIR_MAX_MAP.items()}
+                    _dmax_idx = list(_DIR_MAX_MAP.keys()).index(_dmax_rev.get(_ai_maxda, "Any"))
+                    max_dir_age_sel = st.selectbox(
+                        "Max director age",
+                        options=list(_DIR_MAX_MAP.keys()),
+                        index=_dmax_idx,
+                        help="Exclude companies where the oldest director exceeds this age.",
+                        key="flt_max_dir_age",
+                    )
+                    max_dir_age = _DIR_MAX_MAP[max_dir_age_sel]
+                with df3:
+                    _pe_opts = ["Include all", "Exclude High PE", "Exclude High + Medium", "PE-backed only"]
+                    _ai_pe = st.session_state.get("_ai_pe_filter", "Include all")
+                    _pe_idx = _pe_opts.index(_ai_pe) if _ai_pe in _pe_opts else 0
+                    pe_filter_sel = st.selectbox(
+                        "PE ownership",
+                        options=_pe_opts,
+                        index=_pe_idx,
+                        help="Filter companies by PE ownership likelihood. "
+                             "'Exclude High PE' removes companies with strong PE signals.",
+                        key="flt_pe",
+                    )
+                with df4:
+                    _ai_fam = st.session_state.get("_ai_family_only", False)
+                    family_filter = st.checkbox(
+                        "Family-owned only",
+                        value=_ai_fam,
+                        help="Only show companies flagged as likely family-owned "
+                             "(shared surnames, long tenures, small boards).",
+                        key="flt_family",
+                    )
+
+                st.markdown("**Performance & size filters** *(applied to results after enrichment)*")
+                pf1, pf2, pf3, pf4 = st.columns(4)
+                with pf1:
+                    _EMP_MAP = {"Any": 0, "5+": 5, "10+": 10, "20+": 20, "50+": 50, "100+": 100}
+                    _ai_emp = st.session_state.get("_ai_min_employees", 0)
+                    _emp_rev = {v: k for k, v in _EMP_MAP.items()}
+                    _emp_idx = list(_EMP_MAP.keys()).index(_emp_rev.get(_ai_emp, "Any"))
+                    min_employees_sel = st.selectbox(
+                        "Min employees",
+                        options=list(_EMP_MAP.keys()),
+                        index=_emp_idx,
+                        help="Filter by minimum employee count (where known).",
+                        key="flt_min_emp",
+                    )
+                    min_employees = _EMP_MAP[min_employees_sel]
+                with pf2:
+                    _GROWTH_MAP = {"Any": 0, "25+ (not weak)": 25, "40+ (stable+)": 40,
+                                   "55+ (growing+)": 55, "75+ (strong)": 75}
+                    _ai_gr = st.session_state.get("_ai_min_growth", 0)
+                    _gr_rev = {v: k for k, v in _GROWTH_MAP.items()}
+                    _gr_idx = list(_GROWTH_MAP.keys()).index(_gr_rev.get(_ai_gr, "Any"))
+                    min_growth_sel = st.selectbox(
+                        "Min Growth Score",
+                        options=list(_GROWTH_MAP.keys()),
+                        index=_gr_idx,
+                        help="Filter by composite Growth Score (0–100). "
+                             "Higher = stronger growth trajectory across all available signals.",
+                        key="flt_min_growth",
+                    )
+                    min_growth = _GROWTH_MAP[min_growth_sel]
+                with pf3:
+                    filing_filter_sel = st.multiselect(
+                        "Filing quality",
+                        options=["Full", "Medium", "Small-Full", "Small", "Exempt-Full",
+                                 "Exempt-Small", "Abridged", "Micro", "Dormant"],
+                        default=[],
+                        help="Only show companies with these filing types. "
+                             "Leave empty to include all. Full/Medium have the most data.",
+                        key="flt_filing",
+                    )
+                with pf4:
+                    _ACQ_MAP = {"Any": 0, "30+": 30, "50+ (Medium+)": 50, "65+ (High+)": 65, "80+ (Prime)": 80}
+                    _ai_acq = st.session_state.get("_ai_min_acq", 0)
+                    _acq_rev = {v: k for k, v in _ACQ_MAP.items()}
+                    _acq_idx = list(_ACQ_MAP.keys()).index(_acq_rev.get(_ai_acq, "Any"))
+                    min_acq_score_sel = st.selectbox(
+                        "Min Acquisition Score",
+                        options=list(_ACQ_MAP.keys()),
+                        index=_acq_idx,
+                        help="Filter by overall Acquisition Score grade.",
+                        key="flt_min_acq",
+                    )
+                    min_acq_score = _ACQ_MAP[min_acq_score_sel]
 
             # ── Enrichment modules ────────────────────────────────────────────
             st.markdown("**Enrichment modules** — tick what to include in this run")
@@ -839,6 +1258,15 @@ with tabs[0]:
                 st.session_state["_estimate_min_age"]       = min_age_yrs
                 st.session_state["_estimate_clean_charges"] = clean_charges
                 st.session_state["_estimate_trade_bodies"]  = _tb_sel_final
+                # Post-enrichment filters (applied to results, not workflow inputs)
+                st.session_state["_filter_min_dir_age"]    = min_dir_age
+                st.session_state["_filter_max_dir_age"]    = max_dir_age
+                st.session_state["_filter_pe"]             = pe_filter_sel
+                st.session_state["_filter_family_only"]    = family_filter
+                st.session_state["_filter_min_employees"]  = min_employees
+                st.session_state["_filter_min_growth"]     = min_growth
+                st.session_state["_filter_filing_quality"] = filing_filter_sel
+                st.session_state["_filter_min_acq_score"]  = min_acq_score
                 ok = trigger_workflow(WORKFLOW_ESTIMATE, {"sector": sector.strip()})
                 if not ok:
                     _reset_estimate()
@@ -946,6 +1374,43 @@ with tabs[0]:
         m3.metric("SIC match method", "Curated map" if source == "curated" else "Fuzzy match")
 
         st.caption(f"{acc_colour} {acc_lbl}")
+
+        # ── Active post-enrichment filters summary ────────────────────────────
+        _active_filters = []
+        _f_min_dir = st.session_state.get("_filter_min_dir_age", 0)
+        _f_max_dir = st.session_state.get("_filter_max_dir_age", 999)
+        _f_pe      = st.session_state.get("_filter_pe", "Include all")
+        _f_family  = st.session_state.get("_filter_family_only", False)
+        _f_min_emp = st.session_state.get("_filter_min_employees", 0)
+        _f_min_gr  = st.session_state.get("_filter_min_growth", 0)
+        _f_filing  = st.session_state.get("_filter_filing_quality", [])
+        _f_min_acq = st.session_state.get("_filter_min_acq_score", 0)
+
+        if _f_min_dir > 0:
+            _active_filters.append(f"Director age ≥ {_f_min_dir}")
+        if _f_max_dir < 999:
+            _active_filters.append(f"Director age < {_f_max_dir}")
+        if _f_pe != "Include all":
+            _active_filters.append(f"PE: {_f_pe}")
+        if _f_family:
+            _active_filters.append("Family-owned only")
+        if _f_min_emp > 0:
+            _active_filters.append(f"Employees ≥ {_f_min_emp}")
+        if _f_min_gr > 0:
+            _active_filters.append(f"Growth Score ≥ {_f_min_gr}")
+        if _f_filing:
+            _active_filters.append(f"Filing: {', '.join(_f_filing)}")
+        if _f_min_acq > 0:
+            _active_filters.append(f"Acq. Score ≥ {_f_min_acq}")
+
+        if _active_filters:
+            st.info(
+                f"**Post-enrichment filters active** ({len(_active_filters)}): "
+                + "  ·  ".join(_active_filters)
+                + "\n\nThese will be applied to results after the pipeline completes. "
+                f"The pipeline will process all ~{total:,} companies, then filter the Excel preview."
+            )
+
         st.divider()
 
         # ── SIC code breakdown + interactive exclusion form ───────────────────
@@ -1103,6 +1568,16 @@ with tabs[0]:
                     "search_source": search_source,
                     "reg_sources": reg_sources,
                     "triggered_at": datetime.now(timezone.utc).isoformat(),
+                    "filters": {
+                        "min_dir_age":    st.session_state.get("_filter_min_dir_age", 0),
+                        "max_dir_age":    st.session_state.get("_filter_max_dir_age", 999),
+                        "pe":             st.session_state.get("_filter_pe", "Include all"),
+                        "family_only":    st.session_state.get("_filter_family_only", False),
+                        "min_employees":  st.session_state.get("_filter_min_employees", 0),
+                        "min_growth":     st.session_state.get("_filter_min_growth", 0),
+                        "filing_quality": st.session_state.get("_filter_filing_quality", []),
+                        "min_acq_score":  st.session_state.get("_filter_min_acq_score", 0),
+                    },
                 }
 
         if ok:
