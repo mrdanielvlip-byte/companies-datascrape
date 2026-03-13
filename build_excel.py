@@ -814,7 +814,7 @@ def build_pipeline(wb, companies):
         cx_rev.font      = Font(name="Arial", size=9, bold=True)
         cx_rev.alignment = Alignment(horizontal="right", vertical="center")
         cx_rev.border    = THIN
-        cx_rev.fill      = fill("E8F4FD") if rev_base else (bg or fill("FFFFFF"))
+        cx_rev.fill      = fill("E8F4FD") if rev_base else (fill(bg) if isinstance(bg, str) else bg) if bg else fill("FFFFFF")
         cell(ws, row, 41, rev_str(rev_high), bg=bg, align="right", size=9)
 
         # Col 42 — Revenue trend
