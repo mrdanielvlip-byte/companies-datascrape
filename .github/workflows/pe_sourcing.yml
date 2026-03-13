@@ -163,14 +163,14 @@ jobs:
 
       # ── Restore cached DB (skips 10-min rebuild if ZIPs haven't changed) ────────
       # Skip DB entirely when --companies is used without --sector (API-only mode)
-      - name: Cache local Companies House DB
+      # Uses separate restore/save steps because save-always is deprecated in cache@v4
+      - name: Restore cached DB
         id: db-cache
         if: inputs.companies == '' || inputs.sector != ''
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: data/companies_house.db
           key: ch-db-${{ hashFiles('datasets/uk_companies_full/*.zip') }}
-          save-always: true
 
       - name: Build local Companies House DB
         if: (inputs.companies == '' || inputs.sector != '') && steps.db-cache.outputs.cache-hit != 'true'
@@ -185,6 +185,13 @@ jobs:
           else
             echo "⚠ DB build failed — falling back to API search"
           fi
+
+      - name: Save DB to cache
+        if: (inputs.companies == '' || inputs.sector != '') && steps.db-cache.outputs.cache-hit != 'true' && always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/companies_house.db
+          key: ch-db-${{ hashFiles('datasets/uk_companies_full/*.zip') }}
 
       - name: Verify DB
         if: inputs.companies == '' || inputs.sector != ''

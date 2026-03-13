@@ -1165,6 +1165,10 @@ def build_contacts(wb, companies):
         contacts = c.get("contacts", {})
         dir_contacts = contacts.get("director_contacts", [])
         website = contacts.get("website", {})
+        if isinstance(website, str):
+            website = {"website_url": website}
+        elif not isinstance(website, dict):
+            website = {}
         site_url = (website.get("website_url", "") or
                     c.get("website_url", "") or
                     c.get("digital_health", {}).get("website_url", "") or "")
@@ -2091,8 +2095,12 @@ def build_overview(wb, companies):
 
         # ── Website / domain ──────────────────────────────────────────────────
         domain   = dh.get("domain", "")
-        website  = contacts.get("website") or c.get("website") or (
-            f"https://{domain}" if domain else "")
+        _ws_raw  = contacts.get("website") or c.get("website") or ""
+        if isinstance(_ws_raw, dict):
+            _ws_raw = _ws_raw.get("website_url") or _ws_raw.get("url") or ""
+        website  = _ws_raw if isinstance(_ws_raw, str) else ""
+        if not website and domain:
+            website = f"https://{domain}"
         website_live = dh.get("website_live", False)
 
         # ── About text — prefer web description, fall back to SIC desc ────────
