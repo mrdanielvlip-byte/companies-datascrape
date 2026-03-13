@@ -162,15 +162,17 @@ jobs:
         run: mkdir -p output data/sectors
 
       # ── Restore cached DB (skips 10-min rebuild if ZIPs haven't changed) ────────
+      # Skip DB entirely when --companies is used without --sector (API-only mode)
       - name: Cache local Companies House DB
         id: db-cache
+        if: inputs.companies == '' || inputs.sector != ''
         uses: actions/cache@v4
         with:
           path: data/companies_house.db
           key: ch-db-${{ hashFiles('datasets/uk_companies_full/*.zip') }}
 
       - name: Build local Companies House DB
-        if: steps.db-cache.outputs.cache-hit != 'true'
+        if: (inputs.companies == '' || inputs.sector != '') && steps.db-cache.outputs.cache-hit != 'true'
         run: |
           echo "Cache miss — building DB from bulk CSVs..."
           echo "Parts found:"
@@ -184,6 +186,7 @@ jobs:
           fi
 
       - name: Verify DB
+        if: inputs.companies == '' || inputs.sector != ''
         run: |
           if [ -f "data/companies_house.db" ]; then
             echo "✅ DB ready ($(du -h data/companies_house.db | cut -f1))"
@@ -191,6 +194,10 @@ jobs:
           else
             echo "⚠ No local DB — will use API search"
           fi
+
+      - name: Skip DB (API-only mode)
+        if: inputs.companies != '' && inputs.sector == ''
+        run: echo "⚡ Standalone --companies mode — skipping DB build, using CH API directly"
 
       # ── 6. Build pipeline flags from per-module inputs ────────────────────────
       - name: Build pipeline flags
