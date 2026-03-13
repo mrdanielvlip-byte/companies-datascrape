@@ -1096,7 +1096,7 @@ Examples:
     # Silently skips if credentials not configured.
     try:
         from notify import send_completion_email
-        import json, pathlib
+        import pathlib
 
         # Build a basic summary from enriched JSON if available
         summary = {}
