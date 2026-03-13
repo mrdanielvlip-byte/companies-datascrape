@@ -170,6 +170,7 @@ jobs:
         with:
           path: data/companies_house.db
           key: ch-db-${{ hashFiles('datasets/uk_companies_full/*.zip') }}
+          save-always: true
 
       - name: Build local Companies House DB
         if: (inputs.companies == '' || inputs.sector != '') && steps.db-cache.outputs.cache-hit != 'true'
