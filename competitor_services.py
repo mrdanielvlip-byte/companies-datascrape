@@ -258,12 +258,12 @@ def enrich_competitor_services(
         return (stored_desc, stored_url)
 
     # ── 3. Known website URL ──────────────────────────────────────────────────
-    known_website = (
-        enriched.get("contacts", {}).get("website")
-        or enriched.get("website")
-        or stored_url
-        or ""
-    )
+    _ws_cand = enriched.get("contacts", {}).get("website") or enriched.get("website") or ""
+    if isinstance(_ws_cand, dict):
+        _ws_cand = _ws_cand.get("website_url") or _ws_cand.get("url") or ""
+    if not isinstance(_ws_cand, str):
+        _ws_cand = ""
+    known_website = _ws_cand or stored_url or ""
     if known_website:
         time.sleep(delay)
         desc = _fetch_description_from_url(known_website)
