@@ -582,6 +582,15 @@ Examples:
                              "runs before committing to a full sector search.")
 
     parser.add_argument(
+        "--companies",
+        metavar="NAMES",
+        default="",
+        help='Pipe-separated company names to run through the full pipeline. '
+             'Looks up each via CH API, seeds filtered_companies.json, '
+             'then runs enrichment + all modules. '
+             'Example: --companies "ACME LTD|SMITH & SONS LIMITED"',
+    )
+    parser.add_argument(
         "--local-db",
         action="store_true",
         help="Force local SQLite DB for Step 1 (auto-detected by default when DB exists). "
@@ -617,8 +626,110 @@ Examples:
         list_registers()
         sys.exit(0)
 
+    # ── --companies: manual company list mode ──────────────────────────────────
+    if args.companies:
+        names = [n.strip() for n in args.companies.split("|") if n.strip()]
+        if names:
+            from types import SimpleNamespace
+            cfg = SimpleNamespace(
+                SECTOR_LABEL        = "Manual Company List",
+                SECTOR_DESCRIPTION  = "manual",
+                SECTOR_SLUG         = "manual",
+                SIC_CODES           = [],
+                NAME_QUERIES        = [],
+                INCLUDE_STEMS       = [],
+                EXCLUDE_TERMS       = [],
+                EXCLUDE_SUBSECTORS  = [],
+                SECTOR_BENCHMARKS   = {"revenue_per_head_base": 80000, "revenue_per_head_low": 50000,
+                                       "revenue_per_head_high": 120000, "asset_turnover_ratio": 1.5,
+                                       "ebitda_margin_low": 0.08, "ebitda_margin_base": 0.12,
+                                       "ebitda_margin_high": 0.18, "sector_b2b_score": 75},
+                REVENUE_PER_HEAD_LOW  = 50000, REVENUE_PER_HEAD_MID = 80000, REVENUE_PER_HEAD_HIGH = 120000,
+                ASSET_TURNOVER_RATIO  = 1.5,
+                EBITDA_MARGIN_LOW     = 0.08, EBITDA_MARGIN_BASE = 0.12, EBITDA_MARGIN_HIGH = 0.18,
+                TARGET_REVENUE_MIN    = 1_000_000, TARGET_REVENUE_MAX = 100_000_000,
+                TARGET_EBITDA_MIN     = 200_000,   TARGET_EBITDA_MAX  = 20_000_000,
+                FOUNDER_AGE_FLOOR     = 55,
+                SCORE_WEIGHTS         = {"scale_financial": 0.30, "market_attractiveness": 0.20,
+                                         "ownership_succession": 0.30, "dealability_signals": 0.20},
+                SCORE_THRESHOLDS      = {"prime": 80, "high": 65, "medium": 50},
+                MARKET_ATTRACTIVENESS_SCORE = 75,
+                CONTACT_ENRICH_TOP_N  = len(names),
+                BOLT_ON_ADJACENCIES   = [],
+                RECOMMENDED_REGISTERS = [],
+                RECOMMENDED_TRADE_BODIES = [],
+                OUTPUT_DIR            = "output",
+                RAW_JSON              = "raw_companies.json",
+                FILTERED_JSON         = "filtered_companies.json",
+                ENRICHED_JSON         = "enriched_companies.json",
+                EXCEL_OUTPUT          = "PE_Pipeline.xlsx",
+            )
+            os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
+
+            # Look up each company via CH API
+            print(f"\n{'='*65}")
+            print(f"  Manual Company Lookup — {len(names)} companies")
+            print(f"{'='*65}\n")
+
+            api_key = load_api_key()
+            import requests as _req, time as _time
+            companies = []
+            for name in names:
+                print(f"  Looking up: {name} ...", end="", flush=True)
+                try:
+                    r = _req.get(
+                        "https://api.company-information.service.gov.uk/search/companies",
+                        params={"q": name, "items_per_page": 5},
+                        auth=(api_key, ""),
+                    )
+                    if r.status_code == 200:
+                        items = r.json().get("items", [])
+                        # Exact match first, then first result
+                        match = None
+                        for item in items:
+                            if item.get("title", "").upper().strip() == name.upper().strip():
+                                match = item; break
+                        if not match and items:
+                            match = items[0]
+                        if match:
+                            num = match.get("company_number", "")
+                            print(f"  ✓ {match.get('title')} ({num})")
+                            companies.append({
+                                "company_number": num,
+                                "company_name": match.get("title", ""),
+                                "company_status": match.get("company_status", "active"),
+                                "date_of_creation": match.get("date_of_creation", ""),
+                                "registered_office_address": match.get("address", {}),
+                                "sic_codes": match.get("sic_codes", []),
+                                "source": "manual_lookup",
+                            })
+                        else:
+                            print(f"  ✗ Not found")
+                    else:
+                        print(f"  ✗ API error {r.status_code}")
+                except Exception as e:
+                    print(f"  ✗ Error: {e}")
+                _time.sleep(0.5)
+
+            if not companies:
+                print("\n❌ No companies found. Check names and try again.")
+                sys.exit(1)
+
+            # Save as filtered_companies.json — pipeline continues from step 3
+            filtered_path = os.path.join(cfg.OUTPUT_DIR, cfg.FILTERED_JSON)
+            with open(filtered_path, "w") as f:
+                json.dump(companies, f, indent=2)
+            print(f"\n  ✅ {len(companies)} companies saved → {filtered_path}")
+            print(f"  Skipping steps 1-2 (search/filter) — running enrichment directly\n")
+
+            # Jump straight to enrichment (step 3 onwards)
+            args.extras_only = False  # ensure full enrichment runs
+            # Fall through to main pipeline — steps 1-2 will be skipped below
+
     # ── Load config ───────────────────────────────────────────────────────────
-    if args.sector:
+    if args.companies:
+        pass  # config already loaded above
+    elif args.sector:
         cfg = load_discovered_config(args.sector, validate=args.validate_sic)
         if args.save_config:
             from sic_discovery import save_config_file
@@ -735,6 +846,9 @@ Examples:
         args.no_competitor_map    = True
         args.no_acquisition_score = True
 
+    # --companies mode: skip steps 1-2 (already seeded filtered_companies.json)
+    _skip_discovery = bool(getattr(args, "companies", ""))
+
     if not args.extras_only:
         # ── Steps 1–4: Discovery, filter, enrich, financials ──────────────────
         search_src   = getattr(args, "search_source", "sic") or "sic"
@@ -746,7 +860,10 @@ Examples:
         if reg_sources and not args.sector:
             search_src = "register"
 
-        if args.smart:
+        if _skip_discovery:
+            print("Steps 1-2 skipped (--companies mode: filtered_companies.json already seeded)\n")
+
+        elif args.smart:
             print(f"Step 1/13 — Smart Sector Search  ⚡")
             smart = reload("smart_search")
             result = smart.run_interactive(
@@ -814,53 +931,55 @@ Examples:
                     print("\nStep 2/13 — Filter")
                     filter_companies(cfg)
 
-            # ── Register discovery (when source is 'register' or 'both') ──────
-            # Auto-inject recommended registers from sic_discovery curated map
-            auto_regs = getattr(cfg, "RECOMMENDED_REGISTERS", []) or []
-            if auto_regs and not reg_sources:
-                reg_sources = auto_regs
-                if search_src == "sic":
-                    search_src = "both"
-                print(f"\n  Auto-detected recommended registers: {reg_sources}")
+            if not _skip_discovery:
+                # ── Register discovery (when source is 'register' or 'both') ──
+                # Auto-inject recommended registers from sic_discovery curated map
+                auto_regs = getattr(cfg, "RECOMMENDED_REGISTERS", []) or []
+                if auto_regs and not reg_sources:
+                    reg_sources = auto_regs
+                    if search_src == "sic":
+                        search_src = "both"
+                    print(f"\n  Auto-detected recommended registers: {reg_sources}")
 
-            if search_src in ("register", "both") and reg_sources:
-                merge = (search_src == "both")
-                for i, reg_key in enumerate(reg_sources):
-                    print(f"\nStep {'1' if i == 0 and search_src == 'register' else '2b'}/13 "
-                          f"— Register Discovery ({reg_key}: '{reg_query}')")
-                    _run_register_discovery(
-                        reg_key, reg_query, cfg,
-                        merge_into_existing=merge,
-                    )
-                if search_src == "register":
-                    print("\nStep 2/13 — Filter (applied during register discovery)")
-                else:
-                    print("\nStep 2b/13 — Register results merged into SIC results")
+                if search_src in ("register", "both") and reg_sources:
+                    merge = (search_src == "both")
+                    for i, reg_key in enumerate(reg_sources):
+                        print(f"\nStep {'1' if i == 0 and search_src == 'register' else '2b'}/13 "
+                              f"— Register Discovery ({reg_key}: '{reg_query}')")
+                        _run_register_discovery(
+                            reg_key, reg_query, cfg,
+                            merge_into_existing=merge,
+                        )
+                    if search_src == "register":
+                        print("\nStep 2/13 — Filter (applied during register discovery)")
+                    else:
+                        print("\nStep 2b/13 — Register results merged into SIC results")
 
-            elif search_src == "register" and not reg_sources:
-                print("\n  [WARNING] --search-source=register but no --reg-source specified. "
-                      "Falling back to SIC search.")
-                search = reload("ch_search")
-                search.run()
-                filter_companies(cfg)
+                elif search_src == "register" and not reg_sources:
+                    print("\n  [WARNING] --search-source=register but no --reg-source specified. "
+                          "Falling back to SIC search.")
+                    search = reload("ch_search")
+                    search.run()
+                    filter_companies(cfg)
 
-        # ── Trade body member discovery ───────────────────────────────────────
-        # Uses recommended trade bodies from curated config, or CLI flags, or AUTO
-        trade_bodies = getattr(args, "trade_bodies", []) or []
-        sector_label = getattr(args, "sector", None) or getattr(cfg, "SECTOR_LABEL", "")
-        if not trade_bodies:
-            # Use curated recommendations if available, otherwise AUTO
-            trade_bodies = getattr(cfg, "RECOMMENDED_TRADE_BODIES", []) or ["AUTO"]
-        print(f"\nStep 2c/13 — Trade Body Member Discovery")
-        _run_trade_body_discovery(
-            sector=sector_label,
-            trade_body_keys=trade_bodies,
-            cfg=cfg,
-            merge_into_existing=True,
-        )
+        if not _skip_discovery:
+            # ── Trade body member discovery ───────────────────────────────────
+            # Uses recommended trade bodies from curated config, or CLI flags, or AUTO
+            trade_bodies = getattr(args, "trade_bodies", []) or []
+            sector_label = getattr(args, "sector", None) or getattr(cfg, "SECTOR_LABEL", "")
+            if not trade_bodies:
+                # Use curated recommendations if available, otherwise AUTO
+                trade_bodies = getattr(cfg, "RECOMMENDED_TRADE_BODIES", []) or ["AUTO"]
+            print(f"\nStep 2c/13 — Trade Body Member Discovery")
+            _run_trade_body_discovery(
+                sector=sector_label,
+                trade_body_keys=trade_bodies,
+                cfg=cfg,
+                merge_into_existing=True,
+            )
 
-        # ── Post-filter 1: age / charges / SIC exclusion ─────────────────────
-        _apply_post_filters(cfg, args)
+            # ── Post-filter 1: age / charges / SIC exclusion ─────────────────
+            _apply_post_filters(cfg, args)
 
         # ── Post-filter 2: cap company count ─────────────────────────────────
         max_n = getattr(args, "max_companies", 0) or 0

@@ -1,13 +1,17 @@
 name: PE Deal Sourcing — Sector Search
-run-name: "${{ inputs.sector }}"
+run-name: "${{ inputs.companies && 'Manual: ' || '' }}${{ inputs.sector || 'company lookup' }}"
 
 on:
   workflow_dispatch:
     inputs:
       sector:
-        description: 'Sector description (e.g. "fire safety", "HVAC contractors", "pest control")'
-        required: true
+        description: 'Sector description (e.g. "fire safety", "HVAC contractors", "pest control"). Not needed if using companies field.'
+        required: false
         default: 'lift maintenance'
+      companies:
+        description: 'Pipe-separated company names for manual lookup (e.g. "ACME LTD|SMITH & SONS LIMITED"). Overrides sector search.'
+        required: false
+        default: ''
       region:
         description: 'UK region filter (leave blank for all UK)'
         required: false
@@ -287,11 +291,18 @@ jobs:
           SECTOR_MIN_REVENUE: ${{ inputs.min_revenue }}
         run: |
           SECTOR="${{ inputs.sector }}"
+          COMPANIES="${{ inputs.companies }}"
           FLAGS="${{ steps.flags.outputs.flags }}"
 
-          echo "Running pipeline for: $SECTOR"
-          echo "Flags: $FLAGS"
-          python3 run.py --sector "$SECTOR" $FLAGS
+          if [ -n "$COMPANIES" ]; then
+            echo "Running pipeline for manual companies: $COMPANIES"
+            echo "Flags: $FLAGS"
+            python3 run.py --companies "$COMPANIES" $FLAGS
+          else
+            echo "Running pipeline for: $SECTOR"
+            echo "Flags: $FLAGS"
+            python3 run.py --sector "$SECTOR" $FLAGS
+          fi
 
       # ── 8. Upload Excel artifact ──────────────────────────────────────────────
       - name: Upload Excel output
