@@ -365,11 +365,17 @@ def enrich_digital(company: dict) -> dict:
     Full digital health enrichment for one company.
     Uses website URL from contacts enrichment (if available).
     """
+    _contacts = company.get("contacts") or {}
+    if not isinstance(_contacts, dict):
+        _contacts = {}
     website = (
-        company.get("contacts", {}).get("website")
+        _contacts.get("website")
         or company.get("website")
         or ""
     )
+    # Guard against non-string values (e.g. a dict leaking through)
+    if not isinstance(website, str):
+        website = ""
 
     domain = ""
     if website:

@@ -16,10 +16,16 @@ Sheets:
 
 import json
 import os
+import re
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.comments import Comment
+
+# Regex to strip characters illegal in Excel worksheets (control chars except \t \n \r)
+_ILLEGAL_CHAR_RE = re.compile(
+    r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\ufeff\ufffe\uffff]'
+)
 
 import config as cfg
 
@@ -376,6 +382,9 @@ def digital_band_fill(band: str):
 
 def cell(ws, row, col, value, bg=None, fg="000000", bold=False,
          align="left", wrap=False, size=9, border=True):
+    # Sanitise strings to avoid openpyxl IllegalCharacterError
+    if isinstance(value, str):
+        value = _ILLEGAL_CHAR_RE.sub("", value)
     c = ws.cell(row=row, column=col, value=value)
     if bg:
         # bg may already be a PatternFill object (e.g. from sell_intent_fill)
@@ -390,6 +399,8 @@ def cell(ws, row, col, value, bg=None, fg="000000", bold=False,
 def title_row(ws, row, cols_span, text, bg=NAVY, size=13):
     ws.merge_cells(f"A{row}:{get_column_letter(cols_span)}{row}")
     ws.row_dimensions[row].height = 28
+    if isinstance(text, str):
+        text = _ILLEGAL_CHAR_RE.sub("", text)
     c = ws.cell(row=row, column=1, value=text)
     c.fill = fill(bg)
     c.font = Font(name="Arial", bold=True, size=size, color=WHITE)
