@@ -9,7 +9,7 @@ on:
         required: false
         default: 'lift maintenance'
       companies:
-        description: 'Pipe-separated company names for manual lookup (e.g. "ACME LTD|SMITH & SONS LIMITED"). Overrides sector search.'
+        description: 'Pipe-separated company names OR numbers (e.g. "ACME LTD|07827663|SC371215"). Standalone or combined with sector.'
         required: false
         default: ''
       region:
@@ -294,15 +294,22 @@ jobs:
           COMPANIES="${{ inputs.companies }}"
           FLAGS="${{ steps.flags.outputs.flags }}"
 
-          if [ -n "$COMPANIES" ]; then
+          CMD="python3 run.py"
+
+          # Build command: --companies and --sector can be used together or standalone
+          if [ -n "$COMPANIES" ] && [ -n "$SECTOR" ]; then
+            echo "Running pipeline: sector '$SECTOR' + manual companies"
+            CMD="$CMD --sector \"$SECTOR\" --companies \"$COMPANIES\""
+          elif [ -n "$COMPANIES" ]; then
             echo "Running pipeline for manual companies: $COMPANIES"
-            echo "Flags: $FLAGS"
-            python3 run.py --companies "$COMPANIES" $FLAGS
+            CMD="$CMD --companies \"$COMPANIES\""
           else
             echo "Running pipeline for: $SECTOR"
-            echo "Flags: $FLAGS"
-            python3 run.py --sector "$SECTOR" $FLAGS
+            CMD="$CMD --sector \"$SECTOR\""
           fi
+
+          echo "Flags: $FLAGS"
+          eval $CMD $FLAGS
 
       # ── 8. Upload Excel artifact ──────────────────────────────────────────────
       - name: Upload Excel output

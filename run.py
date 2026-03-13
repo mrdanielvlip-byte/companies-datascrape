@@ -583,12 +583,14 @@ Examples:
 
     parser.add_argument(
         "--companies",
-        metavar="NAMES",
+        metavar="NAMES_OR_NUMBERS",
         default="",
-        help='Pipe-separated company names to run through the full pipeline. '
-             'Looks up each via CH API, seeds filtered_companies.json, '
-             'then runs enrichment + all modules. '
-             'Example: --companies "ACME LTD|SMITH & SONS LIMITED"',
+        help='Pipe-separated company names OR company numbers (or a mix). '
+             'Company numbers (e.g. 07827663, SC371215) are fetched directly '
+             'via the CH profile API; names are searched and exact-matched. '
+             'Can be used standalone (skips discovery) or combined with --sector '
+             '(manual companies are merged into sector results). '
+             'Example: --companies "ACME LTD|07827663|SC371215|SMITH & SONS LIMITED"',
     )
     parser.add_argument(
         "--local-db",
@@ -627,54 +629,65 @@ Examples:
         sys.exit(0)
 
     # ── --companies: manual company list mode ──────────────────────────────────
+    # Detects company numbers vs names automatically:
+    #   - Numbers: fetched directly via /company/{number} profile API (fast, exact)
+    #   - Names: searched via /search/companies and exact-matched
+    # Can be used standalone (skips sector discovery) or alongside --sector
+    # (manual companies are merged into sector results after discovery).
+    import re as _re
+    _CO_NUMBER_RE = _re.compile(r'^(?:SC|NI|OC|SO|NC|NF|FC|FE|GE|LP|SL|NL|R)?\d{5,8}$', _re.IGNORECASE)
+
+    _manual_companies = []  # populated below if --companies provided
+
     if args.companies:
-        names = [n.strip() for n in args.companies.split("|") if n.strip()]
-        if names:
-            from types import SimpleNamespace
-            cfg = SimpleNamespace(
-                SECTOR_LABEL        = "Manual Company List",
-                SECTOR_DESCRIPTION  = "manual",
-                SECTOR_SLUG         = "manual",
-                SIC_CODES           = [],
-                NAME_QUERIES        = [],
-                INCLUDE_STEMS       = [],
-                EXCLUDE_TERMS       = [],
-                EXCLUDE_SUBSECTORS  = [],
-                SECTOR_BENCHMARKS   = {"revenue_per_head_base": 80000, "revenue_per_head_low": 50000,
-                                       "revenue_per_head_high": 120000, "asset_turnover_ratio": 1.5,
-                                       "ebitda_margin_low": 0.08, "ebitda_margin_base": 0.12,
-                                       "ebitda_margin_high": 0.18, "sector_b2b_score": 75},
-                REVENUE_PER_HEAD_LOW  = 50000, REVENUE_PER_HEAD_MID = 80000, REVENUE_PER_HEAD_HIGH = 120000,
-                ASSET_TURNOVER_RATIO  = 1.5,
-                EBITDA_MARGIN_LOW     = 0.08, EBITDA_MARGIN_BASE = 0.12, EBITDA_MARGIN_HIGH = 0.18,
-                TARGET_REVENUE_MIN    = 1_000_000, TARGET_REVENUE_MAX = 100_000_000,
-                TARGET_EBITDA_MIN     = 200_000,   TARGET_EBITDA_MAX  = 20_000_000,
-                FOUNDER_AGE_FLOOR     = 55,
-                SCORE_WEIGHTS         = {"scale_financial": 0.30, "market_attractiveness": 0.20,
-                                         "ownership_succession": 0.30, "dealability_signals": 0.20},
-                SCORE_THRESHOLDS      = {"prime": 80, "high": 65, "medium": 50},
-                MARKET_ATTRACTIVENESS_SCORE = 75,
-                CONTACT_ENRICH_TOP_N  = len(names),
-                BOLT_ON_ADJACENCIES   = [],
-                RECOMMENDED_REGISTERS = [],
-                RECOMMENDED_TRADE_BODIES = [],
-                OUTPUT_DIR            = "output",
-                RAW_JSON              = "raw_companies.json",
-                FILTERED_JSON         = "filtered_companies.json",
-                ENRICHED_JSON         = "enriched_companies.json",
-                EXCEL_OUTPUT          = "PE_Pipeline.xlsx",
-            )
-            os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
-
-            # Look up each company via CH API
-            print(f"\n{'='*65}")
-            print(f"  Manual Company Lookup — {len(names)} companies")
-            print(f"{'='*65}\n")
-
+        entries = [n.strip() for n in args.companies.split("|") if n.strip()]
+        if entries:
             api_key = load_api_key()
             import requests as _req, time as _time
-            companies = []
-            for name in names:
+
+            # Split into company numbers vs names
+            _numbers = [e for e in entries if _CO_NUMBER_RE.match(e)]
+            _names   = [e for e in entries if not _CO_NUMBER_RE.match(e)]
+
+            print(f"\n{'='*65}")
+            print(f"  Manual Company Lookup — {len(entries)} entries")
+            if _numbers:
+                print(f"    Company numbers: {len(_numbers)}")
+            if _names:
+                print(f"    Company names:   {len(_names)}")
+            print(f"{'='*65}\n")
+
+            # ── Fetch by company number (direct profile API — fast, exact) ──
+            for num in _numbers:
+                num_padded = num.upper().zfill(8) if num.isdigit() else num.upper()
+                print(f"  Fetching: {num_padded} ...", end="", flush=True)
+                try:
+                    r = _req.get(
+                        f"https://api.company-information.service.gov.uk/company/{num_padded}",
+                        auth=(api_key, ""),
+                    )
+                    if r.status_code == 200:
+                        data = r.json()
+                        print(f"  ✓ {data.get('company_name', '?')} ({num_padded})")
+                        _manual_companies.append({
+                            "company_number": data.get("company_number", num_padded),
+                            "company_name": data.get("company_name", ""),
+                            "company_status": data.get("company_status", "active"),
+                            "date_of_creation": data.get("date_of_creation", ""),
+                            "registered_office_address": data.get("registered_office_address", {}),
+                            "sic_codes": data.get("sic_codes", []),
+                            "source": "manual_number",
+                        })
+                    elif r.status_code == 404:
+                        print(f"  ✗ Not found (invalid number?)")
+                    else:
+                        print(f"  ✗ API error {r.status_code}")
+                except Exception as e:
+                    print(f"  ✗ Error: {e}")
+                _time.sleep(0.3)
+
+            # ── Search by company name ──────────────────────────────────────
+            for name in _names:
                 print(f"  Looking up: {name} ...", end="", flush=True)
                 try:
                     r = _req.get(
@@ -694,14 +707,14 @@ Examples:
                         if match:
                             num = match.get("company_number", "")
                             print(f"  ✓ {match.get('title')} ({num})")
-                            companies.append({
+                            _manual_companies.append({
                                 "company_number": num,
                                 "company_name": match.get("title", ""),
                                 "company_status": match.get("company_status", "active"),
                                 "date_of_creation": match.get("date_of_creation", ""),
                                 "registered_office_address": match.get("address", {}),
                                 "sic_codes": match.get("sic_codes", []),
-                                "source": "manual_lookup",
+                                "source": "manual_name",
                             })
                         else:
                             print(f"  ✗ Not found")
@@ -711,24 +724,67 @@ Examples:
                     print(f"  ✗ Error: {e}")
                 _time.sleep(0.5)
 
-            if not companies:
-                print("\n❌ No companies found. Check names and try again.")
+            if not _manual_companies:
+                print("\n❌ No companies found. Check names/numbers and try again.")
                 sys.exit(1)
 
-            # Save as filtered_companies.json — pipeline continues from step 3
-            filtered_path = os.path.join(cfg.OUTPUT_DIR, cfg.FILTERED_JSON)
-            with open(filtered_path, "w") as f:
-                json.dump(companies, f, indent=2)
-            print(f"\n  ✅ {len(companies)} companies saved → {filtered_path}")
-            print(f"  Skipping steps 1-2 (search/filter) — running enrichment directly\n")
+            print(f"\n  ✅ {len(_manual_companies)} companies resolved via CH API")
 
-            # Jump straight to enrichment (step 3 onwards)
-            args.extras_only = False  # ensure full enrichment runs
-            # Fall through to main pipeline — steps 1-2 will be skipped below
+            # ── Standalone mode (no --sector): seed filtered_companies.json directly
+            if not args.sector:
+                from types import SimpleNamespace
+                cfg = SimpleNamespace(
+                    SECTOR_LABEL        = "Manual Company List",
+                    SECTOR_DESCRIPTION  = "manual",
+                    SECTOR_SLUG         = "manual",
+                    SIC_CODES           = [],
+                    NAME_QUERIES        = [],
+                    INCLUDE_STEMS       = [],
+                    EXCLUDE_TERMS       = [],
+                    EXCLUDE_SUBSECTORS  = [],
+                    SECTOR_BENCHMARKS   = {"revenue_per_head_base": 80000, "revenue_per_head_low": 50000,
+                                           "revenue_per_head_high": 120000, "asset_turnover_ratio": 1.5,
+                                           "ebitda_margin_low": 0.08, "ebitda_margin_base": 0.12,
+                                           "ebitda_margin_high": 0.18, "sector_b2b_score": 75},
+                    REVENUE_PER_HEAD_LOW  = 50000, REVENUE_PER_HEAD_MID = 80000, REVENUE_PER_HEAD_HIGH = 120000,
+                    ASSET_TURNOVER_RATIO  = 1.5,
+                    EBITDA_MARGIN_LOW     = 0.08, EBITDA_MARGIN_BASE = 0.12, EBITDA_MARGIN_HIGH = 0.18,
+                    TARGET_REVENUE_MIN    = 1_000_000, TARGET_REVENUE_MAX = 100_000_000,
+                    TARGET_EBITDA_MIN     = 200_000,   TARGET_EBITDA_MAX  = 20_000_000,
+                    FOUNDER_AGE_FLOOR     = 55,
+                    SCORE_WEIGHTS         = {"scale_financial": 0.30, "market_attractiveness": 0.20,
+                                             "ownership_succession": 0.30, "dealability_signals": 0.20},
+                    SCORE_THRESHOLDS      = {"prime": 80, "high": 65, "medium": 50},
+                    MARKET_ATTRACTIVENESS_SCORE = 75,
+                    CONTACT_ENRICH_TOP_N  = len(_manual_companies),
+                    BOLT_ON_ADJACENCIES   = [],
+                    RECOMMENDED_REGISTERS = [],
+                    RECOMMENDED_TRADE_BODIES = [],
+                    OUTPUT_DIR            = "output",
+                    RAW_JSON              = "raw_companies.json",
+                    FILTERED_JSON         = "filtered_companies.json",
+                    ENRICHED_JSON         = "enriched_companies.json",
+                    EXCEL_OUTPUT          = "PE_Pipeline.xlsx",
+                )
+                os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
+
+                filtered_path = os.path.join(cfg.OUTPUT_DIR, cfg.FILTERED_JSON)
+                with open(filtered_path, "w") as f:
+                    json.dump(_manual_companies, f, indent=2)
+                print(f"  Saved → {filtered_path}")
+                print(f"  Skipping steps 1-2 (search/filter) — running enrichment directly\n")
+
+                args.extras_only = False
+                # Fall through — steps 1-2 will be skipped below
+
+            else:
+                # ── Combined mode (--companies + --sector): discovery runs first,
+                # then manual companies are merged in after step 2
+                print(f"  Combined mode: manual companies will be merged into sector results\n")
 
     # ── Load config ───────────────────────────────────────────────────────────
-    if args.companies:
-        pass  # config already loaded above
+    if args.companies and not args.sector:
+        pass  # standalone --companies mode: config already loaded above
     elif args.sector:
         cfg = load_discovered_config(args.sector, validate=args.validate_sic)
         if args.save_config:
@@ -846,8 +902,9 @@ Examples:
         args.no_competitor_map    = True
         args.no_acquisition_score = True
 
-    # --companies mode: skip steps 1-2 (already seeded filtered_companies.json)
-    _skip_discovery = bool(getattr(args, "companies", ""))
+    # --companies standalone mode: skip steps 1-2 (already seeded filtered_companies.json)
+    # Combined mode (--companies + --sector): discovery runs, then manual companies merged in
+    _skip_discovery = bool(getattr(args, "companies", "")) and not args.sector
 
     if not args.extras_only:
         # ── Steps 1–4: Discovery, filter, enrich, financials ──────────────────
@@ -980,6 +1037,26 @@ Examples:
 
             # ── Post-filter 1: age / charges / SIC exclusion ─────────────────
             _apply_post_filters(cfg, args)
+
+        # ── Merge manual companies (combined --companies + --sector mode) ───
+        if _manual_companies and not _skip_discovery:
+            filtered_path = os.path.join(cfg.OUTPUT_DIR, cfg.FILTERED_JSON)
+            try:
+                with open(filtered_path) as _f:
+                    existing = json.load(_f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                existing = []
+            # Deduplicate by company_number
+            existing_nums = {c.get("company_number") for c in existing}
+            new_adds = [c for c in _manual_companies if c.get("company_number") not in existing_nums]
+            if new_adds:
+                merged = existing + new_adds
+                with open(filtered_path, "w") as _f:
+                    json.dump(merged, _f, indent=2)
+                print(f"\n  [MERGE] Added {len(new_adds)} manual companies into {len(existing)} "
+                      f"sector results → {len(merged)} total")
+            else:
+                print(f"\n  [MERGE] All {len(_manual_companies)} manual companies already in sector results")
 
         # ── Post-filter 2: cap company count ─────────────────────────────────
         max_n = getattr(args, "max_companies", 0) or 0
