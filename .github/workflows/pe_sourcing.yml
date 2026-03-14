@@ -40,6 +40,10 @@ on:
         description: 'Number of parallel enrichment workers (default 8 — each handles ~1/N of the companies)'
         required: false
         default: '8'
+      runner_type:
+        description: 'Runner size for enrichment workers. ubuntu-latest = 2 vCPU (free). ubuntu-latest-4-cores = 4 vCPU (Teams/Enterprise). ubuntu-latest-8-cores = 8 vCPU (Enterprise).'
+        required: false
+        default: 'ubuntu-latest'
 
       # ── Search universe ───────────────────────────────────────────────────
       search_source:
@@ -322,7 +326,7 @@ jobs:
   enrich:
     name: "2 — Enrich (batch ${{ matrix.batch_index }} of ${{ inputs.batch_count || '8' }})"
     needs: discover
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner_type || 'ubuntu-latest' }}
     timeout-minutes: 360
 
     strategy:
