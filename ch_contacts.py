@@ -122,7 +122,7 @@ def verify_best_email(patterns: list[dict], site_emails: list[str]) -> dict:
             continue
         result = verify_email_disify(email)
         result["pattern"] = c.get("pattern", "")
-        time.sleep(0.4)  # polite throttle
+        time.sleep(0.1)  # polite throttle (Disify is external, no documented rate limit)
 
         if result["verdict"] == "Verified" and best_verified is None:
             best_verified = result
@@ -320,7 +320,7 @@ def scrape_contact_page(base_url: str) -> dict:
                 break
         except requests.RequestException:
             continue
-        time.sleep(0.2)
+        time.sleep(0.05)
 
     # Deduplicate
     found["phones"] = list(dict.fromkeys(found["phones"]))[:3]
@@ -478,7 +478,7 @@ def run(run_disify: bool = True):
         to_enrich = process_batch(
             items=to_enrich,
             func=_enrich_one_contact,
-            max_workers=min(8, n),
+            max_workers=min(15, n),
             description="Contacts (website + email inference + Disify)",
         )
         to_enrich = [c for c in to_enrich if c is not None]
