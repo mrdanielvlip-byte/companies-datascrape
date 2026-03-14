@@ -403,6 +403,8 @@ jobs:
           echo "flags=$FLAGS" >> $GITHUB_OUTPUT
 
       # ── Run this batch's enrichment (steps 4b–12) ─────────────────────────
+      # Retries up to 3 times automatically. Each retry reads the checkpoint
+      # and resumes from the last completed module — no work is repeated.
       - name: Run batch enrichment
         env:
           COMPANIES_HOUSE_API_KEY: ${{ secrets.CH_API_KEY }}
@@ -418,7 +420,21 @@ jobs:
                --batch-count $BATCH_COUNT"
 
           [ -n "$SECTOR" ] && CMD="$CMD --sector \"$SECTOR\""
-          eval $CMD $FLAGS
+
+          MAX_ATTEMPTS=3
+          for attempt in $(seq 1 $MAX_ATTEMPTS); do
+            echo "━━━ Attempt $attempt/$MAX_ATTEMPTS (batch ${{ matrix.batch_index }}) ━━━"
+            if eval $CMD $FLAGS; then
+              echo "✅ Batch ${{ matrix.batch_index }} complete"
+              exit 0
+            fi
+            if [ $attempt -lt $MAX_ATTEMPTS ]; then
+              echo "⚠ Attempt $attempt failed — checkpoint saved, retrying in 60s"
+              sleep 60
+            fi
+          done
+          echo "❌ All $MAX_ATTEMPTS attempts failed for batch ${{ matrix.batch_index }}"
+          exit 1
 
       # ── Save checkpoint so a re-run can resume from here ─────────────────
       - name: Save batch checkpoint
