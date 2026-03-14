@@ -36,6 +36,10 @@ on:
         description: 'Max companies to process after filtering (leave blank for all; e.g. 50 for a quick test)'
         required: false
         default: ''
+      batch_count:
+        description: 'Number of parallel enrichment workers (default 8 — each handles ~1/N of the companies)'
+        required: false
+        default: '8'
 
       # ── Search universe ───────────────────────────────────────────────────
       search_source:
@@ -117,24 +121,35 @@ on:
         type: choice
         options: ['true', 'false']
 
+# ── Shared setup steps (reused as YAML anchors where supported) ───────────────
+# GitHub Actions doesn't support anchors natively, so setup is repeated per job.
+# Each job is self-contained; artifacts pass data between phases.
+
 jobs:
-  pe-search:
-    name: PE Sector Search — ${{ inputs.sector }}
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # JOB 1 — DISCOVER
+  # Steps 1–4: search, filter, enrich, financials.
+  # Uploads enriched_companies.json as an artifact for the enrich workers.
+  # Estimated time: 30–90 min depending on universe size.
+  # ════════════════════════════════════════════════════════════════════════════
+  discover:
+    name: "1 — Discover & Financials"
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 180
+
+    outputs:
+      company_count: ${{ steps.discover_run.outputs.company_count }}
 
     steps:
-      # ── 1. Checkout ───────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. System dependencies (Tesseract for OCR) ───────────────────────────
       - name: Install system packages
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y tesseract-ocr tesseract-ocr-eng
 
-      # ── 3. Python dependencies ────────────────────────────────────────────────
       - name: Install Python packages
         run: |
           pip install --upgrade pip
@@ -147,7 +162,6 @@ jobs:
             pandas \
             numpy
 
-      # ── 4. Write API keys ─────────────────────────────────────────────────────
       - name: Write API keys
         run: |
           echo "COMPANIES_HOUSE_API_KEY=${{ secrets.CH_API_KEY }}" > .ch_api_key
@@ -156,14 +170,14 @@ jobs:
           echo "FCA_SUBSCRIPTION_KEY=${{ secrets.FCA_SUBSCRIPTION_KEY }}" >> .ch_api_key
           echo "FCA_EMAIL=${{ secrets.FCA_EMAIL }}" >> .ch_api_key
           echo "CQC_API_KEY=${{ secrets.CQC_API_KEY }}" >> .ch_api_key
+          echo "DISIFY_API_KEY=${{ secrets.DISIFY_API_KEY }}" >> .ch_api_key
+          echo "COMPANIES_HOUSE_API_KEY_4=${{ secrets.CH_API_KEY_4 }}" >> .ch_api_key
+          echo "COMPANIES_HOUSE_API_KEY_5=${{ secrets.CH_API_KEY_5 }}" >> .ch_api_key
 
-      # ── 5. Build output directory ─────────────────────────────────────────────
       - name: Prepare directories
         run: mkdir -p output data/sectors
 
-      # ── Restore cached DB (skips 10-min rebuild if ZIPs haven't changed) ────────
-      # Skip DB entirely when --companies is used without --sector (API-only mode)
-      # Uses separate restore/save steps because save-always is deprecated in cache@v4
+      # ── Restore / build local Companies House DB ──────────────────────────
       - name: Restore cached DB
         id: db-cache
         if: inputs.companies == '' || inputs.sector != ''
@@ -176,7 +190,6 @@ jobs:
         if: (inputs.companies == '' || inputs.sector != '') && steps.db-cache.outputs.cache-hit != 'true'
         run: |
           echo "Cache miss — building DB from bulk CSVs..."
-          echo "Parts found:"
           ls -lh datasets/uk_companies_full/BasicCompanyData-*.zip 2>/dev/null || echo "  ⚠ No parts found!"
           python3 build_local_db.py
           if [ -f "data/companies_house.db" ]; then
@@ -203,103 +216,61 @@ jobs:
             echo "⚠ No local DB — will use API search"
           fi
 
-      - name: Skip DB (API-only mode)
-        if: inputs.companies != '' && inputs.sector == ''
-        run: echo "⚡ Standalone --companies mode — skipping DB build, using CH API directly"
-
-      # ── 6. Build pipeline flags from per-module inputs ────────────────────────
-      - name: Build pipeline flags
+      # ── Build discovery flags ─────────────────────────────────────────────
+      - name: Build discovery flags
         id: flags
         run: |
           FLAGS=""
 
-          # Re-enrichment mode: skip discovery/financials steps 1-4
           if [ "${{ inputs.extras_only }}" = "true" ]; then
             FLAGS="$FLAGS --extras-only"
           fi
 
-          # Company count cap (optional quick-test mode)
           if [ -n "${{ inputs.max_companies }}" ] && [ "${{ inputs.max_companies }}" != "0" ]; then
             FLAGS="$FLAGS --max-companies ${{ inputs.max_companies }}"
           fi
 
-          # Search universe: register and combined modes
           if [ "${{ inputs.search_source }}" = "register" ] || [ "${{ inputs.search_source }}" = "both" ]; then
             FLAGS="$FLAGS --search-source ${{ inputs.search_source }}"
-            # Split comma-separated register keys and pass each as --reg-source
             IFS=',' read -ra REGS <<< "${{ inputs.reg_sources }}"
             for R in "${REGS[@]}"; do
-              R="$(echo "$R" | xargs)"   # trim whitespace
-              if [ -n "$R" ]; then
-                FLAGS="$FLAGS --reg-source $R"
-              fi
+              R="$(echo "$R" | xargs)"
+              [ -n "$R" ] && FLAGS="$FLAGS --reg-source $R"
             done
-            if [ -n "${{ inputs.reg_query }}" ]; then
-              FLAGS="$FLAGS --reg-query '${{ inputs.reg_query }}'"
-            fi
+            [ -n "${{ inputs.reg_query }}" ] && FLAGS="$FLAGS --reg-query '${{ inputs.reg_query }}'"
           fi
 
-          # Company quality filters
           if [ -n "${{ inputs.min_age_years }}" ] && [ "${{ inputs.min_age_years }}" != "0" ]; then
             FLAGS="$FLAGS --min-age ${{ inputs.min_age_years }}"
           fi
-          # Region filter (applied at SQL level for speed)
-          if [ -n "${{ inputs.region }}" ]; then
-            FLAGS="$FLAGS --region '${{ inputs.region }}'"
-          fi
-          if [ "${{ inputs.clean_charges_only }}" = "true" ]; then
-            FLAGS="$FLAGS --clean-charges"
-          fi
+          [ -n "${{ inputs.region }}" ] && FLAGS="$FLAGS --region '${{ inputs.region }}'"
+          [ "${{ inputs.clean_charges_only }}" = "true" ] && FLAGS="$FLAGS --clean-charges"
+
           if [ -n "${{ inputs.excluded_sics }}" ]; then
             IFS=',' read -ra SICS <<< "${{ inputs.excluded_sics }}"
             for S in "${SICS[@]}"; do
               S="$(echo "$S" | xargs)"
-              if [ -n "$S" ]; then
-                FLAGS="$FLAGS --exclude-sic $S"
-              fi
+              [ -n "$S" ] && FLAGS="$FLAGS --exclude-sic $S"
             done
           fi
 
-          # Trade body discovery
-          # Default "AUTO" = dynamic web search; explicit keys e.g. "LEIA,BESA"
           if [ -n "${{ inputs.trade_bodies }}" ] && [ "${{ inputs.trade_bodies }}" != "none" ]; then
             IFS=',' read -ra TBS <<< "${{ inputs.trade_bodies }}"
             for TB in "${TBS[@]}"; do
               TB="$(echo "$TB" | xargs)"
-              if [ -n "$TB" ]; then
-                FLAGS="$FLAGS --trade-body $TB"
-              fi
+              [ -n "$TB" ] && FLAGS="$FLAGS --trade-body $TB"
             done
           fi
 
-          # Per-module skip flags (we skip when the input is 'false')
-          if [ "${{ inputs.run_ocr }}" = "false" ]; then
-            FLAGS="$FLAGS --no-accounts-ocr"
-          fi
-          if [ "${{ inputs.run_contacts }}" = "false" ]; then
-            FLAGS="$FLAGS --skip-contacts"
-          fi
-          if [ "${{ inputs.run_sell_signals }}" = "false" ]; then
-            FLAGS="$FLAGS --no-sell-signals"
-          fi
-          if [ "${{ inputs.run_contracts }}" = "false" ]; then
-            FLAGS="$FLAGS --no-contracts"
-          fi
-          if [ "${{ inputs.run_digital }}" = "false" ]; then
-            FLAGS="$FLAGS --no-digital"
-          fi
-          if [ "${{ inputs.run_accreditations }}" = "false" ]; then
-            FLAGS="$FLAGS --no-accreditations"
-          fi
-          if [ "${{ inputs.run_competitor_map }}" = "false" ]; then
-            FLAGS="$FLAGS --no-competitor-map"
-          fi
+          # Discovery phase: always skip enrichment modules — they run in parallel next
+          FLAGS="$FLAGS --skip-contacts --no-accounts-ocr --no-sell-signals --no-contracts --no-digital --no-accreditations --no-bolt-on --no-competitor-map --no-acquisition-score"
 
           echo "flags=$FLAGS" >> $GITHUB_OUTPUT
           echo "Built flags: $FLAGS"
 
-      # ── 7. Run pipeline ───────────────────────────────────────────────────────
-      - name: Run PE sourcing pipeline
+      # ── Run discovery + financials (steps 1–4, no enrichment) ────────────
+      - name: Run discovery and financials
+        id: discover_run
         env:
           COMPANIES_HOUSE_API_KEY: ${{ secrets.CH_API_KEY }}
           SECTOR_REGION: ${{ inputs.region }}
@@ -310,23 +281,215 @@ jobs:
           FLAGS="${{ steps.flags.outputs.flags }}"
 
           CMD="python3 run.py"
-
-          # Build command: --companies and --sector can be used together or standalone
           if [ -n "$COMPANIES" ] && [ -n "$SECTOR" ]; then
-            echo "Running pipeline: sector '$SECTOR' + manual companies"
             CMD="$CMD --sector \"$SECTOR\" --companies \"$COMPANIES\""
           elif [ -n "$COMPANIES" ]; then
-            echo "Running pipeline for manual companies: $COMPANIES"
             CMD="$CMD --companies \"$COMPANIES\""
           else
-            echo "Running pipeline for: $SECTOR"
             CMD="$CMD --sector \"$SECTOR\""
           fi
 
-          echo "Flags: $FLAGS"
           eval $CMD $FLAGS
 
-      # ── 8. Upload Excel artifact ──────────────────────────────────────────────
+          # Emit company count for downstream job summary
+          COUNT=$(python3 -c "
+          import json, os
+          p = 'output/enriched_companies.json'
+          if os.path.exists(p):
+              print(len(json.load(open(p))))
+          else:
+              print(0)
+          ")
+          echo "company_count=$COUNT" >> $GITHUB_OUTPUT
+          echo "Companies discovered: $COUNT"
+
+      # ── Upload enriched_companies.json for enrich workers ─────────────────
+      - name: Upload enriched companies
+        uses: actions/upload-artifact@v4
+        with:
+          name: enriched-companies
+          path: output/enriched_companies.json
+          retention-days: 1
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # JOB 2 — ENRICH (PARALLEL MATRIX)
+  # Each worker gets 1/N of the companies and runs all enrichment modules:
+  # OCR (4b), contacts (5), sell signals (6), contracts (7), digital (8),
+  # accreditations (9), bolt-on (10), competitor map (11), acq score (12).
+  # Workers run simultaneously — total wall-clock ≈ single-worker time.
+  # Estimated time per worker: 60–120 min for ~335 companies (8-way split).
+  # ════════════════════════════════════════════════════════════════════════════
+  enrich:
+    name: "2 — Enrich (batch ${{ matrix.batch_index }} of ${{ inputs.batch_count || '8' }})"
+    needs: discover
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    strategy:
+      fail-fast: false   # let other batches finish even if one fails
+      matrix:
+        batch_index: [0, 1, 2, 3, 4, 5, 6, 7]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-eng
+
+      - name: Install Python packages
+        run: |
+          pip install --upgrade pip
+          pip install \
+            requests \
+            openpyxl \
+            python-dateutil \
+            PyMuPDF \
+            pgeocode \
+            pandas \
+            numpy
+
+      - name: Write API keys
+        run: |
+          echo "COMPANIES_HOUSE_API_KEY=${{ secrets.CH_API_KEY }}" > .ch_api_key
+          echo "COMPANIES_HOUSE_API_KEY_2=${{ secrets.CH_API_KEY_2 }}" >> .ch_api_key
+          echo "COMPANIES_HOUSE_API_KEY_3=${{ secrets.CH_API_KEY_3 }}" >> .ch_api_key
+          echo "FCA_SUBSCRIPTION_KEY=${{ secrets.FCA_SUBSCRIPTION_KEY }}" >> .ch_api_key
+          echo "FCA_EMAIL=${{ secrets.FCA_EMAIL }}" >> .ch_api_key
+          echo "CQC_API_KEY=${{ secrets.CQC_API_KEY }}" >> .ch_api_key
+          echo "DISIFY_API_KEY=${{ secrets.DISIFY_API_KEY }}" >> .ch_api_key
+          echo "COMPANIES_HOUSE_API_KEY_4=${{ secrets.CH_API_KEY_4 }}" >> .ch_api_key
+          echo "COMPANIES_HOUSE_API_KEY_5=${{ secrets.CH_API_KEY_5 }}" >> .ch_api_key
+
+      - name: Prepare directories
+        run: mkdir -p output data/sectors
+
+      # ── Download the enriched companies from discover job ─────────────────
+      - name: Download enriched companies
+        uses: actions/download-artifact@v4
+        with:
+          name: enriched-companies
+          path: output/
+
+      # ── Build enrichment flags ────────────────────────────────────────────
+      - name: Build enrichment flags
+        id: flags
+        run: |
+          FLAGS=""
+          [ "${{ inputs.run_ocr }}"           = "false" ] && FLAGS="$FLAGS --no-accounts-ocr"
+          [ "${{ inputs.run_contacts }}"       = "false" ] && FLAGS="$FLAGS --skip-contacts"
+          [ "${{ inputs.run_sell_signals }}"   = "false" ] && FLAGS="$FLAGS --no-sell-signals"
+          [ "${{ inputs.run_contracts }}"      = "false" ] && FLAGS="$FLAGS --no-contracts"
+          [ "${{ inputs.run_digital }}"        = "false" ] && FLAGS="$FLAGS --no-digital"
+          [ "${{ inputs.run_accreditations }}" = "false" ] && FLAGS="$FLAGS --no-accreditations"
+          [ "${{ inputs.run_competitor_map }}" = "false" ] && FLAGS="$FLAGS --no-competitor-map"
+          echo "flags=$FLAGS" >> $GITHUB_OUTPUT
+
+      # ── Run this batch's enrichment (steps 4b–12) ─────────────────────────
+      - name: Run batch enrichment
+        env:
+          COMPANIES_HOUSE_API_KEY: ${{ secrets.CH_API_KEY }}
+          SECTOR_REGION: ${{ inputs.region }}
+          SECTOR_MIN_REVENUE: ${{ inputs.min_revenue }}
+        run: |
+          BATCH_COUNT="${{ inputs.batch_count || '8' }}"
+          SECTOR="${{ inputs.sector }}"
+          FLAGS="${{ steps.flags.outputs.flags }}"
+
+          CMD="python3 run.py --batch-enrich \
+               --batch-index ${{ matrix.batch_index }} \
+               --batch-count $BATCH_COUNT"
+
+          [ -n "$SECTOR" ] && CMD="$CMD --sector \"$SECTOR\""
+          eval $CMD $FLAGS
+
+      # ── Upload this batch's enriched output ───────────────────────────────
+      - name: Upload batch results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: batch-${{ matrix.batch_index }}
+          path: output/batch_${{ matrix.batch_index }}.json
+          retention-days: 1
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # JOB 3 — MERGE + EXCEL
+  # Downloads the base enriched_companies.json + all 8 batch_N.json files,
+  # merges enrichment data back into the base by company_number, and builds
+  # the final 10-sheet Excel workbook.
+  # Estimated time: 5–15 min.
+  # ════════════════════════════════════════════════════════════════════════════
+  merge:
+    name: "3 — Merge & Excel"
+    needs: enrich
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: always()   # run even if some enrich batches failed — partial output > none
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Python packages
+        run: |
+          pip install --upgrade pip
+          pip install \
+            requests \
+            openpyxl \
+            python-dateutil \
+            PyMuPDF \
+            pgeocode \
+            pandas \
+            numpy
+
+      - name: Write API keys
+        run: |
+          echo "COMPANIES_HOUSE_API_KEY=${{ secrets.CH_API_KEY }}" > .ch_api_key
+          echo "COMPANIES_HOUSE_API_KEY_2=${{ secrets.CH_API_KEY_2 }}" >> .ch_api_key
+          echo "COMPANIES_HOUSE_API_KEY_3=${{ secrets.CH_API_KEY_3 }}" >> .ch_api_key
+          echo "FCA_SUBSCRIPTION_KEY=${{ secrets.FCA_SUBSCRIPTION_KEY }}" >> .ch_api_key
+          echo "FCA_EMAIL=${{ secrets.FCA_EMAIL }}" >> .ch_api_key
+          echo "CQC_API_KEY=${{ secrets.CQC_API_KEY }}" >> .ch_api_key
+          echo "DISIFY_API_KEY=${{ secrets.DISIFY_API_KEY }}" >> .ch_api_key
+          echo "COMPANIES_HOUSE_API_KEY_4=${{ secrets.CH_API_KEY_4 }}" >> .ch_api_key
+          echo "COMPANIES_HOUSE_API_KEY_5=${{ secrets.CH_API_KEY_5 }}" >> .ch_api_key
+
+      - name: Prepare directories
+        run: mkdir -p output data/sectors
+
+      # ── Download base enriched companies ──────────────────────────────────
+      - name: Download enriched companies (base)
+        uses: actions/download-artifact@v4
+        with:
+          name: enriched-companies
+          path: output/
+
+      # ── Download all batch enrichment results ────────────────────────────
+      - name: Download all batch results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: batch-*
+          path: output/
+          merge-multiple: true
+
+      - name: List downloaded files
+        run: ls -lh output/
+
+      # ── Merge batches + build Excel ───────────────────────────────────────
+      - name: Merge batches and build Excel
+        env:
+          COMPANIES_HOUSE_API_KEY: ${{ secrets.CH_API_KEY }}
+          SECTOR_REGION: ${{ inputs.region }}
+          SECTOR_MIN_REVENUE: ${{ inputs.min_revenue }}
+        run: |
+          SECTOR="${{ inputs.sector }}"
+          CMD="python3 run.py --merge-batches"
+          [ -n "$SECTOR" ] && CMD="$CMD --sector \"$SECTOR\""
+          eval $CMD
+
+      # ── Upload final Excel ────────────────────────────────────────────────
       - name: Upload Excel output
         uses: actions/upload-artifact@v4
         if: always()
@@ -336,7 +499,7 @@ jobs:
           retention-days: 30
           overwrite: true
 
-      # ── 9. Send completion email via Resend ───────────────────────────────────
+      # ── Send completion email ─────────────────────────────────────────────
       - name: Send completion email
         if: always()
         env:
@@ -355,9 +518,7 @@ jobs:
           run_id     = "${{ github.run_id }}"
           repo       = "${{ github.repository }}"
           sector     = "${{ inputs.sector }}"
-          status     = "${{ job.status }}"
           run_url    = f"https://github.com/{repo}/actions/runs/{run_id}"
-          flags      = "${{ steps.flags.outputs.flags }}"
           extras_only = "${{ inputs.extras_only }}" == "true"
 
           modules_run = []
@@ -369,6 +530,7 @@ jobs:
           if "${{ inputs.run_accreditations }}" != "false": modules_run.append("Accreditations")
           if "${{ inputs.run_competitor_map }}" != "false": modules_run.append("Competitor Map")
 
+          batch_count = "${{ inputs.batch_count || '8' }}"
           run_type    = "Re-enrichment" if extras_only else "Full search"
           max_co_raw  = "${{ inputs.max_companies }}"
           max_co_str  = f"Top {max_co_raw} companies (test run)" if max_co_raw and max_co_raw != "0" else "All companies"
@@ -376,10 +538,10 @@ jobs:
           payload = {
               "from":    "PE Deal Sourcing <onboarding@resend.dev>",
               "to":      [notify_email],
-              "subject": f"✅ {sector.title()} — Deal Sourcing Report Ready ({status})",
+              "subject": f"✅ {sector.title()} — Deal Sourcing Report Ready",
               "text": (
                   f"Your {sector} intelligence report has finished.\n\n"
-                  f"Run type: {run_type}  |  Status: {status}\n"
+                  f"Run type: {run_type}  |  Parallel workers: {batch_count}\n"
                   f"Scope: {max_co_str}\n"
                   f"Modules run: {', '.join(modules_run) if modules_run else 'Core only (1-4)'}\n\n"
                   f"DOWNLOAD YOUR EXCEL:\n{run_url}\n\n"
@@ -401,7 +563,7 @@ jobs:
               body = json.loads(resp.read())
               print(f"[notify] ✅ Email sent to {notify_email}  (id: {body.get('id')})")
           except urllib.error.HTTPError as e:
-              print(f"[notify] ⚠ Resend error {e.code}: {e.read().decode()} — email skipped, pipeline succeeded")
+              print(f"[notify] ⚠ Resend error {e.code}: {e.read().decode()} — email skipped")
           except Exception as e:
-              print(f"[notify] ⚠ Email skipped ({e}) — pipeline succeeded")
+              print(f"[notify] ⚠ Email skipped ({e})")
           EOF

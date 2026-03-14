@@ -230,12 +230,13 @@ def run():
     with open(enriched_path) as f:
         companies = json.load(f)
 
-    top_n     = getattr(cfg, "ACCREDITATIONS_TOP_N", 75)
-    to_enrich = companies[:top_n]
-    skipped   = len(companies) - top_n
+    top_n     = getattr(cfg, "ACCREDITATIONS_TOP_N", None)   # None = process all companies
+    to_enrich = companies[:top_n] if top_n else companies
+    skipped   = len(companies) - len(to_enrich)
 
-    print(f"\nAccreditation & regulatory enrichment for top {len(to_enrich)} companies"
-          f" ({skipped} skipped)...")
+    print(f"\nAccreditation & regulatory enrichment for {len(to_enrich)} companies"
+          + (f" (top {top_n})" if top_n else " (all)")
+          + (f" — {skipped} skipped" if skipped else "") + "...")
 
     if not HAS_REG_SOURCES:
         print("  ⚠️  reg_sources.py not available — website keyword detection only")

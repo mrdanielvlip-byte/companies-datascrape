@@ -558,6 +558,55 @@ def enrich_financials(company: dict) -> dict:
         revenue_estimate = blended
         ebitda_out       = ebitda
 
+    # ── Account-type band fallback (last resort) ──────────────────────────────
+    # If all models returned None (typical for Micro Entity companies with no
+    # employees, assets, or staff cost data), apply a sector-aware band estimate
+    # so the JSON contains a value rather than None.  build_excel.py also has
+    # this fallback, but populating it here means the JSON itself is useful
+    # for downstream analysis.
+    if not (revenue_estimate.get("revenue_base") if revenue_estimate else None):
+        _BAND = {
+            "total-exemption-full":       (500_000,  1_800_000, 5_000_000),
+            "total-exemption-small":      (350_000,  1_200_000, 3_500_000),
+            "micro-entity":               (120_000,    320_000,   632_000),
+            "unaudited-abridged":         (800_000,  2_500_000, 7_000_000),
+            "small":                    (1_500_000,  4_500_000,10_200_000),
+            "small-full":               (1_500_000,  4_500_000,10_200_000),
+            "full":                     (3_000_000, 10_000_000,25_000_000),
+            "group":                    (5_000_000, 15_000_000,40_000_000),
+            "medium":                  (10_200_000, 20_000_000,36_000_000),
+            "audit-exemption-subsidiary":(500_000,  2_000_000, 8_000_000),
+        }
+        _LIFT_SICS = {"33120", "43290", "43210", "43220", "28220", "71121", "71129"}
+        _acct_type = bs.get("accounts_type", "").lower().replace(" ", "-")
+        _band_vals = _BAND.get(_acct_type)
+        if not _band_vals:
+            for _k, _v in _BAND.items():
+                if _k in _acct_type:
+                    _band_vals = _v
+                    break
+        if _band_vals:
+            _lo, _base, _hi = _band_vals
+            _sics = set(str(company.get("sic1", "")).split(","))
+            if _sics & _LIFT_SICS:
+                _lo   = round(_lo   * 1.15)
+                _base = round(_base * 1.15)
+                _hi   = round(_hi   * 1.15)
+            revenue_estimate = {
+                "revenue_low":  _lo,
+                "revenue_base": _base,
+                "revenue_high": _hi,
+                "confidence":   f"Low — {_acct_type} band est.",
+                "models_used":  ["Account-type band"],
+                "formula":      f"Account-type band ({_acct_type})",
+            }
+            ebitda_out = {
+                "ebitda_low":   round(_lo   * 0.08),
+                "ebitda_base":  round(_base * 0.12),
+                "ebitda_high":  round(_hi   * 0.18),
+                "formula":      "Sector EBITDA margin (band estimate)",
+            }
+
     return {
         "balance_sheet":         bs,
         "charges":               charges,
