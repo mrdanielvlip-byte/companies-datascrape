@@ -28,6 +28,13 @@ Standalone usage:
 
 import json, re, time, os, sys, subprocess, tempfile, io
 import requests
+
+# Revenue estimation — imported at module level so it's available in the
+# post-OCR re-estimation block without repeated inline imports.
+try:
+    from revenue_estimate import estimate_revenue as _estimate_revenue
+except ImportError:
+    _estimate_revenue = None
 import fitz          # PyMuPDF
 
 # ── API auth ───────────────────────────────────────────────────────────────────
@@ -584,7 +591,10 @@ def run(resume: bool = True):
         }
 
         try:
-            pe_est = estimate_revenue(pe_input)
+            _fn = _estimate_revenue
+            if _fn is None:
+                from revenue_estimate import estimate_revenue as _fn
+            pe_est = _fn(pe_input)
             pe_dict = pe_est.to_dict()
 
             available_models = len(pe_dict.get("models_used", []))

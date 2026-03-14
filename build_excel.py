@@ -137,6 +137,36 @@ def _normalise(c: dict) -> dict:
         c["date_of_creation"] = c.get("incorporation_date", "")
     if c.get("is_family") is None:
         c["is_family"] = bool(c.get("family_business", False))
+
+    # ── Family flag heuristic fallback ────────────────────────────────────────
+    # If still None/False after field alias, derive from structure signals:
+    # Sole/dual director + no corporate parent + 15+ year company = likely founder-run.
+    if not c.get("is_family"):
+        _corp = (c.get("corporate_ownership") or {}).get("has_corporate_owner", False)
+        _dirs = c.get("director_count") or len(c.get("directors", []))
+        _age  = float(c.get("company_age_years") or c.get("age_years") or 0)
+        if not _corp and _dirs <= 2 and _age >= 15:
+            c["is_family"] = True
+
+    # ── PE Likelihood fallback ─────────────────────────────────────────────────
+    # If not set by ch_enrich ownership analysis, derive from corporate ownership signals.
+    if not c.get("pe_likelihood") or c.get("pe_likelihood") == "None":
+        _corp_owner = (c.get("corporate_ownership") or {}).get("has_corporate_owner", False)
+        _owner_name = ((c.get("corporate_ownership") or {}).get("owner_name", "")
+                       or c.get("owner_name", "")).lower()
+        _pe_kws = {"capital", "equity", "partners", "fund", "ventures", "invest",
+                   "holdings", "acquisition", "buyout", "asset", "wealth",
+                   "mgmt", "management", "advisors"}
+        _charges_out = (c.get("charges") or {}).get("outstanding_charges", 0) or 0
+        if _corp_owner and any(kw in _owner_name for kw in _pe_kws):
+            c["pe_likelihood"] = "Medium"
+        elif _corp_owner and _charges_out > 0:
+            c["pe_likelihood"] = "Medium"
+        elif _corp_owner:
+            c["pe_likelihood"] = "Low"
+        else:
+            c["pe_likelihood"] = "Low"
+
     if not c.get("sic_codes"):
         sic1 = c.get("sic1")
         c["sic_codes"] = [sic1] if sic1 else []
@@ -837,6 +867,28 @@ def build_pipeline(wb, companies):
         # ── Cols 36+: Financial intelligence ─────────────────────────────────
         emp       = c.get("estimated_employees")
         emp_src   = c.get("estimated_employees_source", "")
+
+        # Employee fallback: use account-type band median when nothing else available
+        if not emp:
+            _acct_emp = {
+                "micro entity": 4, "micro-entity": 4,
+                "total exemption full": 18, "total-exemption-full": 18,
+                "total exemption small": 12, "total-exemption-small": 12,
+                "unaudited abridged": 25, "unaudited-abridged": 25,
+                "small": 40, "small-full": 40,
+                "full": 80, "group": 120, "medium": 150,
+            }
+            _at = ((c.get("financials") or {}).get("balance_sheet", {}).get("accounts_type", "")
+                   or (c.get("bs") or {}).get("accounts_type", "")).lower().strip()
+            _emp_est = _acct_emp.get(_at)
+            if not _emp_est:
+                for _k, _v in _acct_emp.items():
+                    if _k in _at:
+                        _emp_est = _v
+                        break
+            if _emp_est:
+                emp     = _emp_est
+                emp_src = "Tier 4 — acct-type band"
         # Revenue: try nested financials dict first (live pipeline),
         # then fall back to flat top-level keys (enrich_batch / legacy format)
         fin       = c.get("financials") or {}
