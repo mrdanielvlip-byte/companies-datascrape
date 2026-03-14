@@ -459,7 +459,7 @@ def run():
         to_enrich = process_batch(
             items=to_enrich,
             func=_enrich_one_digital,
-            max_workers=min(8, len(to_enrich)),
+            max_workers=min(15, len(to_enrich)),
             description="Digital health (domain, LinkedIn, jobs)",
         )
         to_enrich = [c for c in to_enrich if c is not None]
