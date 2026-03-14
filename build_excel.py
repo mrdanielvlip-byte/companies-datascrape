@@ -552,7 +552,7 @@ PIPELINE_COLS = [
     ("Net Asset Δ 3yr", 13), ("Staff Cost Δ 3yr", 13),
     ("Gross Margin %", 12), ("Debt/Asset %", 12), ("Debtors £", 13),
     ("Filing Quality", 12), ("Growth Score", 11), ("Performance", 14),
-    ("Holding Co.", 10),
+    ("Holding Co.", 10), ("Debtor Days", 11),
 ]
 
 # Column header tooltips — explain the formula or data source for each column
@@ -723,6 +723,16 @@ PIPELINE_COL_NOTES = [
     "  — = no holding signals detected.\n"
     "  NOTE: holding companies are NEVER excluded from the pipeline —\n"
     "  this flag is for analyst context only.",
+    "Debtor Days: Estimated debtor collection period.\n"
+    "  Formula: (Trade Debtors £ ÷ Revenue Base £) × 365\n"
+    "  Benchmarks (UK SME):\n"
+    "    <30 days  — excellent cash collection\n"
+    "    30–45 days — healthy\n"
+    "    45–60 days — acceptable\n"
+    "    60–90 days — elevated risk (slow payers or weak credit control)\n"
+    "    >90 days  — high risk / potential bad debt exposure\n"
+    "  Green <30 | Blue 30–45 | Amber 45–75 | Red >75\n"
+    "  Only populated when both trade debtors and revenue estimate are available.",
 ]
 
 def build_pipeline(wb, companies):
@@ -1157,6 +1167,23 @@ def build_pipeline(wb, companies):
         cell(ws, row, 67, "✓" if is_hold else "—",
              bg=fill("FFF2CC") if is_hold else bg, align="center", size=9,
              bold=is_hold, fg="7B5B00" if is_hold else "AAAAAA")
+
+        # Col 68 — Debtor Days  (trade_debtors_latest ÷ rev_base × 365)
+        td_raw = c.get("trade_debtors_latest")
+        if td_raw and rev_base and rev_base > 0:
+            debtor_days = round(td_raw / rev_base * 365)
+            dd_bg = (fill("E2EFDA") if debtor_days < 30 else
+                     fill("E8F4FD") if debtor_days < 45 else
+                     fill("FFF2CC") if debtor_days < 75 else
+                     fill("FFD6D6"))
+            dd_fg = ("1A5C2C" if debtor_days < 30 else
+                     "1A4A6C" if debtor_days < 45 else
+                     "7B5B00" if debtor_days < 75 else
+                     "7B0000")
+            cell(ws, row, 68, f"{debtor_days}d", bg=dd_bg, align="center",
+                 size=9, bold=(debtor_days > 75), fg=dd_fg)
+        else:
+            cell(ws, row, 68, "—", bg=bg, align="center", size=9, fg="AAAAAA")
 
     ws.freeze_panes = "E4"   # freeze cols A-D (Rank, Reg, Name, Sector ✓)
     ws.auto_filter.ref = f"A3:{get_column_letter(n)}{len(companies)+3}"
