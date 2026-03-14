@@ -461,9 +461,9 @@ def run(run_disify: bool = True):
     with open(enriched_path) as f:
         companies = json.load(f)
 
-    top_n = getattr(cfg, "CONTACT_ENRICH_TOP_N", 50)
+    top_n = getattr(cfg, "CONTACT_ENRICH_TOP_N", None)   # None = process all companies
     disify_str = "with Disify verification" if run_disify else "without email verification"
-    print(f"\nContact enrichment for top {top_n} companies ({disify_str})...")
+    print(f"\nContact enrichment for {'all' if not top_n else f'top {top_n}'} companies ({disify_str})...")
 
     def _enrich_one_contact(c):
         from concurrent_pipeline import rate_limited_sleep
@@ -471,21 +471,25 @@ def run(run_disify: bool = True):
         rate_limited_sleep()
         return c
 
-    to_enrich = companies[:top_n]
-    if len(to_enrich) > 1:
+    to_enrich = companies[:top_n] if top_n else companies
+    n = len(to_enrich)
+    if n > 1:
         from concurrent_pipeline import process_batch
         to_enrich = process_batch(
             items=to_enrich,
             func=_enrich_one_contact,
-            max_workers=min(8, len(to_enrich)),
+            max_workers=min(8, n),
             description="Contacts (website + email inference + Disify)",
         )
         to_enrich = [c for c in to_enrich if c is not None]
-        companies[:top_n] = to_enrich
+        if top_n:
+            companies[:top_n] = to_enrich
+        else:
+            companies[:] = to_enrich
     else:
         for i, c in enumerate(to_enrich):
             if i % 10 == 0:
-                print(f"  [{i+1}/{top_n}] {c['company_name'][:50]}")
+                print(f"  [{i+1}/{n}] {c['company_name'][:50]}")
             _enrich_one_contact(c)
 
     with open(enriched_path, "w") as f:
@@ -494,7 +498,7 @@ def run(run_disify: bool = True):
     # Print a quick verification summary
     if run_disify:
         verified = sum(
-            1 for c in companies[:top_n]
+            1 for c in (companies[:top_n] if top_n else companies)
             for dc in c.get("contacts", {}).get("director_contacts", [])
             if "Verified" in dc.get("email_confidence", "")
         )

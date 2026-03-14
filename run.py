@@ -173,14 +173,16 @@ def _build_reg_config(register_key: str):
     cfg_mod.EXCLUDE_SUBSECTORS = []
     cfg_mod.INCLUDE_STEMS      = []   # empty = include all
 
-    # Pipeline limits
-    cfg_mod.FINANCIALS_TOP_N      = 100
-    cfg_mod.CONTACTS_TOP_N        = 75
-    cfg_mod.SELL_SIGNALS_TOP_N    = 100
-    cfg_mod.CONTRACTS_TOP_N       = 50
-    cfg_mod.DIGITAL_TOP_N         = 75
-    cfg_mod.ACCREDITATIONS_TOP_N  = 75
-    cfg_mod.BOLT_ON_TOP_N         = 50
+    # Pipeline limits — None = process all companies (no cap).
+    # Set to an integer to cap a specific module (e.g. for very large datasets
+    # where full enrichment would exceed the CI timeout budget).
+    cfg_mod.FINANCIALS_TOP_N      = None
+    cfg_mod.CONTACT_ENRICH_TOP_N  = None
+    cfg_mod.SELL_SIGNALS_TOP_N    = None
+    cfg_mod.CONTRACTS_TOP_N       = None
+    cfg_mod.DIGITAL_TOP_N         = None
+    cfg_mod.ACCREDITATIONS_TOP_N  = None
+    cfg_mod.BOLT_ON_TOP_N         = None
 
     sys.modules["config"] = cfg_mod
     return cfg_mod

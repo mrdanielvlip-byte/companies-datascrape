@@ -436,12 +436,13 @@ def run():
     with open(enriched_path) as f:
         companies = json.load(f)
 
-    top_n     = getattr(cfg, "DIGITAL_TOP_N", 75)
-    to_enrich = companies[:top_n]
-    skipped   = len(companies) - top_n
+    top_n     = getattr(cfg, "DIGITAL_TOP_N", None)   # None = process all companies
+    to_enrich = companies[:top_n] if top_n else companies
+    skipped   = len(companies) - len(to_enrich)
 
-    print(f"\nDigital health assessment for top {len(to_enrich)} companies"
-          f" ({skipped} skipped)...")
+    print(f"\nDigital health assessment for {len(to_enrich)} companies"
+          + (f" (top {top_n})" if top_n else " (all)")
+          + (f" — {skipped} skipped" if skipped else "") + "...")
 
     def _enrich_one_digital(c):
         from concurrent_pipeline import rate_limited_sleep

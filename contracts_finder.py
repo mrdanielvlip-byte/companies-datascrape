@@ -221,13 +221,13 @@ def run():
     with open(enriched_path) as f:
         companies = json.load(f)
 
-    # Only enrich top N by acquisition score to save time
-    top_n     = getattr(cfg, "CONTRACTS_TOP_N", 50)
-    to_enrich = companies[:top_n]
-    skipped   = len(companies) - top_n
+    top_n     = getattr(cfg, "CONTRACTS_TOP_N", None)   # None = process all companies
+    to_enrich = companies[:top_n] if top_n else companies
+    skipped   = len(companies) - len(to_enrich)
 
-    print(f"\nContracts Finder enrichment for top {len(to_enrich)} companies"
-          f" ({skipped} skipped)...")
+    print(f"\nContracts Finder enrichment for {len(to_enrich)} companies"
+          + (f" (top {top_n})" if top_n else " (all)")
+          + (f" — {skipped} skipped" if skipped else "") + "...")
 
     def _enrich_one_contract(c):
         from concurrent_pipeline import rate_limited_sleep
