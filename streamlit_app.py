@@ -294,6 +294,9 @@ def parse_excel_preview(zip_bytes: bytes) -> dict | None:
         ci_maxage = col("Max Age")
         ci_corp   = col("Corp. Owner")
         ci_plike  = col("PE Likelihood")
+        ci_basis  = col("Rev. Basis")
+        ci_hold   = col("Holding Co.")
+        ci_ddays  = col("Debtor Days")
 
         data_rows = rows[3:]   # skip title, subtitle, header
         records = []
@@ -308,6 +311,7 @@ def parse_excel_preview(zip_bytes: bytes) -> dict | None:
                 "Grade":       str(r[ci_grade]  or "") if ci_grade  is not None else "",
                 "Score":       r[ci_score]  if ci_score  is not None else None,
                 "Rev. Base":   str(r[ci_rev]    or "") if ci_rev    is not None else "",
+                "Rev. Basis":  str(r[ci_basis]  or "") if ci_basis  is not None else "",
                 "EBITDA £":    str(r[ci_ebitda] or "") if ci_ebitda is not None else "",
                 "EBITDA %":    str(r[ci_epct]   or "") if ci_epct   is not None else "",
                 "Sell Intent": str(r[ci_sell]   or "") if ci_sell   is not None else "",
@@ -322,6 +326,8 @@ def parse_excel_preview(zip_bytes: bytes) -> dict | None:
                 "Max Dir Age": r[ci_maxage] if ci_maxage is not None else None,
                 "Corp. Owner": str(r[ci_corp] or "") if ci_corp is not None else "",
                 "PE Likelihood": str(r[ci_plike] or "") if ci_plike is not None else "",
+                "Holding Co.": str(r[ci_hold] or "") if ci_hold is not None else "",
+                "Debtor Days": str(r[ci_ddays] or "") if ci_ddays is not None else "",
             })
 
         df = pd.DataFrame(records)
@@ -341,9 +347,10 @@ def parse_excel_preview(zip_bytes: bytes) -> dict | None:
 
         top = df_sorted.head(25)
         display_cols = ["Company", "Grade", "Score", "Growth", "Performance",
-                        "Rev. Base", "EBITDA £", "EBITDA %", "Sell Intent",
+                        "Rev. Base", "Rev. Basis", "EBITDA £", "EBITDA %", "Sell Intent",
                         "Employees", "Family", "PE", "Dirs", "Age (yr)", "Filing",
-                        "Max Dir Age", "Corp. Owner", "PE Likelihood"]
+                        "Max Dir Age", "Corp. Owner", "PE Likelihood",
+                        "Holding Co.", "Debtor Days"]
         # Only include columns that actually exist in the data
         display_cols = [c for c in display_cols if c in top.columns]
         top_df = top[display_cols].reset_index(drop=True)
@@ -521,6 +528,15 @@ def _apply_post_filters(df: "pd.DataFrame", filters: dict) -> "pd.DataFrame":
     if fq_list and "Filing" in filtered.columns:
         filtered = filtered[filtered["Filing"].isin(fq_list) | (filtered["Filing"] == "")]
 
+    # Revenue basis filter (Actual / Estimated / Band Est.)
+    rb_list = filters.get("rev_basis", [])
+    if rb_list and "Rev. Basis" in filtered.columns:
+        filtered = filtered[filtered["Rev. Basis"].isin(rb_list) | (filtered["Rev. Basis"] == "")]
+
+    # Exclude holding companies
+    if filters.get("excl_holding") and "Holding Co." in filtered.columns:
+        filtered = filtered[~filtered["Holding Co."].str.strip().isin(["✓", "Yes"])]
+
     # Min acquisition score
     min_acq = filters.get("min_acq_score", 0)
     if min_acq > 0 and "Score" in filtered.columns:
@@ -598,6 +614,16 @@ def show_excel_preview(zip_bytes: bytes, run_id: str):
                 default=[], key=f"rv_flt_fq_{run_id}",
             )
 
+        flt9, flt10, _, _ = st.columns(4)
+        with flt9:
+            _rv_rev_basis = st.multiselect(
+                "Revenue basis",
+                ["Actual", "Estimated", "Band Est."],
+                default=[], key=f"rv_flt_basis_{run_id}",
+            )
+        with flt10:
+            _rv_excl_hold = st.checkbox("Exclude holding companies", value=False, key=f"rv_flt_hold_{run_id}")
+
     # Build active filter dict from the interactive controls
     live_filters = {
         "min_dir_age":    _rv_dir_map[_rv_min_dir],
@@ -608,6 +634,8 @@ def show_excel_preview(zip_bytes: bytes, run_id: str):
         "min_growth":     _rv_gr_map[_rv_min_growth],
         "filing_quality": _rv_filing,
         "min_acq_score":  _rv_acq_map[_rv_min_acq],
+        "rev_basis":      _rv_rev_basis,
+        "excl_holding":   _rv_excl_hold,
     }
 
     # Apply filters
@@ -665,8 +693,9 @@ def show_excel_preview(zip_bytes: bytes, run_id: str):
     # Choose display columns (hide internal ones)
     hide_cols = {"Max Dir Age", "Corp. Owner", "PE Likelihood"}
     display_cols = ["Company", "Grade", "Score", "Growth", "Performance",
-                    "Rev. Base", "EBITDA £", "EBITDA %", "Sell Intent",
-                    "Employees", "PE", "Family", "Dirs", "Age (yr)", "Filing"]
+                    "Rev. Base", "Rev. Basis", "EBITDA £", "EBITDA %", "Sell Intent",
+                    "Employees", "PE", "Family", "Dirs", "Age (yr)", "Filing",
+                    "Holding Co.", "Debtor Days"]
     display_cols = [c for c in display_cols if c in display_df.columns and c not in hide_cols]
 
     show_df = display_df[display_cols]
