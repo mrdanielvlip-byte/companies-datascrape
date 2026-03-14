@@ -583,6 +583,31 @@ Examples:
                              "(step 2). 0 or omitted = process all. Useful for quick test "
                              "runs before committing to a full sector search.")
 
+    # ── Parallel batch enrichment (CI matrix mode) ────────────────────────────
+    parser.add_argument(
+        "--batch-enrich",
+        action="store_true",
+        help="Parallel enrichment mode: run steps 4b–12 on a slice of enriched_companies.json. "
+             "Requires --batch-index and --batch-count. Output saved to output/batch_N.json. "
+             "Designed for CI matrix jobs where N workers process the full universe in parallel.",
+    )
+    parser.add_argument(
+        "--batch-index",
+        type=int, default=0, metavar="N",
+        help="Zero-based index of this batch (0 to batch-count−1). Used with --batch-enrich.",
+    )
+    parser.add_argument(
+        "--batch-count",
+        type=int, default=8, metavar="M",
+        help="Total number of parallel batches. Used with --batch-enrich. Default: 8.",
+    )
+    parser.add_argument(
+        "--merge-batches",
+        action="store_true",
+        help="Merge all output/batch_N.json files back into enriched_companies.json, "
+             "then build the Excel workbook. Run this after all --batch-enrich jobs finish.",
+    )
+
     parser.add_argument(
         "--companies",
         metavar="NAMES_OR_NUMBERS",
@@ -623,6 +648,183 @@ Examples:
     )
 
     args = parser.parse_args()
+
+    # ── --batch-enrich / --merge-batches: parallel CI mode ───────────────────
+    # These two modes are used by the GitHub Actions matrix workflow to run
+    # the slow enrichment modules (steps 4b–12) in parallel across N workers,
+    # then stitch the results back together in a single merge job.
+
+    if args.batch_enrich or args.merge_batches:
+        # Both modes need the config loaded first.
+        # Use --sector if supplied, otherwise fall back to default config.
+        if args.sector:
+            cfg = load_discovered_config(args.sector, validate=False)
+        elif args.reg_sources:
+            cfg = _build_reg_config(args.reg_sources[0])
+        else:
+            cfg = load_config(args.config)
+
+        os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
+
+        def _reload(module_name):
+            mod = importlib.import_module(module_name)
+            importlib.reload(mod)
+            return mod
+
+        from api_keys import init as _init_keys, key_count as _key_count
+        _init_keys()
+        from concurrent_pipeline import init_rate_limiter
+        init_rate_limiter(_key_count())
+
+    # ────────────────────────────────────────────────────────────────────────
+    # --batch-enrich: steps 4b–12 on a slice of enriched_companies.json
+    # ────────────────────────────────────────────────────────────────────────
+    if args.batch_enrich:
+        import glob as _glob_mod
+
+        batch_idx   = args.batch_index
+        batch_count = max(1, args.batch_count)
+
+        enriched_path = os.path.join(cfg.OUTPUT_DIR, cfg.ENRICHED_JSON)
+        if not os.path.exists(enriched_path):
+            print(f"[BATCH {batch_idx}] ERROR: {enriched_path} not found. "
+                  f"Run discovery phase first.")
+            sys.exit(1)
+
+        with open(enriched_path) as _f:
+            all_companies = json.load(_f)
+
+        total      = len(all_companies)
+        batch_size = (total + batch_count - 1) // batch_count
+        start      = batch_idx * batch_size
+        end        = min(start + batch_size, total)
+        batch_cos  = all_companies[start:end]
+
+        print(f"\n{'='*65}")
+        print(f"  Batch {batch_idx + 1}/{batch_count} — companies {start}–{end - 1} of {total}")
+        print(f"  Batch size: {len(batch_cos)}")
+        print(f"{'='*65}\n")
+
+        # Write a temp file that the enrichment modules will treat as
+        # the enriched companies list for this worker.
+        batch_file = f"batch_{batch_idx}.json"
+        batch_path = os.path.join(cfg.OUTPUT_DIR, batch_file)
+        with open(batch_path, "w") as _f:
+            json.dump(batch_cos, _f, indent=2)
+
+        # Override ENRICHED_JSON so all modules read/write the batch file.
+        cfg.ENRICHED_JSON = batch_file
+        sys.modules["config"] = cfg
+
+        # ── Step 4b: Accounts OCR ─────────────────────────────────────────
+        if not getattr(args, "no_accounts_ocr", False):
+            print(f"\n[Batch {batch_idx}] Step 4b — Accounts OCR")
+            ocr = _reload("ch_accounts_ocr")
+            ocr.run(resume=True)
+        else:
+            print(f"\n[Batch {batch_idx}] Step 4b — OCR SKIPPED")
+
+        # ── Step 5: Contacts ──────────────────────────────────────────────
+        if not args.skip_contacts:
+            run_disify = not getattr(args, "no_disify", False)
+            print(f"\n[Batch {batch_idx}] Step 5 — Contacts")
+            contacts = _reload("ch_contacts")
+            contacts.run(run_disify=run_disify)
+
+        # ── Step 6: Sell signals ──────────────────────────────────────────
+        if not getattr(args, "no_sell_signals", False):
+            print(f"\n[Batch {batch_idx}] Step 6 — Sell signals")
+            sell = _reload("sell_signals")
+            sell.run()
+
+        # ── Step 7: Contracts ─────────────────────────────────────────────
+        if not getattr(args, "no_contracts", False):
+            print(f"\n[Batch {batch_idx}] Step 7 — Government contracts")
+            contracts = _reload("contracts_finder")
+            contracts.run()
+
+        # ── Step 8: Digital health ────────────────────────────────────────
+        if not getattr(args, "no_digital", False):
+            print(f"\n[Batch {batch_idx}] Step 8 — Digital health")
+            digital = _reload("digital_health")
+            digital.run()
+
+        # ── Step 9: Accreditations ────────────────────────────────────────
+        if not getattr(args, "no_accreditations", False):
+            print(f"\n[Batch {batch_idx}] Step 9 — Accreditations")
+            accreds = _reload("accreditations")
+            accreds.run()
+
+        # ── Step 10: Bolt-on ──────────────────────────────────────────────
+        if not getattr(args, "no_bolt_on", False):
+            print(f"\n[Batch {batch_idx}] Step 10 — Bolt-on analysis")
+            bolt = _reload("bolt_on")
+            bolt.run()
+
+        # ── Step 11: Competitor Map ───────────────────────────────────────
+        if not getattr(args, "no_competitor_map", False):
+            print(f"\n[Batch {batch_idx}] Step 11 — Competitor map")
+            comp_map = _reload("competitor_map")
+            comp_map.run()
+
+        # ── Step 12: Acquisition Score ────────────────────────────────────
+        if not getattr(args, "no_acquisition_score", False):
+            print(f"\n[Batch {batch_idx}] Step 12 — Acquisition score")
+            acq = _reload("acquisition_score")
+            acq.run()
+
+        print(f"\n[Batch {batch_idx}] ✅ Done — {len(batch_cos)} companies → {batch_path}")
+        return
+
+    # ────────────────────────────────────────────────────────────────────────
+    # --merge-batches: combine all batch_N.json → enriched JSON → Excel
+    # ────────────────────────────────────────────────────────────────────────
+    if args.merge_batches:
+        import glob as _glob_mod
+
+        enriched_path = os.path.join(cfg.OUTPUT_DIR, cfg.ENRICHED_JSON)
+        if not os.path.exists(enriched_path):
+            print(f"ERROR: {enriched_path} not found.")
+            sys.exit(1)
+
+        with open(enriched_path) as _f:
+            base = json.load(_f)
+
+        # Index by company_number for O(1) merge
+        idx = {c["company_number"]: i
+               for i, c in enumerate(base) if c.get("company_number")}
+
+        batch_files = sorted(
+            _glob_mod.glob(os.path.join(cfg.OUTPUT_DIR, "batch_*.json"))
+        )
+        print(f"\n{'='*65}")
+        print(f"  Merge: {len(batch_files)} batch files × {len(base)} companies")
+        print(f"{'='*65}\n")
+
+        merged_count = 0
+        for bf in batch_files:
+            with open(bf) as _f:
+                batch = json.load(_f)
+            for company in batch:
+                cn = company.get("company_number")
+                if cn and cn in idx:
+                    base[idx[cn]] = company
+                    merged_count += 1
+            print(f"  ✓ {os.path.basename(bf)} — {len(batch)} companies")
+
+        with open(enriched_path, "w") as _f:
+            json.dump(base, _f, indent=2)
+        print(f"\n  Merged {merged_count} records → {enriched_path}")
+
+        print("\nStep 13/13 — Build Excel (10-sheet workbook)")
+        excel = _reload("build_excel")
+        out   = excel.run()
+
+        print(f"\n{'='*65}")
+        print(f"  ✓ Merge + Excel complete")
+        print(f"  Output: {out}")
+        print(f"{'='*65}\n")
+        return
 
     # ── --list-registers: print register catalogue and exit ───────────────────
     if args.list_registers:
