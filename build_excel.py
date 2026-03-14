@@ -541,6 +541,7 @@ PIPELINE_COLS = [
     # ── Financial intelligence ────────────────────────────────────────────────
     ("Employees", 11), ("Emp. Source", 22), ("Emp. Δ 3yr", 11),
     ("Rev. Low £", 13), ("Rev. Base £", 13), ("Rev. High £", 13),
+    ("Rev. Basis", 12),
     ("Rev. Trend", 12), ("EBITDA £", 13), ("EBITDA %", 12), ("Rev. Conf.", 10),
     ("Rev. Growth 3yr", 14),
     ("EBITDA Yr1", 13), ("EBITDA Yr2", 13), ("EBITDA Yr3", 13),
@@ -660,6 +661,11 @@ PIPELINE_COL_NOTES = [
     "Rev. Base £: Central revenue estimate (most likely scenario).\n"
     "  Source: ch_financials.py PE triangulation — weighted blend of available models.",
     "Rev. High £: High end of revenue estimate range.",
+    "Rev. Basis: Shows whether revenue figures are actual or estimated.\n"
+    "  Actual (green)    — turnover extracted from filed accounts via OCR (Tier 1).\n"
+    "  Estimated (amber) — derived from PE triangulation models (8-model blend).\n"
+    "  Band Est. (grey)  — fallback range based on filing type (micro/small/full).\n"
+    "  — = no revenue data available.",
     "Rev. Trend: Year-on-year revenue direction based on accounts history.\n"
     "  ↑ = growing  |  ↓ = declining  |  → = flat  |  ? = insufficient data.\n"
     "  Derived from net assets trend across the last 3 annual filings.",
@@ -977,7 +983,26 @@ def build_pipeline(wb, companies):
         cx_rev.fill      = fill("E8F4FD") if rev_base else (fill(bg) if isinstance(bg, str) else bg) if bg else fill("FFFFFF")
         cell(ws, row, 41, rev_str(rev_high), bg=bg, align="right", size=9)
 
-        # Col 42 — Revenue trend
+        # Col 42 — Revenue Basis (Actual / Estimated / Band Est.)
+        is_actual = (conf == "Actual (Tier 1)" or
+                     (c.get("rev_source") or "").startswith("Tier 1"))
+        is_band   = "band" in (conf or "").lower()
+        if is_actual:
+            basis_label = "Actual"
+            basis_bg, basis_fg = fill("E2EFDA"), "1A5C2C"
+        elif rev_base and not is_band:
+            basis_label = "Estimated"
+            basis_bg, basis_fg = fill("FFF2CC"), "7B5B00"
+        elif rev_base and is_band:
+            basis_label = "Band Est."
+            basis_bg, basis_fg = fill("EEEEEE"), "666666"
+        else:
+            basis_label = "—"
+            basis_bg, basis_fg = bg, "AAAAAA"
+        cell(ws, row, 42, basis_label, bg=basis_bg, align="center", size=9,
+             bold=is_actual, fg=basis_fg)
+
+        # Col 43 — Revenue trend
         trend_symbol = "?"
         if len(hist) >= 2:
             na_vals = [h.get("net_assets") for h in hist if h.get("net_assets") is not None]
@@ -996,18 +1021,16 @@ def build_pipeline(wb, companies):
                    (fill(bg) if isinstance(bg, str) else bg) if bg else fill("EEEEEE"))
         trend_color = "1A5C2C" if trend_symbol == "↑" else (
                       "7B0000" if trend_symbol == "↓" else "7B5B00")
-        cx_tr = ws.cell(row=row, column=42, value=trend_symbol)
+        cx_tr = ws.cell(row=row, column=43, value=trend_symbol)
         cx_tr.fill      = trend_bg if trend_bg else fill("EEEEEE")
         cx_tr.font      = Font(name="Arial", size=12, bold=True, color=trend_color)
         cx_tr.alignment = Alignment(horizontal="center", vertical="center")
         cx_tr.border    = THIN
 
-        # Col 43 — EBITDA estimate
-        cell(ws, row, 43, rev_str(ebitda), bg=bg, align="right", size=9)
+        # Col 44 — EBITDA estimate
+        cell(ws, row, 44, rev_str(ebitda), bg=bg, align="right", size=9)
 
-        # Col 44 — EBITDA %
-        is_actual = (conf == "Actual (Tier 1)" or
-                     (c.get("rev_source") or "").startswith("Tier 1"))
+        # Col 45 — EBITDA %
         if ebitda and rev_base and rev_base > 0:
             margin_pct = ebitda / rev_base * 100
             label_suffix = " (Actual)" if is_actual else " (Est.)"
@@ -1015,31 +1038,31 @@ def build_pipeline(wb, companies):
         else:
             ebitda_pct_str = "-"
         ebitda_pct_bg = fill("E2EFDA") if is_actual else fill("FFF2CC") if ebitda_pct_str != "-" else bg
-        cell(ws, row, 44, ebitda_pct_str, bg=ebitda_pct_bg, align="center", size=8,
+        cell(ws, row, 45, ebitda_pct_str, bg=ebitda_pct_bg, align="center", size=8,
              bold=is_actual, fg="1A5C2C" if is_actual else "7B5B00" if ebitda_pct_str != "-" else "000000")
 
-        # Col 45 — Revenue confidence
+        # Col 46 — Revenue confidence
         conf_bg = fill("E2EFDA") if conf == "HIGH" else (
                   fill("FFF2CC") if conf == "MEDIUM" else
                   fill("FFD6D6") if conf == "LOW" else bg)
-        cell(ws, row, 45, conf, bg=conf_bg, align="center", size=8, bold=(conf == "HIGH"))
+        cell(ws, row, 46, conf, bg=conf_bg, align="center", size=8, bold=(conf == "HIGH"))
 
         # ── 3-year financial history from XBRL ──────────────────────────────
         rev_hist = c.get("revenue_history") or []
 
-        # Col 46 — Revenue growth % over 3 years
+        # Col 47 — Revenue growth % over 3 years
         rev_growth_label = c.get("revenue_growth_label")
         rev_growth_pct   = c.get("revenue_growth_pct")
         if rev_growth_label:
             rg_bg = fill("E2EFDA") if rev_growth_pct > 0 else (
                     fill("FFD6D6") if rev_growth_pct < 0 else bg)
             rg_fg = "1A5C2C" if rev_growth_pct > 0 else ("7B0000" if rev_growth_pct < 0 else "000000")
-            cell(ws, row, 46, rev_growth_label, bg=rg_bg, align="center", size=9, bold=True, fg=rg_fg)
+            cell(ws, row, 47, rev_growth_label, bg=rg_bg, align="center", size=9, bold=True, fg=rg_fg)
         else:
-            cell(ws, row, 46, "-", bg=bg, align="center", size=9)
+            cell(ws, row, 47, "-", bg=bg, align="center", size=9)
 
-        # Cols 47–49 — EBITDA £ for Yr1, Yr2, Yr3
-        for yi, col_off in enumerate([47, 48, 49]):
+        # Cols 48–50 — EBITDA £ for Yr1, Yr2, Yr3
+        for yi, col_off in enumerate([48, 49, 50]):
             if yi < len(rev_hist) and rev_hist[yi].get("ebitda") is not None:
                 ev = rev_hist[yi]["ebitda"]
                 e_label = f"£{ev:,.0f}" if ev >= 0 else f"-£{abs(ev):,.0f}"
@@ -1048,8 +1071,8 @@ def build_pipeline(wb, companies):
             else:
                 cell(ws, row, col_off, "-", bg=bg, align="center", size=8, fg="AAAAAA")
 
-        # Cols 50–52 — EBITDA % for Yr1, Yr2, Yr3
-        for yi, col_off in enumerate([50, 51, 52]):
+        # Cols 51–53 — EBITDA % for Yr1, Yr2, Yr3
+        for yi, col_off in enumerate([51, 52, 53]):
             if yi < len(rev_hist) and rev_hist[yi].get("ebitda_pct") is not None:
                 ep = rev_hist[yi]["ebitda_pct"]
                 ep_label = f"{ep:.1f}%"
@@ -1059,9 +1082,9 @@ def build_pipeline(wb, companies):
             else:
                 cell(ws, row, col_off, "-", bg=bg, align="center", size=8, fg="AAAAAA")
 
-        # Cols 53–58 — Last 3 years of accounts filings (period + type)
+        # Cols 54–59 — Last 3 years of accounts filings (period + type)
         for yr_idx in range(3):
-            base_col = 53 + yr_idx * 2
+            base_col = 54 + yr_idx * 2
             if yr_idx < len(hist):
                 h = hist[yr_idx]
                 period = (h.get("period_end") or "")[:7]   # YYYY-MM
@@ -1072,81 +1095,81 @@ def build_pipeline(wb, companies):
                 cell(ws, row, base_col,     "—", bg=bg, align="center", size=8, fg="AAAAAA")
                 cell(ws, row, base_col + 1, "—", bg=bg, size=7, fg="AAAAAA")
 
-        # ── Performance & growth metric columns (59–66) ─────────────────────
+        # ── Performance & growth metric columns (60–67) ─────────────────────
 
-        # Col 59 — Net Asset Δ 3yr
+        # Col 60 — Net Asset Δ 3yr
         na_growth_label = c.get("net_asset_growth_label")
         na_growth_val   = c.get("net_asset_growth_pct")
         if na_growth_label:
             na_bg = fill("E2EFDA") if na_growth_val > 0 else (
                     fill("FFD6D6") if na_growth_val < 0 else bg)
-            cell(ws, row, 59, na_growth_label, bg=na_bg, align="center", size=9, bold=True)
+            cell(ws, row, 60, na_growth_label, bg=na_bg, align="center", size=9, bold=True)
         else:
-            cell(ws, row, 59, "-", bg=bg, align="center", size=9, fg="AAAAAA")
+            cell(ws, row, 60, "-", bg=bg, align="center", size=9, fg="AAAAAA")
 
-        # Col 60 — Staff Cost Δ 3yr
+        # Col 61 — Staff Cost Δ 3yr
         sc_growth_label = c.get("staff_cost_growth_label")
         sc_growth_val   = c.get("staff_cost_growth_pct")
         if sc_growth_label:
             sc_bg = fill("E2EFDA") if sc_growth_val > 0 else (
                     fill("FFD6D6") if sc_growth_val < 0 else bg)
-            cell(ws, row, 60, sc_growth_label, bg=sc_bg, align="center", size=9, bold=True)
+            cell(ws, row, 61, sc_growth_label, bg=sc_bg, align="center", size=9, bold=True)
         else:
-            cell(ws, row, 60, "-", bg=bg, align="center", size=9, fg="AAAAAA")
+            cell(ws, row, 61, "-", bg=bg, align="center", size=9, fg="AAAAAA")
 
-        # Col 61 — Gross Margin %
+        # Col 62 — Gross Margin %
         gm_label = c.get("gross_margin_label")
         gm_val   = c.get("gross_margin_pct")
         if gm_label:
             gm_bg = fill("E2EFDA") if gm_val >= 30 else (
                     fill("FFF2CC") if gm_val >= 15 else fill("FFD6D6"))
-            cell(ws, row, 61, gm_label, bg=gm_bg, align="center", size=9)
+            cell(ws, row, 62, gm_label, bg=gm_bg, align="center", size=9)
         else:
-            cell(ws, row, 61, "-", bg=bg, align="center", size=9, fg="AAAAAA")
+            cell(ws, row, 62, "-", bg=bg, align="center", size=9, fg="AAAAAA")
 
-        # Col 62 — Debt/Asset %
+        # Col 63 — Debt/Asset %
         da_label = c.get("debt_to_asset_label")
         da_val   = c.get("debt_to_asset_pct")
         if da_label:
             da_bg = fill("E2EFDA") if da_val < 50 else (
                     fill("FFF2CC") if da_val < 80 else fill("FFD6D6"))
-            cell(ws, row, 62, da_label, bg=da_bg, align="center", size=9)
-        else:
-            cell(ws, row, 62, "-", bg=bg, align="center", size=9, fg="AAAAAA")
-
-        # Col 63 — Trade Debtors £
-        td_label = c.get("trade_debtors_label")
-        if td_label:
-            cell(ws, row, 63, td_label, bg=bg, align="right", size=9)
+            cell(ws, row, 63, da_label, bg=da_bg, align="center", size=9)
         else:
             cell(ws, row, 63, "-", bg=bg, align="center", size=9, fg="AAAAAA")
 
-        # Col 64 — Filing Quality
+        # Col 64 — Trade Debtors £
+        td_label = c.get("trade_debtors_label")
+        if td_label:
+            cell(ws, row, 64, td_label, bg=bg, align="right", size=9)
+        else:
+            cell(ws, row, 64, "-", bg=bg, align="center", size=9, fg="AAAAAA")
+
+        # Col 65 — Filing Quality
         fq = c.get("filing_quality", "Unknown")
         fq_bg_map = {"Full": fill("E2EFDA"), "Medium": fill("E2EFDA"),
                      "Small-Full": fill("E8F4FD"), "Small": fill("FFF2CC"),
                      "Exempt-Full": fill("FFF2CC"), "Exempt-Small": fill("FFF2CC"),
                      "Abridged": fill("FFF2CC"),
                      "Micro": fill("FFD6D6"), "Dormant": fill("FFD6D6")}
-        cell(ws, row, 64, fq, bg=fq_bg_map.get(fq, bg), align="center", size=8)
+        cell(ws, row, 65, fq, bg=fq_bg_map.get(fq, bg), align="center", size=8)
 
-        # Col 65 — Growth Score (0–100)
+        # Col 66 — Growth Score (0–100)
         gs = c.get("growth_score")
         if gs is not None:
             gs_bg = fill("E2EFDA") if gs >= 55 else (
                     fill("FFF2CC") if gs >= 35 else fill("FFD6D6"))
             gs_fg = "1A5C2C" if gs >= 55 else ("7B5B00" if gs >= 35 else "7B0000")
-            cell(ws, row, 65, gs, bg=gs_bg, align="center", size=10, bold=True, fg=gs_fg)
+            cell(ws, row, 66, gs, bg=gs_bg, align="center", size=10, bold=True, fg=gs_fg)
             # Add data count as tooltip
             dc = c.get("growth_data_count", 0)
             cmt = Comment(f"Based on {dc} growth signal(s)\n"
                           + "\n".join(f"  {k}: {v:.0f}" for k, v in (c.get("growth_signals") or {}).items()),
                           "V² Pipeline")
-            ws.cell(row=row, column=65).comment = cmt
+            ws.cell(row=row, column=66).comment = cmt
         else:
-            cell(ws, row, 65, "-", bg=bg, align="center", size=9, fg="AAAAAA")
+            cell(ws, row, 66, "-", bg=bg, align="center", size=9, fg="AAAAAA")
 
-        # Col 66 — Performance summary label
+        # Col 67 — Performance summary label
         perf = c.get("performance_label", "Insufficient Data")
         perf_bg_map = {
             "Strong Growth": fill("E2EFDA"), "Growing": fill("E2EFDA"),
@@ -1158,17 +1181,17 @@ def build_pipeline(wb, companies):
             "Stable": "7B5B00", "Declining": "7B0000",
             "Weak": "7B0000", "Insufficient Data": "888888",
         }
-        cell(ws, row, 66, perf,
+        cell(ws, row, 67, perf,
              bg=perf_bg_map.get(perf, bg), fg=perf_fg_map.get(perf, "000000"),
              align="center", size=9, bold=(perf in ("Strong Growth", "Weak")))
 
-        # Col 67 — Holding Co. flag
+        # Col 68 — Holding Co. flag
         is_hold = c.get("is_holding", False)
-        cell(ws, row, 67, "✓" if is_hold else "—",
+        cell(ws, row, 68, "✓" if is_hold else "—",
              bg=fill("FFF2CC") if is_hold else bg, align="center", size=9,
              bold=is_hold, fg="7B5B00" if is_hold else "AAAAAA")
 
-        # Col 68 — Debtor Days  (trade_debtors_latest ÷ rev_base × 365)
+        # Col 69 — Debtor Days  (trade_debtors_latest ÷ rev_base × 365)
         td_raw = c.get("trade_debtors_latest")
         if td_raw and rev_base and rev_base > 0:
             debtor_days = round(td_raw / rev_base * 365)
@@ -1180,10 +1203,10 @@ def build_pipeline(wb, companies):
                      "1A4A6C" if debtor_days < 45 else
                      "7B5B00" if debtor_days < 75 else
                      "7B0000")
-            cell(ws, row, 68, f"{debtor_days}d", bg=dd_bg, align="center",
+            cell(ws, row, 69, f"{debtor_days}d", bg=dd_bg, align="center",
                  size=9, bold=(debtor_days > 75), fg=dd_fg)
         else:
-            cell(ws, row, 68, "—", bg=bg, align="center", size=9, fg="AAAAAA")
+            cell(ws, row, 69, "—", bg=bg, align="center", size=9, fg="AAAAAA")
 
     ws.freeze_panes = "E4"   # freeze cols A-D (Rank, Reg, Name, Sector ✓)
     ws.auto_filter.ref = f"A3:{get_column_letter(n)}{len(companies)+3}"
