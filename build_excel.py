@@ -148,6 +148,26 @@ def _normalise(c: dict) -> dict:
         if not _corp and _dirs <= 2 and _age >= 15:
             c["is_family"] = True
 
+    # ── Holding company flag ───────────────────────────────────────────────────
+    # Detects holding-company structure and sets c["is_holding"] = True/False.
+    # Companies are NEVER excluded for this — only flagged for analyst context.
+    # Signals:
+    #   1. Company name contains "holding" or "holdings"
+    #   2. SIC code 64202 (non-trading investment / holding companies)
+    #   3. Corporate owner name contains "holding" / "holdings"
+    _name_lower  = (c.get("company_name") or "").lower()
+    _sic_codes   = [str(s).strip() for s in (c.get("sic_codes") or [])]
+    _owner_lower = (
+        (c.get("corporate_ownership") or {}).get("owner_name", "")
+        or c.get("owner_name", "")
+    ).lower()
+    c["is_holding"] = bool(
+        "holding" in _name_lower
+        or "holdings" in _name_lower
+        or "64202" in _sic_codes
+        or "holding" in _owner_lower
+    )
+
     # ── PE Likelihood fallback ─────────────────────────────────────────────────
     # If not set by ch_enrich ownership analysis, derive from corporate ownership signals.
     if not c.get("pe_likelihood") or c.get("pe_likelihood") == "None":
@@ -532,6 +552,7 @@ PIPELINE_COLS = [
     ("Net Asset Δ 3yr", 13), ("Staff Cost Δ 3yr", 13),
     ("Gross Margin %", 12), ("Debt/Asset %", 12), ("Debtors £", 13),
     ("Filing Quality", 12), ("Growth Score", 11), ("Performance", 14),
+    ("Holding Co.", 10),
 ]
 
 # Column header tooltips — explain the formula or data source for each column
@@ -694,6 +715,14 @@ PIPELINE_COL_NOTES = [
     "Performance: Summary label derived from Growth Score.\n"
     "  Strong Growth (75+) | Growing (55-74) | Stable (40-54) |\n"
     "  Declining (25-39) | Weak (<25) | Insufficient Data (no score).",
+    "Holding Co.: Flags companies with a holding-company structure.\n"
+    "  ✓ (amber) = one or more holding signals detected:\n"
+    "    • Company name contains 'holding' / 'holdings'\n"
+    "    • SIC code 64202 (non-trading holding company)\n"
+    "    • Corporate owner name contains 'holding' / 'holdings'\n"
+    "  — = no holding signals detected.\n"
+    "  NOTE: holding companies are NEVER excluded from the pipeline —\n"
+    "  this flag is for analyst context only.",
 ]
 
 def build_pipeline(wb, companies):
@@ -1122,6 +1151,12 @@ def build_pipeline(wb, companies):
         cell(ws, row, 66, perf,
              bg=perf_bg_map.get(perf, bg), fg=perf_fg_map.get(perf, "000000"),
              align="center", size=9, bold=(perf in ("Strong Growth", "Weak")))
+
+        # Col 67 — Holding Co. flag
+        is_hold = c.get("is_holding", False)
+        cell(ws, row, 67, "✓" if is_hold else "—",
+             bg=fill("FFF2CC") if is_hold else bg, align="center", size=9,
+             bold=is_hold, fg="7B5B00" if is_hold else "AAAAAA")
 
     ws.freeze_panes = "E4"   # freeze cols A-D (Rank, Reg, Name, Sector ✓)
     ws.auto_filter.ref = f"A3:{get_column_letter(n)}{len(companies)+3}"

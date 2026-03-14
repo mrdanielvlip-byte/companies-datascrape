@@ -169,7 +169,9 @@ def _build_reg_config(register_key: str):
     cfg_mod.NAME_QUERIES   = []
 
     # Filtering — permissive for register-sourced companies (already pre-qualified)
-    cfg_mod.EXCLUDE_TERMS      = ["holding", "holdings", "group plc", "listed"]
+    # NOTE: "holding" / "holdings" intentionally NOT excluded — holding companies
+    # are kept in results and flagged via the Holding Structure column in the Excel.
+    cfg_mod.EXCLUDE_TERMS      = ["group plc", "listed"]
     cfg_mod.EXCLUDE_SUBSECTORS = []
     cfg_mod.INCLUDE_STEMS      = []   # empty = include all
 
