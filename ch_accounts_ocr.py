@@ -540,6 +540,89 @@ def run(resume: bool = True):
 
         merged_count += 1
 
+    # ── Re-run revenue estimation for companies that received OCR data ────────
+    # Bug fix: OCR extracts staff_costs, net_assets, total_assets for Tier B
+    # companies, but the estimation models (Step 4) ran BEFORE this data was
+    # available.  Re-run PE triangulation with the new inputs so revenue
+    # estimates are populated in the final Excel output.
+    re_estimated = 0
+    for company in companies:
+        cn = company["company_number"]
+        ocr = ocr_results.get(cn)
+        if not ocr or ocr.get("error"):
+            continue
+
+        # Skip companies that already have actual turnover (Tier A with P&L)
+        if company.get("rev_actual"):
+            continue
+
+        # Check if OCR gave us new inputs the models can use
+        ocr_data = company.get("accounts_ocr") or {}
+        has_new_inputs = any([
+            ocr_data.get("staff_costs"),
+            ocr_data.get("net_assets"),
+            ocr_data.get("total_assets"),
+            ocr_data.get("employees"),
+            ocr_data.get("trade_debtors"),
+        ])
+
+        if not has_new_inputs:
+            continue
+
+        # Rebuild the PE triangulation input with OCR-enriched data
+        bs = company.get("bs") or {}
+        pe_input = {
+            "company_name":    company.get("company_name", ""),
+            "sic1":            company.get("sic1") or (company.get("sic_codes") or [None])[0],
+            "employees":       ocr_data.get("employees") or company.get("estimated_employees"),
+            "total_assets":    ocr_data.get("total_assets") or bs.get("total_assets"),
+            "net_assets":      ocr_data.get("net_assets") or bs.get("net_assets"),
+            "staff_costs":     ocr_data.get("staff_costs") or bs.get("staff_costs"),
+            "director_salary": bs.get("director_emoluments"),
+            "num_sites":       company.get("location_count") or 1,
+            "trade_debtors":   ocr_data.get("trade_debtors"),
+        }
+
+        try:
+            pe_est = estimate_revenue(pe_input)
+            pe_dict = pe_est.to_dict()
+
+            available_models = len(pe_dict.get("models_used", []))
+            if available_models >= 1 and pe_dict.get("revenue_base"):
+                company["rev_low"]    = pe_dict["revenue_low"]
+                company["rev_base"]   = pe_dict["revenue_base"]
+                company["rev_high"]   = pe_dict["revenue_high"]
+                company["confidence"] = pe_dict.get("confidence_label",
+                                                     f"Tier 4 — {available_models} models")
+                company["ebitda_base"] = pe_dict.get("ebitda_base")
+
+                # Update the financials dict (for build_excel compatibility)
+                if "financials" not in company:
+                    company["financials"] = {}
+                company["financials"]["revenue_estimate"] = {
+                    "revenue_low":    pe_dict["revenue_low"],
+                    "revenue_base":   pe_dict["revenue_base"],
+                    "revenue_high":   pe_dict["revenue_high"],
+                    "confidence":     pe_dict.get("confidence_label"),
+                    "models_used":    pe_dict["models_used"],
+                    "formula":        f"PE Triangulation (post-OCR: "
+                                      f"{', '.join(pe_dict['models_used'])})",
+                    "sector":         pe_dict.get("sector"),
+                }
+                company["financials"]["ebitda_estimate"] = {
+                    "ebitda_low":     pe_dict.get("ebitda_low"),
+                    "ebitda_base":    pe_dict.get("ebitda_base"),
+                    "ebitda_high":    pe_dict.get("ebitda_high"),
+                }
+                company["financials"]["pe_triangulation"] = pe_dict
+
+                re_estimated += 1
+        except Exception:
+            pass  # Don't break pipeline on estimation failure
+
+    if re_estimated:
+        print(f"  Revenue re-estimated (post-OCR inputs): {re_estimated} companies")
+
     # ── Re-run ownership/PE analysis with OCR text ───────────────────────────
     # The initial enrichment step didn't have OCR text; now we can check for
     # PE/group ownership mentions in the accounts PDF text.

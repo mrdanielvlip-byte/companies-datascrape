@@ -29,6 +29,67 @@ _ILLEGAL_CHAR_RE = re.compile(
 
 import config as cfg
 
+
+# ── Fallback revenue estimation (account-type band) ──────────────────────────
+# Last-resort estimator when ch_financials + ch_accounts_ocr both returned None.
+# Uses the company's filing type + SIC code to produce a band estimate.
+_ACCT_BAND_ESTIMATES = {
+    "total exemption full":       {"low": 500_000,   "base": 1_800_000,  "high": 5_000_000},
+    "total-exemption-full":       {"low": 500_000,   "base": 1_800_000,  "high": 5_000_000},
+    "total exemption small":      {"low": 350_000,   "base": 1_200_000,  "high": 3_500_000},
+    "total-exemption-small":      {"low": 350_000,   "base": 1_200_000,  "high": 3_500_000},
+    "micro entity":               {"low": 120_000,   "base": 320_000,    "high": 632_000},
+    "micro-entity":               {"low": 120_000,   "base": 320_000,    "high": 632_000},
+    "unaudited abridged":         {"low": 800_000,   "base": 2_500_000,  "high": 7_000_000},
+    "unaudited-abridged":         {"low": 800_000,   "base": 2_500_000,  "high": 7_000_000},
+    "small":                      {"low": 1_500_000, "base": 4_500_000,  "high": 10_200_000},
+    "small-full":                 {"low": 1_500_000, "base": 4_500_000,  "high": 10_200_000},
+    "full":                       {"low": 3_000_000, "base": 10_000_000, "high": 25_000_000},
+    "group":                      {"low": 5_000_000, "base": 15_000_000, "high": 40_000_000},
+    "medium":                     {"low": 10_200_000,"base": 20_000_000, "high": 36_000_000},
+    "audit-exemption-subsidiary": {"low": 500_000,   "base": 2_000_000,  "high": 8_000_000},
+}
+_LIFT_SICS = {"33120", "43290", "43210", "43220", "28220", "71121", "71129"}
+
+
+def _fallback_revenue(c):
+    """
+    Last-resort revenue estimate using account-type band + SIC adjustment.
+    Called when all other estimation paths returned None.
+    Returns (low, base, high, confidence_label) or (None, None, None, None).
+    """
+    acct_type = (
+        (c.get("financials") or {}).get("balance_sheet", {}).get("accounts_type", "")
+        or (c.get("bs") or {}).get("accounts_type", "")
+        or ""
+    ).lower().strip()
+
+    band = _ACCT_BAND_ESTIMATES.get(acct_type)
+    if not band:
+        for key, val in _ACCT_BAND_ESTIMATES.items():
+            if key in acct_type:
+                band = val
+                break
+    if not band:
+        return None, None, None, None
+
+    low, base, high = band["low"], band["base"], band["high"]
+
+    sic1 = c.get("sic1") or (c.get("sic_codes") or [""])[0] or ""
+    all_sics = set(str(sic1).replace(" ", "").split(","))
+    if all_sics & _LIFT_SICS:
+        low  = round(low * 1.15)
+        base = round(base * 1.15)
+        high = round(high * 1.15)
+
+    age = c.get("company_age") or c.get("age")
+    if age and isinstance(age, (int, float)) and age > 20:
+        mult = min(1.2, 1.0 + (age - 20) * 0.005)
+        base = round(base * mult)
+        high = round(high * mult)
+
+    return low, base, high, f"Low — {acct_type} band est."
+
 # ── Lazy module imports (only loaded when needed by _normalise) ───────────────
 _ch_enrich    = None
 _sell_signals = None
@@ -786,6 +847,14 @@ def build_pipeline(wb, companies):
         rev_high  = rev_est.get("revenue_high") or c.get("rev_high")
         ebitda    = ebitda_est.get("ebitda_base") or c.get("ebitda_base")
         conf      = rev_est.get("confidence") or c.get("confidence", "")
+
+        # Fallback: account-type band estimation when all models returned None
+        if not rev_base:
+            rev_low, rev_base, rev_high, fb_conf = _fallback_revenue(c)
+            if fb_conf:
+                conf = fb_conf
+                if not ebitda and rev_base:
+                    ebitda = round(rev_base * 0.12)  # sector EBITDA margin
         hist      = c.get("accounts_history") or fin.get("accounts_history") or []
 
         # Col 36 — Employees (green if Tier 1, amber if estimated)
@@ -1276,9 +1345,19 @@ def build_financials(wb, companies):
         cell(ws, row, 2,  c["company_name"],                     bg=bg)
         cell(ws, row, 3,  bs.get("accounts_type") or "N/A",     bg=bg, size=8)
         cell(ws, row, 4,  (bs.get("period_end") or "")[:7],     bg=bg, align="center")
-        cell(ws, row, 5,  fmt(rev.get("revenue_low")  or c.get("rev_low")),  bg=bg, align="right")
-        cell(ws, row, 6,  fmt(rev.get("revenue_base") or c.get("rev_base")), bg=bg, align="right", bold=True)
-        cell(ws, row, 7,  fmt(rev.get("revenue_high") or c.get("rev_high")), bg=bg, align="right")
+        fe_rev_low  = rev.get("revenue_low")  or c.get("rev_low")
+        fe_rev_base = rev.get("revenue_base") or c.get("rev_base")
+        fe_rev_high = rev.get("revenue_high") or c.get("rev_high")
+        # Fallback: account-type band estimation
+        if not fe_rev_base:
+            fe_rev_low, fe_rev_base, fe_rev_high, fb_conf = _fallback_revenue(c)
+            if fb_conf:
+                conf = fb_conf
+                if not eb_base and fe_rev_base:
+                    eb_base = round(fe_rev_base * 0.12)
+        cell(ws, row, 5,  fmt(fe_rev_low),  bg=bg, align="right")
+        cell(ws, row, 6,  fmt(fe_rev_base), bg=bg, align="right", bold=True)
+        cell(ws, row, 7,  fmt(fe_rev_high), bg=bg, align="right")
         cell(ws, row, 8,  conf,                                  bg=conf_bg, align="center", bold=True)
         cell(ws, row, 9,  fmt(eb_low),                           bg=bg, align="right")
         cell(ws, row, 10, fmt(eb_base),                          bg=bg, align="right", bold=True)
