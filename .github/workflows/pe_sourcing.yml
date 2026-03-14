@@ -172,7 +172,8 @@ jobs:
           echo "CQC_API_KEY=${{ secrets.CQC_API_KEY }}" >> .ch_api_key
           echo "DISIFY_API_KEY=${{ secrets.DISIFY_API_KEY }}" >> .ch_api_key
           echo "COMPANIES_HOUSE_API_KEY_4=${{ secrets.CH_API_KEY_4 }}" >> .ch_api_key
-          echo "COMPANIES_HOUSE_API_KEY_4=${{ secrets.CH_API_KEY_4 }}" >> .ch_api_key
+          echo "COMPANIES_HOUSE_API_KEY_5=${{ secrets.CH_API_KEY_5 }}" >> .ch_api_key
+          echo "COMPANIES_HOUSE_API_KEY_5=${{ secrets.CH_API_KEY_5 }}" >> .ch_api_key
 
       - name: Prepare directories
         run: mkdir -p output data/sectors
@@ -361,6 +362,7 @@ jobs:
           echo "CQC_API_KEY=${{ secrets.CQC_API_KEY }}" >> .ch_api_key
           echo "DISIFY_API_KEY=${{ secrets.DISIFY_API_KEY }}" >> .ch_api_key
           echo "COMPANIES_HOUSE_API_KEY_4=${{ secrets.CH_API_KEY_4 }}" >> .ch_api_key
+          echo "COMPANIES_HOUSE_API_KEY_5=${{ secrets.CH_API_KEY_5 }}" >> .ch_api_key
 
       - name: Prepare directories
         run: mkdir -p output data/sectors
@@ -453,6 +455,7 @@ jobs:
           echo "CQC_API_KEY=${{ secrets.CQC_API_KEY }}" >> .ch_api_key
           echo "DISIFY_API_KEY=${{ secrets.DISIFY_API_KEY }}" >> .ch_api_key
           echo "COMPANIES_HOUSE_API_KEY_4=${{ secrets.CH_API_KEY_4 }}" >> .ch_api_key
+          echo "COMPANIES_HOUSE_API_KEY_5=${{ secrets.CH_API_KEY_5 }}" >> .ch_api_key
 
       - name: Prepare directories
         run: mkdir -p output data/sectors
