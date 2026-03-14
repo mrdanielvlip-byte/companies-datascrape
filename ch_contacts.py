@@ -203,7 +203,7 @@ def search_company_website(company_name: str, company_number: str,
         "data_tier":          "Tier 3 — Website / directory",
     }
 
-    # Strategy 1: DuckDuckGo instant answer
+    # Strategy 1: DuckDuckGo instant answer — registered company name
     query = f'"{company_name}" limited company UK website'
     try:
         r = requests.get(
@@ -228,6 +228,33 @@ def search_company_website(company_name: str, company_number: str,
     except requests.RequestException:
         pass
 
+    # Strategy 1b: DuckDuckGo search by company number
+    # UK law requires companies to display their registration number on their website,
+    # so this finds companies where the trading name differs from the registered name.
+    if company_number:
+        query_num = f'"{company_number}" site:*.co.uk OR site:*.com'
+        try:
+            r = requests.get(
+                "https://api.duckduckgo.com/",
+                params={"q": query_num, "format": "json", "no_redirect": 1, "no_html": 1},
+                headers=SEARCH_HEADERS,
+                timeout=8
+            )
+            if r.status_code == 200:
+                data = r.json()
+                url = data.get("AbstractURL") or data.get("Redirect", "")
+                if url and _is_business_url_by_number(url, company_number):
+                    domain = urlparse(url).netloc.replace("www.", "")
+                    result.update({
+                        "website_url":      url,
+                        "website_domain":   domain,
+                        "match_confidence": "High",
+                        "search_method":    "DuckDuckGo — company number",
+                    })
+                    return result
+        except requests.RequestException:
+            pass
+
     # Strategy 2: Domain pattern inference
     name_clean = re.sub(r"[^a-z0-9\s]", "", company_name.lower())
     name_clean = re.sub(r"\b(limited|ltd|plc|llp|lp)\b", "", name_clean).strip()
@@ -245,7 +272,8 @@ def search_company_website(company_name: str, company_number: str,
             if r.status_code == 200:
                 # Check if company name or number appears on page
                 page_text = r.text.lower()
-                if company_number.lower() in page_text:
+                if company_number and company_number.lower() in page_text:
+                    # Company number on page = high confidence even if trading name differs
                     conf = "High"
                 elif any(w in page_text for w in name_clean.split()[:3] if len(w) > 3):
                     conf = "Medium"
@@ -262,6 +290,36 @@ def search_company_website(company_name: str, company_number: str,
         except requests.RequestException:
             continue
 
+    # Strategy 3: fetch CH profile page and look for linked website
+    # Companies House sometimes lists the company website on the profile.
+    if company_number:
+        ch_url = (f"https://find-and-update.company-information.service.gov.uk"
+                  f"/company/{company_number}")
+        try:
+            r = requests.get(ch_url, headers=SEARCH_HEADERS, timeout=8, allow_redirects=True)
+            if r.status_code == 200:
+                # Look for an external website link in the CH profile
+                ext_links = re.findall(
+                    r'href=["\']((https?://(?!.*companieshouse|.*gov\.uk)[^\s"\'<>]+))["\']',
+                    r.text, re.IGNORECASE
+                )
+                for _, candidate_url in ext_links[:5]:
+                    parsed_c = urlparse(candidate_url)
+                    if parsed_c.netloc and not any(
+                        skip in parsed_c.netloc
+                        for skip in ["companieshouse", "gov.uk", "linkedin", "facebook"]
+                    ):
+                        domain = parsed_c.netloc.replace("www.", "")
+                        result.update({
+                            "website_url":      candidate_url,
+                            "website_domain":   domain,
+                            "match_confidence": "Medium",
+                            "search_method":    "Companies House profile link",
+                        })
+                        return result
+        except requests.RequestException:
+            pass
+
     return result
 
 
@@ -277,6 +335,15 @@ def _is_business_url(url: str, company_name: str) -> bool:
                   and w not in ("limited", "services", "solutions", "group")]
     domain = urlparse(url).netloc.lower()
     return any(w in domain for w in name_words[:2])
+
+
+def _is_business_url_by_number(url: str, company_number: str) -> bool:
+    """Check URL is a real business site (not a directory) when matching by company number."""
+    skip_domains = ["companieshouse", "endole", "duedil", "linkedin", "facebook",
+                    "yell.com", "freeindex", "checkatrade", "trustpilot", "gov.uk",
+                    "bizdb", "companycheck", "opencorporates"]
+    url_lower = url.lower()
+    return not any(d in url_lower for d in skip_domains)
 
 
 # ── Contact page scraping ─────────────────────────────────────────────────────
