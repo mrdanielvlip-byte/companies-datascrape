@@ -336,10 +336,28 @@ def scrape_company_accounts(company_number, company_name, acct_type, period_end)
     full_text = ""
     financial_pages_found = 0
 
-    # Hard cap: accounts rarely need more than 35 pages to find the P&L.
-    # Group accounts can run to 100+ pages — scanning all of them wastes
-    # 2-3 min per company without improving extraction accuracy.
+    # Hard cap: accounts rarely need more than 35 pages to find both the
+    # P&L and balance sheet. Group accounts can run to 100+ pages —
+    # scanning all of them wastes 2-3 min per company for zero gain.
     MAX_SCAN_PAGES = 35
+
+    # Track P&L and balance sheet sections independently so we only stop
+    # once BOTH have been captured (not just any 3 financial pages).
+    pl_found = False
+    bs_found = False
+
+    _PL_KEYWORDS = {"turnover", "revenue", "profit and loss", "income statement",
+                    "profit", "loss account", "p&l"}
+    _BS_KEYWORDS = {"balance sheet", "net assets", "total assets", "fixed assets",
+                    "current assets", "creditors"}
+
+    def _has_pl(t):
+        tl = t.lower()
+        return sum(1 for k in _PL_KEYWORDS if k in tl) >= 2
+
+    def _has_bs(t):
+        tl = t.lower()
+        return sum(1 for k in _BS_KEYWORDS if k in tl) >= 2
 
     # Scan pages — skip cover pages (0-4), focus on middle
     scan_start = max(0, min(5, n_pages - 1))
@@ -349,8 +367,13 @@ def scrape_company_accounts(company_number, company_name, acct_type, period_end)
         full_text += "\n" + text
         if is_financial_page(text):
             financial_pages_found += 1
-        # Stop after finding and processing enough financial content
-        if financial_pages_found >= 3 and pg_idx > 8:
+        if _has_pl(text):
+            pl_found = True
+        if _has_bs(text):
+            bs_found = True
+        # Stop only once we have BOTH P&L and balance sheet content,
+        # and we're past the early pages (avoids stopping mid-statement).
+        if pl_found and bs_found and financial_pages_found >= 4 and pg_idx > 8:
             break
 
     # If we found nothing financial in the middle, try the first few pages
