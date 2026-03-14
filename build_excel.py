@@ -2285,6 +2285,28 @@ def run():
     build_summary(wb, companies)
 
     out_path = os.path.join(cfg.OUTPUT_DIR, cfg.EXCEL_OUTPUT)
+
+    # ── Sanitise fills before save ──────────────────────────────────────────
+    # openpyxl 3.1.x can accumulate non-Fill objects in the internal style
+    # table when cell.fill is assigned a raw string or None via direct
+    # attribute access (bypassing the cell() helper).  This causes
+    # TypeError("expected <class 'openpyxl.styles.fills.Fill'>") at save
+    # time.  Walk every styled cell and replace invalid fills with a proper
+    # PatternFill so wb.save() succeeds.
+    _default_fill = PatternFill(fill_type=None)  # openpyxl "no fill" sentinel
+    for _ws in wb.worksheets:
+        for _row in _ws.iter_rows():
+            for _c in _row:
+                if _c.fill is not None and not isinstance(_c.fill, PatternFill):
+                    try:
+                        # Attempt to coerce a hex-string into a PatternFill
+                        if isinstance(_c.fill, str):
+                            _c.fill = PatternFill("solid", fgColor=_c.fill)
+                        else:
+                            _c.fill = _default_fill
+                    except Exception:
+                        _c.fill = _default_fill
+
     wb.save(out_path)
     print(f"Saved → {out_path}")
     return out_path
