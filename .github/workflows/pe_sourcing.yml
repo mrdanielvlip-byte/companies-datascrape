@@ -121,7 +121,7 @@ jobs:
   pe-search:
     name: PE Sector Search — ${{ inputs.sector }}
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 480
 
     steps:
       # ── 1. Checkout ───────────────────────────────────────────────────────────
@@ -156,6 +156,7 @@ jobs:
           echo "FCA_SUBSCRIPTION_KEY=${{ secrets.FCA_SUBSCRIPTION_KEY }}" >> .ch_api_key
           echo "FCA_EMAIL=${{ secrets.FCA_EMAIL }}" >> .ch_api_key
           echo "CQC_API_KEY=${{ secrets.CQC_API_KEY }}" >> .ch_api_key
+          echo "DISIFY_API_KEY=${{ secrets.DISIFY_API_KEY }}" >> .ch_api_key
 
       # ── 5. Build output directory ─────────────────────────────────────────────
       - name: Prepare directories
