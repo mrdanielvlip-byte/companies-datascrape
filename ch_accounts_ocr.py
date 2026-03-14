@@ -100,7 +100,7 @@ def doc_get_pdf(url, retries=3):
     return None
 
 # ── OCR a single PDF page ──────────────────────────────────────────────────────
-def ocr_page(page, dpi=250):
+def ocr_page(page, dpi=200):
     """Render PyMuPDF page, OCR with tesseract, return text."""
     mat = fitz.Matrix(dpi/72, dpi/72)
     pix = page.get_pixmap(matrix=mat)
@@ -305,7 +305,7 @@ def scrape_company_accounts(company_number, company_name, acct_type, period_end)
     if not doc_meta_url:
         return {"error": "no document_metadata link"}
 
-    time.sleep(0.3)
+    time.sleep(0.1)
 
     # 2. doc metadata → content URL
     meta = doc_get_meta(doc_meta_url)
@@ -319,7 +319,7 @@ def scrape_company_accounts(company_number, company_name, acct_type, period_end)
     if "application/pdf" not in resources:
         return {"error": f"no PDF resource — available: {list(resources.keys())}"}
 
-    time.sleep(0.3)
+    time.sleep(0.1)
 
     # 3. download PDF
     pdf_bytes = doc_get_pdf(content_url)
@@ -336,18 +336,24 @@ def scrape_company_accounts(company_number, company_name, acct_type, period_end)
     full_text = ""
     financial_pages_found = 0
 
+    # Hard cap: accounts rarely need more than 35 pages to find the P&L.
+    # Group accounts can run to 100+ pages — scanning all of them wastes
+    # 2-3 min per company without improving extraction accuracy.
+    MAX_SCAN_PAGES = 35
+
     # Scan pages — skip cover pages (0-4), focus on middle
     scan_start = max(0, min(5, n_pages - 1))
-    for pg_idx in range(scan_start, n_pages):
+    scan_end   = min(n_pages, scan_start + MAX_SCAN_PAGES)
+    for pg_idx in range(scan_start, scan_end):
         text = get_page_text(doc[pg_idx])
         full_text += "\n" + text
         if is_financial_page(text):
             financial_pages_found += 1
         # Stop after finding and processing enough financial content
-        if financial_pages_found >= 5 and pg_idx > 10:
+        if financial_pages_found >= 3 and pg_idx > 8:
             break
 
-    # If we found nothing financial in the middle, try all pages
+    # If we found nothing financial in the middle, try the first few pages
     if financial_pages_found == 0:
         for pg_idx in range(0, min(5, n_pages)):
             full_text += "\n" + get_page_text(doc[pg_idx])
@@ -412,10 +418,12 @@ def run(resume: bool = True):
     errors = 0
 
     # ── Concurrent OCR processing ─────────────────────────────────────────
-    # OCR is both I/O-bound (PDF download) and CPU-bound (Tesseract),
-    # so we use fewer workers than pure-API modules (default 5).
+    # OCR is a mix of I/O-bound (PDF download, API calls) and CPU-bound
+    # (Tesseract page render). Workers above the CPU count are still
+    # productive because they overlap download wait with OCR compute.
+    # 10 workers is the sweet spot for 2-vCPU GitHub-hosted runners.
     concurrent = len(queue) > 1
-    max_workers = min(5, len(queue))
+    max_workers = min(10, len(queue))
 
     def _scrape_one(company):
         """Thread-safe per-company OCR wrapper."""
