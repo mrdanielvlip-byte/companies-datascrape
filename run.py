@@ -678,10 +678,13 @@ Examples:
 
     # ────────────────────────────────────────────────────────────────────────
     # --batch-enrich: steps 4b–12 on a slice of enriched_companies.json
+    #
+    # Checkpointing: after each module completes, a checkpoint file is saved
+    # (output/batch_N_checkpoint.json).  If the job is re-run (e.g. after a
+    # timeout), already-completed modules are skipped and processing resumes
+    # from the last saved state — no wasted work.
     # ────────────────────────────────────────────────────────────────────────
     if args.batch_enrich:
-        import glob as _glob_mod
-
         batch_idx   = args.batch_index
         batch_count = max(1, args.batch_count)
 
@@ -700,78 +703,148 @@ Examples:
         end        = min(start + batch_size, total)
         batch_cos  = all_companies[start:end]
 
+        batch_file       = f"batch_{batch_idx}.json"
+        batch_path       = os.path.join(cfg.OUTPUT_DIR, batch_file)
+        checkpoint_path  = os.path.join(cfg.OUTPUT_DIR, f"batch_{batch_idx}_checkpoint.json")
+
+        # ── Load checkpoint (if resuming a previous attempt) ─────────────
+        def _load_checkpoint():
+            if os.path.exists(checkpoint_path):
+                try:
+                    with open(checkpoint_path) as _cf:
+                        data = json.load(_cf)
+                    done_set = set(data.get("done", []))
+                    if done_set:
+                        print(f"[Batch {batch_idx}] ♻  Resuming — modules already done: "
+                              f"{', '.join(sorted(done_set))}")
+                    return done_set
+                except Exception as _e:
+                    print(f"[Batch {batch_idx}] Checkpoint unreadable ({_e}) — starting fresh")
+            return set()
+
+        def _save_checkpoint(done_set):
+            with open(checkpoint_path, "w") as _cf:
+                json.dump({"done": sorted(done_set), "batch_index": batch_idx}, _cf)
+
+        done = _load_checkpoint()
+
         print(f"\n{'='*65}")
         print(f"  Batch {batch_idx + 1}/{batch_count} — companies {start}–{end - 1} of {total}")
         print(f"  Batch size: {len(batch_cos)}")
+        if done:
+            print(f"  Resuming from checkpoint ({len(done)} modules already complete)")
         print(f"{'='*65}\n")
 
-        # Write a temp file that the enrichment modules will treat as
-        # the enriched companies list for this worker.
-        batch_file = f"batch_{batch_idx}.json"
-        batch_path = os.path.join(cfg.OUTPUT_DIR, batch_file)
-        with open(batch_path, "w") as _f:
-            json.dump(batch_cos, _f, indent=2)
+        # On a fresh run write the slice; on a resume keep the existing
+        # batch_N.json which already contains results from prior modules.
+        if not done or not os.path.exists(batch_path):
+            with open(batch_path, "w") as _f:
+                json.dump(batch_cos, _f, indent=2)
 
         # Override ENRICHED_JSON so all modules read/write the batch file.
         cfg.ENRICHED_JSON = batch_file
         sys.modules["config"] = cfg
 
         # ── Step 4b: Accounts OCR ─────────────────────────────────────────
-        if not getattr(args, "no_accounts_ocr", False):
+        _skip_ocr = getattr(args, "no_accounts_ocr", False)
+        if "ch_accounts_ocr" in done:
+            print(f"\n[Batch {batch_idx}] Step 4b — OCR already done ✓ (checkpoint)")
+        elif _skip_ocr:
+            print(f"\n[Batch {batch_idx}] Step 4b — OCR SKIPPED (flag)")
+        else:
             print(f"\n[Batch {batch_idx}] Step 4b — Accounts OCR")
             ocr = _reload("ch_accounts_ocr")
             ocr.run(resume=True)
-        else:
-            print(f"\n[Batch {batch_idx}] Step 4b — OCR SKIPPED")
+            done.add("ch_accounts_ocr"); _save_checkpoint(done)
 
         # ── Step 5: Contacts ──────────────────────────────────────────────
-        if not args.skip_contacts:
+        if "ch_contacts" in done:
+            print(f"\n[Batch {batch_idx}] Step 5 — Contacts already done ✓ (checkpoint)")
+        elif args.skip_contacts:
+            print(f"\n[Batch {batch_idx}] Step 5 — Contacts SKIPPED (flag)")
+        else:
             run_disify = not getattr(args, "no_disify", False)
             print(f"\n[Batch {batch_idx}] Step 5 — Contacts")
             contacts = _reload("ch_contacts")
             contacts.run(run_disify=run_disify)
+            done.add("ch_contacts"); _save_checkpoint(done)
 
         # ── Step 6: Sell signals ──────────────────────────────────────────
-        if not getattr(args, "no_sell_signals", False):
+        if "sell_signals" in done:
+            print(f"\n[Batch {batch_idx}] Step 6 — Sell signals already done ✓ (checkpoint)")
+        elif getattr(args, "no_sell_signals", False):
+            print(f"\n[Batch {batch_idx}] Step 6 — Sell signals SKIPPED (flag)")
+        else:
             print(f"\n[Batch {batch_idx}] Step 6 — Sell signals")
             sell = _reload("sell_signals")
             sell.run()
+            done.add("sell_signals"); _save_checkpoint(done)
 
         # ── Step 7: Contracts ─────────────────────────────────────────────
-        if not getattr(args, "no_contracts", False):
+        if "contracts_finder" in done:
+            print(f"\n[Batch {batch_idx}] Step 7 — Contracts already done ✓ (checkpoint)")
+        elif getattr(args, "no_contracts", False):
+            print(f"\n[Batch {batch_idx}] Step 7 — Contracts SKIPPED (flag)")
+        else:
             print(f"\n[Batch {batch_idx}] Step 7 — Government contracts")
             contracts = _reload("contracts_finder")
             contracts.run()
+            done.add("contracts_finder"); _save_checkpoint(done)
 
         # ── Step 8: Digital health ────────────────────────────────────────
-        if not getattr(args, "no_digital", False):
+        if "digital_health" in done:
+            print(f"\n[Batch {batch_idx}] Step 8 — Digital health already done ✓ (checkpoint)")
+        elif getattr(args, "no_digital", False):
+            print(f"\n[Batch {batch_idx}] Step 8 — Digital health SKIPPED (flag)")
+        else:
             print(f"\n[Batch {batch_idx}] Step 8 — Digital health")
             digital = _reload("digital_health")
             digital.run()
+            done.add("digital_health"); _save_checkpoint(done)
 
         # ── Step 9: Accreditations ────────────────────────────────────────
-        if not getattr(args, "no_accreditations", False):
+        if "accreditations" in done:
+            print(f"\n[Batch {batch_idx}] Step 9 — Accreditations already done ✓ (checkpoint)")
+        elif getattr(args, "no_accreditations", False):
+            print(f"\n[Batch {batch_idx}] Step 9 — Accreditations SKIPPED (flag)")
+        else:
             print(f"\n[Batch {batch_idx}] Step 9 — Accreditations")
             accreds = _reload("accreditations")
             accreds.run()
+            done.add("accreditations"); _save_checkpoint(done)
 
         # ── Step 10: Bolt-on ──────────────────────────────────────────────
-        if not getattr(args, "no_bolt_on", False):
+        if "bolt_on" in done:
+            print(f"\n[Batch {batch_idx}] Step 10 — Bolt-on already done ✓ (checkpoint)")
+        elif getattr(args, "no_bolt_on", False):
+            print(f"\n[Batch {batch_idx}] Step 10 — Bolt-on SKIPPED (flag)")
+        else:
             print(f"\n[Batch {batch_idx}] Step 10 — Bolt-on analysis")
             bolt = _reload("bolt_on")
             bolt.run()
+            done.add("bolt_on"); _save_checkpoint(done)
 
         # ── Step 11: Competitor Map ───────────────────────────────────────
-        if not getattr(args, "no_competitor_map", False):
+        if "competitor_map" in done:
+            print(f"\n[Batch {batch_idx}] Step 11 — Competitor map already done ✓ (checkpoint)")
+        elif getattr(args, "no_competitor_map", False):
+            print(f"\n[Batch {batch_idx}] Step 11 — Competitor map SKIPPED (flag)")
+        else:
             print(f"\n[Batch {batch_idx}] Step 11 — Competitor map")
             comp_map = _reload("competitor_map")
             comp_map.run()
+            done.add("competitor_map"); _save_checkpoint(done)
 
         # ── Step 12: Acquisition Score ────────────────────────────────────
-        if not getattr(args, "no_acquisition_score", False):
+        if "acquisition_score" in done:
+            print(f"\n[Batch {batch_idx}] Step 12 — Acquisition score already done ✓ (checkpoint)")
+        elif getattr(args, "no_acquisition_score", False):
+            print(f"\n[Batch {batch_idx}] Step 12 — Acquisition score SKIPPED (flag)")
+        else:
             print(f"\n[Batch {batch_idx}] Step 12 — Acquisition score")
             acq = _reload("acquisition_score")
             acq.run()
+            done.add("acquisition_score"); _save_checkpoint(done)
 
         print(f"\n[Batch {batch_idx}] ✅ Done — {len(batch_cos)} companies → {batch_path}")
         return

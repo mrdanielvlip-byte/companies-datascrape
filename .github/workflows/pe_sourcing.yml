@@ -373,6 +373,21 @@ jobs:
           name: enriched-companies
           path: output/
 
+      # ── Restore checkpoint from a previous attempt (if re-running) ────────
+      # Cache key includes run_id so it's scoped to this workflow run.
+      # run_attempt increments on each retry — restore-keys matches any prior
+      # attempt so a timed-out job resumes exactly where it left off.
+      - name: Restore batch checkpoint
+        uses: actions/cache/restore@v4
+        id: batch-checkpoint
+        with:
+          path: |
+            output/batch_${{ matrix.batch_index }}.json
+            output/batch_${{ matrix.batch_index }}_checkpoint.json
+          key: batch-ckpt-${{ github.run_id }}-${{ matrix.batch_index }}-${{ github.run_attempt }}
+          restore-keys: |
+            batch-ckpt-${{ github.run_id }}-${{ matrix.batch_index }}-
+
       # ── Build enrichment flags ────────────────────────────────────────────
       - name: Build enrichment flags
         id: flags
@@ -404,6 +419,16 @@ jobs:
 
           [ -n "$SECTOR" ] && CMD="$CMD --sector \"$SECTOR\""
           eval $CMD $FLAGS
+
+      # ── Save checkpoint so a re-run can resume from here ─────────────────
+      - name: Save batch checkpoint
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            output/batch_${{ matrix.batch_index }}.json
+            output/batch_${{ matrix.batch_index }}_checkpoint.json
+          key: batch-ckpt-${{ github.run_id }}-${{ matrix.batch_index }}-${{ github.run_attempt }}
 
       # ── Upload this batch's enriched output ───────────────────────────────
       - name: Upload batch results
